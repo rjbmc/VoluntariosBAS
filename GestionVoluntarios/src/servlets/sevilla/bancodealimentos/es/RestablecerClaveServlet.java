@@ -1,0 +1,108 @@
+// Paquete: servlets.sevilla.bancodealimentos.es
+package servlets.sevilla.bancodealimentos.es;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+
+import util.sevilla.bancodealimentos.es.Config;
+import util.sevilla.bancodealimentos.es.DatabaseUtil;
+import util.sevilla.bancodealimentos.es.LogUtil;
+import util.sevilla.bancodealimentos.es.PasswordUtils;
+
+/**
+ * Servlet que finaliza el proceso de restablecimiento de contrase�a.
+ * Verifica el token y actualiza la contrase�a del usuario.
+ */
+@WebServlet("/restablecer-clave")
+public class RestablecerClaveServlet extends HttpServlet {
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void init() throws ServletException {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            throw new ServletException("Error: No se pudo cargar el driver de MySQL.", e);
+        }
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        PrintWriter out = response.getWriter();
+        String jsonResponse;
+
+        String token = request.getParameter("token");
+        String nuevaClave = request.getParameter("nuevaClave");
+
+        if (token == null || token.trim().isEmpty() || nuevaClave == null || nuevaClave.trim().isEmpty()) {
+            sendError(response, "Token o contrase�a no proporcionados.");
+            return;
+        }
+
+        String sqlFindUser = "SELECT Usuario, reset_token_expiry FROM voluntarios WHERE reset_token = ?";
+        
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            String usuario = null;
+            Timestamp expiryTime = null;
+
+            // 1. Buscar el usuario por el token
+            try (PreparedStatement stmtFind = conn.prepareStatement(sqlFindUser)) {
+                stmtFind.setString(1, token);
+                try (ResultSet rs = stmtFind.executeQuery()) {
+                    if (rs.next()) {
+                        usuario = rs.getString("Usuario");
+                        expiryTime = rs.getTimestamp("reset_token_expiry");
+                    }
+                }
+            }
+
+            // 2. Validar el token y su caducidad
+            if (usuario == null || expiryTime == null || expiryTime.before(new Timestamp(System.currentTimeMillis()))) {
+                sendError(response, "El enlace de recuperaci�n no es v�lido o ha caducado. Por favor, solicita uno nuevo.");
+                return;
+            }
+
+            // 3. Si todo es correcto, actualizar la contrase�a
+            String nuevaClaveHasheada = PasswordUtils.hashPassword(nuevaClave);
+            String sqlUpdate = "UPDATE voluntarios SET Clave = ?, reset_token = NULL, reset_token_expiry = NULL, notificar = 'S' WHERE Usuario = ?";
+
+            try (PreparedStatement stmtUpdate = conn.prepareStatement(sqlUpdate)) {
+                stmtUpdate.setString(1, nuevaClaveHasheada);
+                stmtUpdate.setString(2, usuario);
+                stmtUpdate.executeUpdate();
+                
+                // --- CAMBIO: Se elimina el �ltimo par�metro de la llamada al log ---
+                LogUtil.logOperation(conn, "RECUPERACION_OK", usuario, "Contrase�a restablecida correctamente para " + usuario);
+                jsonResponse = "{\"success\": true, \"message\": \"�Contrase�a actualizada con �xito! Ya puedes iniciar sesi�n.\"}";
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            jsonResponse = "{\"success\": false, \"message\": \"Error de base de datos al actualizar la contrase�a.\"}";
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        }
+
+        out.print(jsonResponse);
+        out.flush();
+    }
+
+    private void sendError(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        response.getWriter().print("{\"success\": false, \"message\": \"" + message + "\"}");
+    }
+}
+

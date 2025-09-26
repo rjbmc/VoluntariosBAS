@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Voluntarios - Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen py-12">
+
+    <div class="w-full max-w-3xl p-8 space-y-6 bg-white rounded-2xl card-shadow m-4">
+        <div class="flex justify-center">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+        </div>
+        
+        <h2 class="text-2xl font-bold text-center text-gray-800">Alta de Nuevo Voluntario</h2>
+        
+        <div id="tienda-seleccionada-info" class="p-3 text-center bg-green-100 text-green-800 rounded-lg hidden">
+            <p>Punto de recogida seleccionado: <strong id="nombre-tienda"></strong></p>
+        </div>
+
+        <form id="registroForm" class="mt-8 space-y-6" onsubmit="handleRegister(event)">
+            <input type="hidden" id="punto_id" name="punto_id">
+
+            <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+                <div>
+                    <label for="nombre" class="input-label">Nombre</label>
+                    <input id="nombre" name="nombre" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tu nombre">
+                </div>
+                <div>
+                    <label for="apellidos" class="input-label">Apellidos</label>
+                    <input id="apellidos" name="apellidos" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tus apellidos">
+                </div>
+                <div>
+                    <label for="dni" class="input-label">DNI / NIF</label>
+                    <input id="dni" name="dni" type="text" maxlength="9" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A">
+                </div>
+                <div>
+                    <label for="fechaNacimiento" class="input-label">Fecha de Nacimiento</label>
+                    <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm">
+                </div>
+                <div>
+                    <label for="email" class="input-label">Correo Electrónico</label>
+                    <input id="email" name="email" type="email" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="tu@email.com">
+                </div>
+                <div>
+                    <label for="telefono" class="input-label">Teléfono</label>
+                    <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="600112233">
+                </div>
+                 <div>
+                    <label for="cp" class="input-label">Código Postal</label>
+                    <input id="cp" name="cp" type="text" maxlength="5" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="41001">
+                </div>
+            </div>
+
+            <hr class="my-6">
+
+            <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+                <div>
+                    <label for="usuario" class="input-label">Nombre de Usuario</label>
+                    <input id="usuario" name="usuario" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Elige un usuario">
+                </div>
+                <div></div>
+                <div>
+                    <label for="clave" class="input-label">Contraseña</label>
+                    <input id="clave" name="clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Mínimo 8 caracteres">
+                </div>
+                <div>
+                    <label for="confirmar_clave" class="input-label">Confirmar Contraseña</label>
+                    <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña">
+                </div>
+            </div>
+
+            <div>
+                <button type="submit" class="relative flex justify-center w-full px-4 py-3 mt-4 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                    Completar Registro
+                </button>
+            </div>
+        </form>
+        
+        <div class="text-center">
+            <a href="login.html" class="text-sm font-medium text-gray-600 hover:text-orange-500">
+                ¿Ya tienes una cuenta? Inicia sesión
+            </a>
+        </div>
+        
+        <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const puntoId = params.get('tienda_id');
+            const puntoNombre = params.get('tienda_nombre');
+
+            if (puntoId && puntoNombre) {
+                document.getElementById('punto_id').value = puntoId;
+                document.getElementById('nombre-tienda').textContent = puntoNombre;
+                document.getElementById('tienda-seleccionada-info').classList.remove('hidden');
+            }
+        });
+
+        async function handleRegister(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const messageDiv = document.getElementById('message');
+            
+            const clave = formData.get('clave');
+            const confirmarClave = formData.get('confirmar_clave');
+
+            if (clave !== confirmarClave) {
+                messageDiv.textContent = 'Las contraseñas no coinciden.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return;
+            }
+            
+            if (clave.length < 8) {
+                messageDiv.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return;
+            }
+
+            messageDiv.textContent = 'Registrando...';
+            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
+            messageDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch(AppConfig.getUrl('NUEVO_VOLUNTARIO'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    messageDiv.textContent = result.message;
+                    messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
+                    form.reset();
+                    // La redirección al login se hará después de que el usuario vea el mensaje
+                } else {
+                    messageDiv.textContent = result.message || 'Error desconocido.';
+                    messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                }
+
+            } catch (error) {
+                console.error('Error al conectar con el servidor:', error);
+                messageDiv.textContent = 'No se pudo conectar con el servidor. Inténtalo más tarde.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+            }
+            
+            messageDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

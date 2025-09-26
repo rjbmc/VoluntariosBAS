@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.jst.server.core.container/org.eclipse.jst.server.tomcat.runtimeTarget/Apache Tomcat v9.0">
+		<attributes>
+			<attribute name="owner.project.facets" value="jst.web"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="con" path="org.eclipse.jst.j2ee.internal.module.container"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/jbcrypt-0.4.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/commons-compress-1.21.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/log4j-api-2.18.0.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/commons-io-2.11.0.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/commons-codec-1.15.jar"/>
+	<classpathentry exported="true" kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-17">
+		<attributes>
+			<attribute name="module" value="true"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/gson-2.9.0.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/jakarta.servlet-api-6.0.0.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/jakarta.mail-2.0.1.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/jakarta.activation-2.0.1.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/mysql-connector-j-8.0.33.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/mariadb-java-client-3.1.4.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/commons-collections4-4.4.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/xmlbeans-5.1.1.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/poi-5.2.3.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/poi-ooxml-5.2.3.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/curvesapi-1.07.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/log4j-core-2.18.0.jar"/>
+	<classpathentry exported="true" kind="lib" path="C:/Users/Bas002/eclipse 25.06-workspace/GestionVoluntarios/WebContent/WEB-INF/lib/poi-ooxml-full-5.2.3.jar"/>
+	<classpathentry kind="output" path="build/classes"/>
+</classpath>

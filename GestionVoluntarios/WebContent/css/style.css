@@ -1,0 +1,113 @@
+/*
+ * Hoja de Estilos Común para la Aplicación VoluntariosBAS
+ */
+
+:root {
+    --banco-orange: #F36C21;
+    --banco-dark-blue: #2E3D4C;
+    --banco-light-gray: #f0f2f5;
+}
+
+body {
+    font-family: 'Montserrat', sans-serif;
+    background-color: var(--banco-light-gray);
+}
+
+/* --- Estilos de Botones (Corregidos y Unificados) --- */
+.btn { 
+    padding: 0.5rem 1rem; 
+    border-radius: 0.375rem; 
+    font-weight: 600; /* Texto más grueso para legibilidad */
+    transition: all 0.2s; 
+    font-size: 0.875rem; /* Tamaño de texto estándar */
+    line-height: 1.25rem;
+}
+.btn-primary, .btn-orange {
+    background-color: var(--banco-orange);
+    color: white;
+}
+.btn-primary:hover, .btn-orange:hover {
+    background-color: #d85b1a;
+}
+
+.btn-secondary {
+    background-color: var(--banco-dark-blue);
+    color: white;
+}
+.btn-secondary:hover {
+    background-color: #1f2a35;
+}
+
+.btn-success { background-color: #16a34a; color: white; }
+.btn-success:hover { background-color: #15803d; }
+.btn-success:disabled { background-color: #a7f3d0; cursor: not-allowed; }
+
+.btn-danger { background-color: #dc2626; color: white; }
+.btn-danger:hover { background-color: #b91c1c; }
+
+
+/* --- Estilos de Formularios --- */
+.form-input, .form-select {
+    border-color: #D1D5DB;
+}
+.form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--banco-orange);
+    box-shadow: 0 0 0 2px rgba(243, 108, 33, 0.5);
+}
+.input-label { 
+    display: block; 
+    margin-bottom: 0.25rem; 
+    font-size: 0.875rem; 
+    font-weight: 500; 
+    color: #374151; 
+}
+
+/* --- Estilos de Componentes --- */
+.card-shadow {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* --- Estilos para Ventanas Emergentes (Modal) --- */
+.modal-overlay { 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    right: 0; 
+    bottom: 0; 
+    background-color: rgba(0, 0, 0, 0.6); 
+    z-index: 40; 
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.modal-content { 
+    z-index: 50; 
+    background-color: white; 
+    padding: 2rem; 
+    border-radius: 0.5rem; 
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); 
+    width: 90%; 
+    max-width: 600px; 
+    max-height: 90vh; 
+    overflow-y: auto; 
+}
+
+/* --- Estilos para el Mapa --- */
+#map { 
+    height: 400px; 
+    width: 100%; 
+    border-radius: 0.5rem; 
+}
+
+/* --- Estilos para el Interruptor (Toggle Switch) --- */
+.switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+.slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+input:checked + .slider { background-color: var(--banco-orange); }
+input:focus + .slider { box-shadow: 0 0 1px var(--banco-orange); }
+input:checked + .slider:before { transform: translateX(26px); }
+.slider.round { border-radius: 34px; }
+.slider.round:before { border-radius: 50%; }

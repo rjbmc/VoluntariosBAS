@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modificar Datos Personales - VoluntariosBAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
+</head>
+<body class="flex items-center justify-center min-h-screen py-12">
+
+    <div class="w-full max-w-4xl p-8 space-y-6 bg-white rounded-2xl card-shadow m-4">
+        <div class="flex justify-center">
+            <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48 mb-4">
+        </div>
+        <div class="text-center">
+            <h2 class="text-2xl font-bold text-gray-800">Modificar Mis Datos Personales</h2>
+            <p class="text-md text-gray-600 mt-1">Aquí puedes actualizar tu información de contacto y de perfil.</p>
+        </div>
+        
+        <div class="text-center border-t border-b py-4">
+            <a href="asignar-turnos.html" class="inline-block px-6 py-2 text-sm font-medium text-white rounded-md btn-secondary">Volver a la Asignación de Turnos</a>
+        </div>
+
+        <form id="modificarDatosForm" onsubmit="handleUpdate(event)">
+            <!-- Datos Personales -->
+            <div class="grid grid-cols-1 md:[grid-template-columns:2fr_3fr] gap-6">
+                <div>
+                    <label for="nombre" class="input-label">Nombre</label>
+                    <input type="text" id="nombre" name="nombre" class="form-input" required>
+                </div>
+                <div>
+                    <label for="apellidos" class="input-label">Apellidos</label>
+                    <input type="text" id="apellidos" name="apellidos" class="form-input" required>
+                </div>
+                <div >
+                    <label for="dni" class="input-label">DNI / NIF</label>
+                    <input type="text" id="dni" name="dni" class="form-input bg-gray-200" readonly>
+                </div>
+                <div>
+                    <label for="email" class="input-label">Email</label>
+                    <input type="email" id="email" name="email" class="form-input w-full" required>
+                </div>
+                <div>
+                    <label for="telefono" class="input-label">Teléfono</label>
+                    <input type="tel" id="telefono" name="telefono" class="form-input" required>
+                </div>
+                <div>
+                    <label for="fechaNacimiento" class="input-label">Fecha de Nacimiento</label>
+                    <input type="date" id="fechaNacimiento" name="fechaNacimiento" class="form-input" required>
+                </div>
+                <div>
+                    <label for="cp" class="input-label">Código Postal</label>
+                    <input type="text" id="cp" name="cp" class="form-input" required>
+                </div>
+                <div >
+                    <label for="tiendaReferencia" class="input-label">Tienda de Referencia</label>
+                    <input type="hidden" id="tiendaReferencia" name="tiendaReferencia">
+                    <div id="tiendaReferenciaNombre" class="form-input bg-gray-100">Cargando...</div>
+                    <button type="button" onclick="openMapModal()" class="w-full mt-2 px-4 py-2 text-sm font-medium text-white rounded-md btn-secondary">Cambiar Tienda</button>
+                </div>
+            </div>
+
+            <!-- Sección para Cambiar Contraseña -->
+            <div class="border-t pt-6 mt-8">
+                <h3 class="text-lg font-semibold text-gray-700">Cambiar Contraseña (opcional)</h3>
+                <p class="text-sm text-gray-600 mt-1">Si dejas estos campos en blanco, tu contraseña no cambiará.</p>
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="clave_actual" class="input-label">Contraseña Actual</label>
+                        <input type="password" id="clave_actual" name="clave_actual" class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="nueva_clave" class="input-label">Nueva Contraseña</label>
+                        <input type="password" id="nueva_clave" name="nueva_clave" class="form-input w-full">
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-8">
+                <button type="submit" class="w-full px-4 py-3 font-medium text-white border border-transparent rounded-md btn-primary">
+                    Guardar Cambios
+                </button>
+            </div>
+        </form>
+        
+        <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
+
+        <!-- Sección para Darse de Baja -->
+        <div class="border-t pt-6 mt-6 border-red-200">
+             <h3 class="text-lg font-semibold text-red-700">Darse de Baja</h3>
+             <p class="text-sm text-gray-600 mt-1">Si ya no deseas ser voluntario, puedes solicitar tu baja aquí. Este proceso es irreversible.</p>
+             <button type="button" onclick="openBajaModal()" class="mt-4 inline-block px-6 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700">
+                 Solicitar Baja de la Aplicación
+             </button>
+        </div>
+    </div>
+    
+    <!-- Modal para el Mapa -->
+    <div id="map-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4">Selecciona tu nueva tienda de referencia</h3>
+            <div id="map">Cargando mapa...</div>
+            <div class="flex justify-end mt-4">
+                <button type="button" onclick="closeMapModal()" class="btn btn-secondary">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Confirmar Baja -->
+    <div id="baja-modal" class="modal-overlay hidden">
+        <div class="modal-content max-w-md">
+            <h3 class="text-xl font-bold text-red-700">Confirmar Baja</h3>
+            <p class="text-gray-700 my-4">Para confirmar que deseas darte de baja, por favor, introduce tu contraseña actual.</p>
+            <form id="bajaForm" onsubmit="handleBaja(event)">
+                <div>
+                    <label for="clave_baja" class="input-label">Contraseña</label>
+                    <input type="password" id="clave_baja" name="clave_baja" class="form-input" required>
+                </div>
+                <div class="flex justify-end space-x-4 mt-6">
+                    <button type="button" onclick="closeBajaModal()" class="btn btn-secondary">Cancelar</button>
+                    <button type="submit" class="btn bg-red-600 hover:bg-red-700 text-white">Confirmar Baja</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <script src="/VoluntariosBAS/js/config.js"></script>
+    <script>
+        let mapInstance = null;
+        let todasTiendasCache = new Map();
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadAllTiendas();
+            await loadVoluntarioData();
+        });
+
+        async function loadAllTiendas() {
+            try {
+                const response = await fetch(AppConfig.getUrl('TODAS_LAS_TIENDAS'));
+                if (!response.ok) throw new Error('Error al cargar tiendas');
+                const tiendas = await response.json();
+                tiendas.forEach(tienda => todasTiendasCache.set(tienda.id, tienda));
+            } catch (error) {
+                console.error("Error al precargar la lista de tiendas:", error);
+            }
+        }
+
+        async function loadVoluntarioData() {
+            try {
+                const response = await fetch(AppConfig.getUrl('MODIFICAR_DATOS'));
+                if (!response.ok) {
+                    if (response.status === 401) window.location.href = 'login.html';
+                    throw new Error('No se pudieron cargar los datos del voluntario.');
+                }
+                const data = await response.json();
+                
+                document.getElementById('nombre').value = data.nombre || '';
+                document.getElementById('apellidos').value = data.apellidos || '';
+                document.getElementById('dni').value = data.dni || '';
+                document.getElementById('email').value = data.email || '';
+                document.getElementById('telefono').value = data.telefono || '';
+                document.getElementById('fechaNacimiento').value = data.fechaNacimiento || '';
+                document.getElementById('cp').value = data.cp || '';
+                
+                const tiendaRefId = data.tiendaReferencia;
+                document.getElementById('tiendaReferencia').value = tiendaRefId;
+                if (todasTiendasCache.has(tiendaRefId)) {
+                    document.getElementById('tiendaReferenciaNombre').textContent = todasTiendasCache.get(tiendaRefId).nombre;
+                } else {
+                    document.getElementById('tiendaReferenciaNombre').textContent = `Tienda ID: ${tiendaRefId}`;
+                }
+            } catch (error) {
+                displayMessage(error.message, 'error');
+            }
+        }
+
+        async function handleUpdate(event) {
+            event.preventDefault();
+            
+            const nuevaClave = document.getElementById('nueva_clave').value;
+            const claveActual = document.getElementById('clave_actual').value;
+
+            // Validación de contraseña
+            if (nuevaClave || claveActual) {
+                if (!claveActual) {
+                    displayMessage('Debes introducir tu contraseña actual para poder cambiarla.', 'error');
+                    return;
+                }
+                 if (nuevaClave.length < 6) {
+                    displayMessage('La nueva contraseña debe tener al menos 6 caracteres.', 'error');
+                    return;
+                }
+            }
+            
+            const form = event.target;
+            const formData = new FormData(form);
+            displayMessage('Guardando cambios...', 'info');
+
+            try {
+                const response = await fetch(AppConfig.getUrl('MODIFICAR_DATOS'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    displayMessage(result.message, 'success');
+                    document.getElementById('clave_actual').value = '';
+                    document.getElementById('nueva_clave').value = '';
+                } else {
+                    displayMessage(result.message, 'error');
+                }
+            } catch (error) {
+                displayMessage('Error de conexión con el servidor.', 'error');
+            }
+        }
+        
+        function openBajaModal() {
+            document.getElementById('baja-modal').classList.remove('hidden');
+        }
+
+        function closeBajaModal() {
+            document.getElementById('baja-modal').classList.add('hidden');
+        }
+        
+        async function handleBaja(event) {
+            // Lógica para procesar la baja
+        }
+
+        function openMapModal() {
+            document.getElementById('map-modal').classList.remove('hidden');
+            if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+            setTimeout(() => {
+                mapInstance = L.map('map').setView([37.3891, -5.9845], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(mapInstance);
+                todasTiendasCache.forEach(tienda => {
+                    const marker = L.marker([tienda.lat, tienda.lon]).addTo(mapInstance);
+                    marker.bindPopup(`<b>${tienda.nombre}</b><br>${tienda.direccion}`);
+                    marker.on('click', () => selectStore(tienda));
+                });
+            }, 100);
+        }
+        
+        function selectStore(tienda) {
+            document.getElementById('tiendaReferencia').value = tienda.id;
+            document.getElementById('tiendaReferenciaNombre').textContent = tienda.nombre;
+            closeMapModal();
+        }
+
+        function closeMapModal() {
+            document.getElementById('map-modal').classList.add('hidden');
+        }
+
+        function displayMessage(msg, type) {
+            const messageDiv = document.getElementById('message');
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            messageDiv.textContent = msg;
+            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colors[type]}`;
+        }
+    </script>
+</body>
+</html>
+

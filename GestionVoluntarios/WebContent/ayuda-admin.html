@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitud de Ayuda - VoluntariosBAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-lg p-8 space-y-8 bg-white rounded-2xl card-shadow m-4">
+        <div class="flex justify-center">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+        </div>
+        
+        <div class="text-center">
+            <h2 class="text-2xl font-bold text-gray-800">Solicitud de Ayuda</h2>
+            <p class="mt-2 text-sm text-gray-600">¿Tienes problemas para acceder? Rellena este formulario y un administrador se pondrá en contacto contigo.</p>
+        </div>
+        
+        <form id="ayudaForm" class="mt-8 space-y-6" onsubmit="handleHelpRequest(event)">
+            <div>
+                <label for="nombre" class="input-label">Tu Nombre Completo</label>
+                <input id="nombre" name="nombre" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Ej: Juan García Pérez">
+            </div>
+            <div>
+                <label for="email" class="input-label">Tu Email de Contacto</label>
+                <input id="email" name="email" type="email" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="El correo donde podamos contactarte">
+            </div>
+            <div>
+                <label for="problema" class="input-label">Describe tu problema</label>
+                <textarea id="problema" name="problema" rows="4" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Ej: He olvidado mi contraseña y ya no tengo acceso a mi antiguo correo."></textarea>
+            </div>
+
+            <div>
+                <button type="submit" class="relative flex justify-center w-full px-4 py-3 text-sm font-medium text-white border border-transparent rounded-md btn-primary group">
+                    Enviar Solicitud
+                </button>
+            </div>
+        </form>
+        
+        <div class="text-center">
+            <a href="login.html" class="text-sm font-medium text-gray-600 hover:text-orange-500">
+                &larr; Volver al inicio de sesión
+            </a>
+        </div>
+
+        <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script>
+        async function handleHelpRequest(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const messageDiv = document.getElementById('message');
+
+            messageDiv.textContent = 'Enviando tu solicitud...';
+            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
+            messageDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch(AppConfig.getUrl('AYUDA_ADMIN'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    displayMessage(result.message, 'success');
+                    form.reset();
+                } else {
+                    displayMessage(result.message, 'error');
+                }
+            } catch (error) {
+                console.error('Error en la solicitud de ayuda:', error);
+                displayMessage('Ocurrió un error al enviar tu solicitud. Por favor, inténtalo de nuevo más tarde.', 'error');
+            }
+        }
+
+        function displayMessage(msg, type) {
+            const messageDiv = document.getElementById('message');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500'
+            };
+            messageDiv.textContent = msg;
+            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colors[type]}`;
+            messageDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

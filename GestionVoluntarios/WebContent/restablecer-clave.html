@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restablecer Contraseña - VoluntariosBAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl card-shadow m-4">
+        <div class="flex justify-center">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+        </div>
+        
+        <div class="text-center">
+            <h2 class="text-2xl font-bold text-gray-800">Crear Nueva Contraseña</h2>
+            <p class="mt-2 text-sm text-gray-600">Introduce tu nueva contraseña. Asegúrate de que sea segura.</p>
+        </div>
+        
+        <form id="resetForm" class="mt-8 space-y-6" onsubmit="handleReset(event)">
+            <input type="hidden" id="token" name="token">
+
+            <div>
+                <label for="nuevaClave" class="sr-only">Nueva Contraseña</label>
+                <input id="nuevaClave" name="nuevaClave" type="password" required class="relative block w-full px-3 py-3 text-gray-900 placeholder-gray-500 border rounded-md appearance-none form-input focus:z-10 sm:text-sm" placeholder="Nueva Contraseña">
+            </div>
+            <div>
+                <label for="confirmarClave" class="sr-only">Confirmar Contraseña</label>
+                <input id="confirmarClave" name="confirmarClave" type="password" required class="relative block w-full px-3 py-3 text-gray-900 placeholder-gray-500 border rounded-md appearance-none form-input focus:z-10 sm:text-sm" placeholder="Confirmar Nueva Contraseña">
+            </div>
+
+            <div>
+                <button type="submit" class="relative flex justify-center w-full px-4 py-3 text-sm font-medium text-white border border-transparent rounded-md btn-primary group">
+                    Guardar Nueva Contraseña
+                </button>
+            </div>
+        </form>
+        
+        <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
+    </div>
+
+    <!-- CAMBIO: Incluir el fichero de configuración -->
+    <script src="js/config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+            if (token) {
+                document.getElementById('token').value = token;
+            } else {
+                displayMessage('Token no encontrado. Por favor, utiliza el enlace de tu correo.', 'error');
+                document.querySelector('button[type="submit"]').disabled = true;
+            }
+        });
+
+        async function handleReset(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const messageDiv = document.getElementById('message');
+
+            const nuevaClave = formData.get('nuevaClave');
+            const confirmarClave = formData.get('confirmarClave');
+
+            if (nuevaClave !== confirmarClave) {
+                displayMessage('Las contraseñas no coinciden.', 'error');
+                return;
+            }
+            if (nuevaClave.length < 8) {
+                displayMessage('La nueva contraseña debe tener al menos 8 caracteres.', 'error');
+                return;
+            }
+
+            messageDiv.textContent = 'Actualizando tu contraseña...';
+            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
+            messageDiv.classList.remove('hidden');
+
+            try {
+                // CAMBIO: Usar la URL del fichero de configuración
+                const response = await fetch(AppConfig.getUrl('RESTABLECER_CLAVE'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    displayMessage(result.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 3000);
+                } else {
+                    displayMessage(result.message, 'error');
+                }
+
+            } catch (error) {
+                console.error('Error en la solicitud:', error);
+                displayMessage('Ocurrió un error al procesar tu solicitud.', 'error');
+            }
+        }
+
+        function displayMessage(msg, type) {
+            const messageDiv = document.getElementById('message');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500'
+            };
+            messageDiv.textContent = msg;
+            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colors[type]}`;
+            messageDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
