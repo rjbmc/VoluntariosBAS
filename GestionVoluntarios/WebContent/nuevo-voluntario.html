@@ -129,7 +129,29 @@
                 messageDiv.classList.remove('hidden');
                 return;
             }
+           
+            const fechaNacimientoStr = formData.get('fechaNacimiento');
+            if (!fechaNacimientoStr) {
+                messageDiv.textContent = 'Por favor, introduce tu fecha de nacimiento.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return;
+            }
 
+            const fechaNacimiento = new Date(fechaNacimientoStr);
+            const hoy = new Date();
+            const edadMinima = 16;
+            
+            // Clonamos la fecha de hoy para no modificarla
+            let fechaMinima = new Date(hoy.getFullYear() - edadMinima, hoy.getMonth(), hoy.getDate());
+
+            if (fechaNacimiento > fechaMinima) {
+                messageDiv.textContent = 'Debes tener al menos 16 años para registrarte.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return; // Detiene el envío del formulario
+            }
+            
             messageDiv.textContent = 'Registrando...';
             messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
             messageDiv.classList.remove('hidden');
@@ -143,9 +165,10 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    messageDiv.textContent = result.message;
-                    messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
-                    form.reset();
+                	const mensajeExito = `${result.message} <br>Email enviado a: <strong>${result.email}</strong>`;
+                	messageDiv.innerHTML = mensajeExito; 
+                	messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
+                    // form.reset();
                     // La redirección al login se hará después de que el usuario vea el mensaje
                 } else {
                     messageDiv.textContent = result.message || 'Error desconocido.';

@@ -4,7 +4,6 @@ package servlets.sevilla.bancodealimentos.es;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
@@ -14,8 +13,6 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-
-import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
@@ -74,7 +71,7 @@ public class GuardarTurnosServlet extends HttpServlet {
         try {
             String campanaId = request.getParameter("campanaId");
 
-            int[] tiendas = new int[4];
+            Integer[] tiendas = new Integer[4];
             String[] comentarios = new String[4];
 
             for (int i = 1; i <= 4; i++) {
@@ -96,7 +93,7 @@ public class GuardarTurnosServlet extends HttpServlet {
                     }
                     comentarios[i - 1] = comentarioFinal.toString();
                 } else {
-                    tiendas[i - 1] = 0;
+                    tiendas[i - 1] = null;
                     comentarios[i - 1] = "";
                 }
             }
@@ -115,13 +112,13 @@ public class GuardarTurnosServlet extends HttpServlet {
 
                 stmt.setString(1, campanaId);
                 stmt.setString(2, usuarioFinal);
-                stmt.setInt(3, tiendas[0]);
+                stmt.setObject(3, tiendas[0], java.sql.Types.INTEGER);
                 stmt.setString(4, comentarios[0]);
-                stmt.setInt(5, tiendas[1]);
+                stmt.setObject(5, tiendas[1], java.sql.Types.INTEGER);
                 stmt.setString(6, comentarios[1]);
-                stmt.setInt(7, tiendas[2]);
+                stmt.setObject(7, tiendas[2], java.sql.Types.INTEGER);
                 stmt.setString(8, comentarios[2]);
-                stmt.setInt(9, tiendas[3]);
+                stmt.setObject(9, tiendas[3], java.sql.Types.INTEGER);
                 stmt.setString(10, comentarios[3]);
                 stmt.setString(11, "S");
 
