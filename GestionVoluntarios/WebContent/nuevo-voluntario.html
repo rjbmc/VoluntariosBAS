@@ -75,9 +75,29 @@
                     <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña">
                 </div>
             </div>
-
+			<hr class="my-8">
+			
+			<div class="space-y-4">
+			    <h3 class="text-lg font-semibold text-center text-gray-700">Compromiso y Tratamiento de Datos</h3>
+			    <a href="Acuerdo-Voluntarios-Grandes-Recogidas.pdf" target="_blank" id="link-compromisos" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
+			        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+			        Leer Acuerdo Voluntarios Grandes Recogidas
+			    </a>
+			    <a href="Politica-de-proteccion-de-datos-1.pdf" target="_blank" id="link-privacidad" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
+			        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+			        Leer Política de Privacidad de Datos (PDF)
+			    </a>
+			</div>
+			
+			<div class="pt-4 mt-4">
+			    <label class="flex items-center" id="consent-label">
+			        <input type="checkbox" id="consent-checkbox" disabled class="h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500 disabled:opacity-50">
+			        <span class="ml-3 text-gray-700">He leído y acepto los compromisos y la política de tratamiento de datos.</span>
+			    </label>
+			</div>
+			
             <div>
-                <button type="submit" class="relative flex justify-center w-full px-4 py-3 mt-4 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                <button type="submit" id="submit-btn" disabled class="relative flex justify-center w-full px-4 py-3 mt-4 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
                     Completar Registro
                 </button>
             </div>
@@ -104,8 +124,39 @@
                 document.getElementById('nombre-tienda').textContent = puntoNombre;
                 document.getElementById('tienda-seleccionada-info').classList.remove('hidden');
             }
+        }); 
+        
+        const linkCompromisos = document.getElementById('link-compromisos');
+        const linkPrivacidad = document.getElementById('link-privacidad');
+        const checkbox = document.getElementById('consent-checkbox');
+        const submitBtn = document.getElementById('submit-btn'); // El botón de registro
+        
+        let haLeidoCompromisos = false;
+        let haLeidoPrivacidad = false; // Lo ponemos en false para obligar a hacer clic
+
+        // Función para comprobar si se debe habilitar la casilla de aceptación
+        function checkEnableCheckbox() {
+            if (haLeidoCompromisos && haLeidoPrivacidad) {
+                checkbox.disabled = false;
+            }
+        }
+
+        // Añadir listeners a los enlaces para saber si el usuario ha hecho clic
+        linkCompromisos.addEventListener('click', () => {
+            haLeidoCompromisos = true;
+            checkEnableCheckbox();
         });
 
+        linkPrivacidad.addEventListener('click', () => {
+            haLeidoPrivacidad = true;
+            checkEnableCheckbox();
+        });
+
+        // Habilitar/deshabilitar el botón de REGISTRO cuando cambia la casilla
+        checkbox.addEventListener('change', () => {
+            submitBtn.disabled = !checkbox.checked;
+        });
+        
         async function handleRegister(event) {
             event.preventDefault();
 
