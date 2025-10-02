@@ -65,7 +65,7 @@ public class ConfirmarBajaServlet extends HttpServlet {
                 // 2. Si se encuentra el usuario, proceder con la baja lógica
                 String updateUserSql = "UPDATE voluntarios SET fecha_baja = ?, token_baja = NULL, token_baja_expiry = NULL WHERE Usuario = ?";
                 try (PreparedStatement psUpdate = conn.prepareStatement(updateUserSql)) {
-                    psUpdate.setDate(1, new java.sql.Date(new Date().getTime()));
+                    psUpdate.setTimestamp(1, Timestamp.from(Instant.now())); 
                     psUpdate.setString(2, usuario);
                     
                     int rowsAffected = psUpdate.executeUpdate();

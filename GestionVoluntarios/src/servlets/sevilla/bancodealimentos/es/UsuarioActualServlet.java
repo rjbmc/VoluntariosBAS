@@ -21,12 +21,13 @@ public class UsuarioActualServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    	// Obtenemos la sesión actual. El 'false' indica que no se debe crear una nueva si no existe.
+    	HttpSession session = request.getSession(false);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         PrintWriter out = response.getWriter();
 
         // Obtenemos la sesi�n actual. El 'false' indica que no se debe crear una nueva si no existe.
-        HttpSession session = request.getSession(false);
 
         if (session != null && session.getAttribute("usuario") != null) {
             // Si hay una sesi�n y contiene el atributo 'usuario', lo devolvemos.
@@ -40,5 +41,6 @@ public class UsuarioActualServlet extends HttpServlet {
             // Enviamos un error 401 Unauthorized.
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No hay una sesi�n de usuario activa.");
         }
-    }
+    }    
+
 }

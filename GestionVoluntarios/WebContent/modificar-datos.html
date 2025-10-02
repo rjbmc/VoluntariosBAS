@@ -8,13 +8,13 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/Voluntarios Banco de Alimentos de Sevilla/css/style.css">
+    <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
 </head>
 <body class="flex items-center justify-center min-h-screen py-12">
 
     <div class="w-full max-w-4xl p-8 space-y-6 bg-white rounded-2xl card-shadow m-4">
         <div class="flex justify-center">
-            <img src="/Voluntarios Banco de Alimentos de Sevilla/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48 mb-4">
+            <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48 mb-4">
         </div>
         <div class="text-center">
             <h2 class="text-2xl font-bold text-gray-800">Modificar Mis Datos Personales</h2>
@@ -129,7 +129,7 @@
     </div>
 
 
-    <script src="/Voluntarios Banco de Alimentos de Sevilla/js/config.js"></script>
+    <script src="/VoluntariosBAS/js/config.js"></script>
     <script>
         let mapInstance = null;
         let todasTiendasCache = new Map();
@@ -228,8 +228,42 @@
         }
         
         async function handleBaja(event) {
-            // Lógica para procesar la baja
+            event.preventDefault(); // Evita que el formulario se envíe de la manera tradicional
+            const form = document.getElementById('bajaForm');
+            const password = document.getElementById('clave_baja').value;
+
+            if (!password) {
+                alert("Por favor, introduce tu contraseña para continuar.");
+                return;
+            }
+
+            try {
+                const response = await fetch(AppConfig.getUrl('SOLICITAR_BAJA'), { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ password: password }) // Enviamos la contraseña para verificación
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Éxito: el servidor ha enviado el email
+                    closeBajaModal();
+                    alert(result.message); // "Se ha enviado un email a tu correo para confirmar la baja."
+                    form.reset(); // Limpia el campo de contraseña
+                } else {
+                    // Error: contraseña incorrecta, token inválido, etc.
+                    alert(`Error: ${result.message}`);
+                }
+
+            } catch (error) {
+                console.error('Error de red al solicitar la baja:', error);
+                alert("Hubo un problema de conexión. Inténtalo de nuevo más tarde.");
+            }
         }
+
 
         function openMapModal() {
             document.getElementById('map-modal').classList.remove('hidden');

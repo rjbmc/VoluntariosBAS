@@ -38,7 +38,8 @@ const AppConfig = {
         ADMIN_DETALLE_TURNO: '/admin-detalle-turno',
         ADMIN_FILTROS_TIENDAS: '/admin-filtros-tiendas',
         INFORME_CAMPANA: '/informe-campana',
-        REFRESCAR_POWERAPP: '/refrescar-powerapp'
+        REFRESCAR_POWERAPP: '/refrescar-powerapp',
+		SOLICITAR_BAJA: '/solicitar-baja'
     },
 
     /**
