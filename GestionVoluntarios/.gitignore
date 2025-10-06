@@ -11,4 +11,8 @@
 .DS_Store
 *.class
 *.war
+<<<<<<< HEAD
 *.ear
+=======
+*.ear
+>>>>>>> branch 'master' of https://github.com/rjbmc/VoluntariosBAS
