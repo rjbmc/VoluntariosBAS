@@ -1,0 +1,14 @@
+# Eclipse project files
+.project
+.classpath
+.settings/
+
+# Compiled output
+/bin/
+/target/
+
+# Other IDE files
+.DS_Store
+*.class
+*.war
+*.ear
