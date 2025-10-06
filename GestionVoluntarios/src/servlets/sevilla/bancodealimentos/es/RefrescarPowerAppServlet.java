@@ -20,6 +20,11 @@ import java.util.Set;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.ss.util.AreaReference;
+import org.apache.poi.ss.util.CellReference;
+import org.apache.poi.xssf.usermodel.XSSFTable;
+import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTTableStyleInfo;
+import org.apache.poi.ss.SpreadsheetVersion; // Añadido para AreaReference
 
 import com.google.gson.JsonObject;
 
@@ -182,6 +187,7 @@ public class RefrescarPowerAppServlet extends HttpServlet {
                 
                 correlativo++;
             }
+            applyTableFormatting(sheet, "ResumenAsignaciones");
         }
     }
 
@@ -201,6 +207,7 @@ public class RefrescarPowerAppServlet extends HttpServlet {
                     row.createCell(i - 1).setCellValue(value != null ? value.toString() : "");
                 }
             }
+            applyTableFormatting(sheet, sheetName.replaceAll("\\s+", "")); // Usamos un nombre de tabla sin espacios
         }
     }
 
@@ -241,6 +248,7 @@ public class RefrescarPowerAppServlet extends HttpServlet {
                 rowNum = compareAssignments(sheet, rowNum, current, snapshot);
             }
         }
+        applyTableFormatting(sheet, "ResumenConCambios");
     }
     
     private int compareAssignments(XSSFSheet sheet, int rowNum, Asignacion current, Asignacion snapshot) {
@@ -370,6 +378,43 @@ public class RefrescarPowerAppServlet extends HttpServlet {
         
         message.setContent(multipart);
         Transport.send(message);
+    }
+    /**
+     * Aplica el formato de "Tabla de Excel" a una hoja con datos ya existentes.
+     * @param sheet La hoja a la que se le aplicará el formato.
+     * @param tableName Un nombre único para la tabla dentro del libro de trabajo.
+     */
+    private void applyTableFormatting(XSSFSheet sheet, String tableName) {
+        // Paso 1: Determinar el rango de la tabla (desde A1 hasta la última celda con datos)
+        int firstRow = 0;
+        int lastRow = sheet.getLastRowNum();
+        if (lastRow < firstRow) { return; } // No hacer nada si la hoja está vacía
+
+        int firstCol = sheet.getRow(0).getFirstCellNum();
+        int lastCol = sheet.getRow(0).getLastCellNum() - 1;
+
+        // Crear la referencia del área, ej: "A1:E50"
+        CellReference topLeft = new CellReference(firstRow, firstCol);
+        CellReference bottomRight = new CellReference(lastRow, lastCol);
+        AreaReference area = new AreaReference(topLeft, bottomRight, SpreadsheetVersion.EXCEL2007);
+
+        // Paso 2: Crear el objeto Tabla sobre esa área
+        XSSFTable table = sheet.createTable(area);
+        table.setName(tableName);
+        table.setDisplayName(tableName);
+
+        // Paso 3: Configurar la tabla
+        // Indicar que la primera fila es la cabecera
+        table.getCTTable().setHeaderRowCount(1);
+
+        // Habilitar el autofiltro en la cabecera
+        table.getCTTable().addNewAutoFilter();
+
+        // Paso 4: Aplicar un estilo visual a la tabla
+        CTTableStyleInfo styleInfo = table.getCTTable().addNewTableStyleInfo();
+        styleInfo.setName("TableStyleMedium2"); // Un estilo azul común. Puedes probar otros como "TableStyleMedium9" (verde), etc.
+        styleInfo.setShowRowStripes(true); // Habilitar las filas con bandas de colores
+        styleInfo.setShowColumnStripes(false);
     }
 }
 

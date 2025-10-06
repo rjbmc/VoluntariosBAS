@@ -202,7 +202,13 @@
                 messageDiv.classList.remove('hidden');
                 return; // Detiene el envío del formulario
             }
-            
+            const dni = formData.get('dni');
+            if (!validarDniNie(dni)) {
+                messageDiv.textContent = 'El DNI o NIE introducido no es válido.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return; // Detiene el envío del formulario si no es válido
+            }
             messageDiv.textContent = 'Registrando...';
             messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
             messageDiv.classList.remove('hidden');
@@ -233,6 +239,41 @@
             }
             
             messageDiv.classList.remove('hidden');
+        }
+        /**
+         * Valida si un DNI o NIE tiene el formato y la letra de control correctos.
+         * @param {string} valor - El DNI o NIE a validar.
+         * @returns {boolean} - Devuelve true si es válido, false en caso contrario.
+         */
+        function validarDniNie(valor) {
+            if (typeof valor !== 'string') {
+                return false;
+            }
+
+            const valorUpper = valor.toUpperCase().trim();
+            
+            // Expresión regular para validar el formato de DNI o NIE
+            // Acepta: 8 números + letra, o X/Y/Z + 7 números + letra
+            const nifRegex = /^([XYZ]?\d{7,8})([A-Z])$/;
+            
+            if (!nifRegex.test(valorUpper)) {
+                return false; // El formato no es válido
+            }
+            
+            const match = valorUpper.match(nifRegex);
+            let numero = match[1];
+            const letra = match[2];
+            
+            // Si es un NIE (empieza por X, Y, Z), se reemplaza la letra inicial por un número
+            numero = numero.replace('X', '0').replace('Y', '1').replace('Z', '2');
+            
+            // Se calcula la letra de control
+            const resto = parseInt(numero, 10) % 23;
+            const letras = "TRWAGMYFPDXBNJZSQVHLCKE";
+            const letraCalculada = letras.charAt(resto);
+            
+            // Se compara la letra introducida con la calculada
+            return letra === letraCalculada;
         }
     </script>
 </body>

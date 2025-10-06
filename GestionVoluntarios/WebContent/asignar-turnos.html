@@ -357,11 +357,17 @@
             if (!mapInstance.hasLayer(priorityLayers[1])) priorityLayers[1].addTo(mapInstance);
             if (!mapInstance.hasLayer(priorityLayers[level])) priorityLayers[level].addTo(mapInstance);
             
-            if (level === 3 && !mapInstance.hasLayer(priorityLayers[2])) {
-                priorityLayers[2].addTo(mapInstance);
+            if (level === 3) {
+                setActiveButton('btn-prio3');
+                if (!mapInstance.hasLayer(priorityLayers[2])) {
+                    priorityLayers[2].addTo(mapInstance);
+                }
             }
-            if (level === 2 && mapInstance.hasLayer(priorityLayers[3])) {
-                mapInstance.removeLayer(priorityLayers[3]);
+            if (level === 2) {
+                setActiveButton('btn-prio2');
+                if (mapInstance.hasLayer(priorityLayers[3])) {
+                    mapInstance.removeLayer(priorityLayers[3]);
+                }
             }
         }
 
@@ -370,6 +376,7 @@
             if (mapInstance.hasLayer(priorityLayers[2])) mapInstance.removeLayer(priorityLayers[2]);
             if (mapInstance.hasLayer(priorityLayers[3])) mapInstance.removeLayer(priorityLayers[3]);
             if (!mapInstance.hasLayer(priorityLayers[1])) priorityLayers[1].addTo(mapInstance);
+            setActiveButton('btn-prio1');
         }
 
         function selectStore(turnoId, tienda) {
@@ -419,6 +426,29 @@
             console.error(message);
             displayMessage(message, 'error');
         }
+        function setActiveButton(buttonId) {
+            const btn1 = document.getElementById('btn-prio1');
+            const btn2 = document.getElementById('btn-prio2');
+            const btn3 = document.getElementById('btn-prio3');
+
+            // Primero, ponemos todos como inactivos (btn-secondary)
+            btn1.classList.remove('btn-primary');
+            btn1.classList.add('btn-secondary');
+            
+            btn2.classList.remove('btn-primary');
+            btn2.classList.add('btn-secondary');
+
+            btn3.classList.remove('btn-primary');
+            btn3.classList.add('btn-secondary');
+
+            // Luego, activamos solo el que se ha seleccionado
+            const activeButton = document.getElementById(buttonId);
+            activeButton.classList.remove('btn-secondary');
+            activeButton.classList.add('btn-primary');
+        }
+
+        // Así la llamarías
+        // setActiveButton('btn-prio1');
     </script>
 </body>
 </html>
