@@ -60,17 +60,16 @@
 
             <hr class="my-6">
 
-            <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+            <div class="flex flex-col items-center gap-y-6">
                 <!-- Eliminado campo de usuario, se usará DNI/NIF como identificador -->
                 <input type="hidden" id="usuario" name="usuario">
-                <div></div>
-                <div>
-                    <label for="clave" class="input-label">Contraseña</label>
-                    <input id="clave" name="clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Mínimo 8 caracteres">
+                <div class="w-full max-w-md">
+                    <label for="clave" class="input-label block text-center">Contraseña</label>
+                    <input id="clave" name="clave" type="password" required class="form-input mx-auto block w-full max-w-md px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Mínimo 8 caracteres">
                 </div>
-                <div>
-                    <label for="confirmar_clave" class="input-label">Confirmar Contraseña</label>
-                    <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña">
+                <div class="w-full max-w-md">
+                    <label for="confirmar_clave" class="input-label block text-center">Confirmar Contraseña</label>
+                    <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input mx-auto block w-full max-w-md px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña">
                 </div>
             </div>
 			<hr class="my-8">
