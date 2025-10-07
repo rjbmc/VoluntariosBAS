@@ -24,68 +24,53 @@
             <p>Punto de recogida seleccionado: <strong id="nombre-tienda"></strong></p>
         </div>
 
-        <form id="registroForm" class="mt-8 space-y-6" onsubmit="return false;">
+        <form id="registroForm" class="mt-8 space-y-6" onsubmit="handleRegister(event)">
             <input type="hidden" id="punto_id" name="punto_id">
 
             <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
                 <div>
-                    <label for="nombre" class="input-label" aria-label="Nombre">Nombre</label>
-                    <input id="nombre" name="nombre" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tu nombre" aria-required="true">
-                    <div id="error-nombre" class="text-red-600 text-xs mt-1 hidden"></div>
+                    <label for="nombre" class="input-label">Nombre</label>
+                    <input id="nombre" name="nombre" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tu nombre">
                 </div>
                 <div>
-                    <label for="apellidos" class="input-label" aria-label="Apellidos">Apellidos</label>
-                    <input id="apellidos" name="apellidos" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tus apellidos" aria-required="true">
-                    <div id="error-apellidos" class="text-red-600 text-xs mt-1 hidden"></div>
+                    <label for="apellidos" class="input-label">Apellidos</label>
+                    <input id="apellidos" name="apellidos" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tus apellidos">
                 </div>
                 <div>
-                    <label for="dni" class="input-label" aria-label="DNI / NIF">DNI / NIF</label>
-                    <input id="dni" name="dni" type="text" maxlength="9" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A" aria-required="true">
-                    <div id="error-dni" class="text-red-600 text-xs mt-1 hidden"></div>
+                    <label for="dni" class="input-label">DNI / NIF</label>
+                    <input id="dni" name="dni" type="text" maxlength="9" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A">
                 </div>
                 <div>
-                    <label for="fechaNacimiento" class="input-label" aria-label="Fecha de Nacimiento">Fecha de Nacimiento</label>
-                    <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" aria-required="true">
-                    <div id="error-fechaNacimiento" class="text-red-600 text-xs mt-1 hidden"></div>
+                    <label for="fechaNacimiento" class="input-label">Fecha de Nacimiento</label>
+                    <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm">
                 </div>
                 <div>
-                    <label for="email" class="input-label" aria-label="Correo Electrónico">Correo Electrónico</label>
-                    <input id="email" name="email" type="email" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="tu@email.com" aria-required="true">
-                    <div id="error-email" class="text-red-600 text-xs mt-1 hidden"></div>
+                    <label for="email" class="input-label">Correo Electrónico</label>
+                    <input id="email" name="email" type="email" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="tu@email.com">
                 </div>
                 <div>
-                    <label for="telefono" class="input-label" aria-label="Teléfono">Teléfono</label>
-                    <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="600112233" aria-required="true">
-                    <div id="error-telefono" class="text-red-600 text-xs mt-1 hidden"></div>
+                    <label for="telefono" class="input-label">Teléfono</label>
+                    <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="600112233">
                 </div>
-                <div>
-                    <label for="cp" class="input-label" aria-label="Código Postal">Código Postal</label>
-                    <input id="cp" name="cp" type="text" maxlength="5" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="41001" aria-required="true">
-                    <div id="error-cp" class="text-red-600 text-xs mt-1 hidden"></div>
+                 <div>
+                    <label for="cp" class="input-label">Código Postal</label>
+                    <input id="cp" name="cp" type="text" maxlength="5" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="41001">
                 </div>
             </div>
 
             <hr class="my-6">
 
             <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
-                <div>
-                    <label for="usuario" class="input-label" aria-label="Nombre de Usuario">Nombre de Usuario</label>
-                    <input id="usuario" name="usuario" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Elige un usuario" aria-required="true">
-                    <div id="error-usuario" class="text-red-600 text-xs mt-1 hidden"></div>
-                </div>
+                <!-- Eliminado campo de usuario, se usará DNI/NIF como identificador -->
+                <input type="hidden" id="usuario" name="usuario">
                 <div></div>
-                <div class="relative">
-                    <label for="clave" class="input-label" aria-label="Contraseña">Contraseña</label>
-                    <input id="clave" name="clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm pr-10" placeholder="Mínimo 8 caracteres" aria-required="true">
-                    <button type="button" id="toggleClave" class="absolute right-2 top-9 text-gray-500" aria-label="Mostrar/Ocultar contraseña">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm6 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </button>
-                    <div id="error-clave" class="text-red-600 text-xs mt-1 hidden"></div>
+                <div>
+                    <label for="clave" class="input-label">Contraseña</label>
+                    <input id="clave" name="clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Mínimo 8 caracteres">
                 </div>
                 <div>
-                    <label for="confirmar_clave" class="input-label" aria-label="Confirmar Contraseña">Confirmar Contraseña</label>
-                    <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña" aria-required="true">
-                    <div id="error-confirmar_clave" class="text-red-600 text-xs mt-1 hidden"></div>
+                    <label for="confirmar_clave" class="input-label">Confirmar Contraseña</label>
+                    <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña">
                 </div>
             </div>
 			<hr class="my-8">
@@ -104,13 +89,13 @@
 			
 			<div class="pt-4 mt-4">
 			    <label class="flex items-center" id="consent-label">
-			        <input type="checkbox" id="consent-checkbox" disabled class="h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500 disabled:opacity-50" aria-required="true">
+			        <input type="checkbox" id="consent-checkbox" disabled class="h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500 disabled:opacity-50">
 			        <span class="ml-3 text-gray-700">He leído y acepto los compromisos y la política de tratamiento de datos.</span>
 			    </label>
 			</div>
+			
             <div>
                 <button type="submit" id="submit-btn" disabled class="relative flex justify-center w-full px-4 py-3 mt-4 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
-                    <span id="spinner" class="hidden mr-2"><svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg></span>
                     Completar Registro
                 </button>
             </div>
@@ -126,6 +111,170 @@
 
     </div>
 
-    <script src="js/registro-voluntario.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const puntoId = params.get('tienda_id');
+            const puntoNombre = params.get('tienda_nombre');
+
+            if (puntoId && puntoNombre) {
+                document.getElementById('punto_id').value = puntoId;
+                document.getElementById('nombre-tienda').textContent = puntoNombre;
+                document.getElementById('tienda-seleccionada-info').classList.remove('hidden');
+            }
+        }); 
+        
+        const linkCompromisos = document.getElementById('link-compromisos');
+        const linkPrivacidad = document.getElementById('link-privacidad');
+        const checkbox = document.getElementById('consent-checkbox');
+        const submitBtn = document.getElementById('submit-btn'); // El botón de registro
+        
+        let haLeidoCompromisos = false;
+        let haLeidoPrivacidad = false; // Lo ponemos en false para obligar a hacer clic
+
+        // Función para comprobar si se debe habilitar la casilla de aceptación
+        function checkEnableCheckbox() {
+            if (haLeidoCompromisos && haLeidoPrivacidad) {
+                checkbox.disabled = false;
+            }
+        }
+
+        // Añadir listeners a los enlaces para saber si el usuario ha hecho clic
+        linkCompromisos.addEventListener('click', () => {
+            haLeidoCompromisos = true;
+            checkEnableCheckbox();
+        });
+
+        linkPrivacidad.addEventListener('click', () => {
+            haLeidoPrivacidad = true;
+            checkEnableCheckbox();
+        });
+
+        // Habilitar/deshabilitar el botón de REGISTRO cuando cambia la casilla
+        checkbox.addEventListener('change', () => {
+            submitBtn.disabled = !checkbox.checked;
+        });
+        
+        async function handleRegister(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const messageDiv = document.getElementById('message');
+            // Asignar el valor de usuario al DNI antes de enviar
+            formData.set('usuario', formData.get('dni'));
+
+            const clave = formData.get('clave');
+            const confirmarClave = formData.get('confirmar_clave');
+
+            if (clave !== confirmarClave) {
+                messageDiv.textContent = 'Las contraseñas no coinciden.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return;
+            }
+            
+            if (clave.length < 8) {
+                messageDiv.textContent = 'La contraseña debe tener al menos 8 caracteres.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return;
+            }
+           
+            const fechaNacimientoStr = formData.get('fechaNacimiento');
+            if (!fechaNacimientoStr) {
+                messageDiv.textContent = 'Por favor, introduce tu fecha de nacimiento.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return;
+            }
+
+            const fechaNacimiento = new Date(fechaNacimientoStr);
+            const hoy = new Date();
+            const edadMinima = 16;
+            
+            // Clonamos la fecha de hoy para no modificarla
+            let fechaMinima = new Date(hoy.getFullYear() - edadMinima, hoy.getMonth(), hoy.getDate());
+
+            if (fechaNacimiento > fechaMinima) {
+                messageDiv.textContent = 'Debes tener al menos 16 años para registrarte.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return; // Detiene el envío del formulario
+            }
+            const dni = formData.get('dni');
+            if (!validarDniNie(dni)) {
+                messageDiv.textContent = 'El DNI o NIE introducido no es válido.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                messageDiv.classList.remove('hidden');
+                return; // Detiene el envío del formulario si no es válido
+            }
+            messageDiv.textContent = 'Registrando...';
+            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
+            messageDiv.classList.remove('hidden');
+
+            try {
+                const response = await fetch(AppConfig.getUrl('NUEVO_VOLUNTARIO'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                	const mensajeExito = `${result.message} <br>Email enviado a: <strong>${result.email}</strong>`;
+                	messageDiv.innerHTML = mensajeExito; 
+                	messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
+                    // form.reset();
+                    // La redirección al login se hará después de que el usuario vea el mensaje
+                } else {
+                    messageDiv.textContent = result.message || 'Error desconocido.';
+                    messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                }
+
+            } catch (error) {
+                console.error('Error al conectar con el servidor:', error);
+                messageDiv.textContent = 'No se pudo conectar con el servidor. Inténtalo más tarde.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+            }
+            
+            messageDiv.classList.remove('hidden');
+        }
+        /**
+         * Valida si un DNI o NIE tiene el formato y la letra de control correctos.
+         * @param {string} valor - El DNI o NIE a validar.
+         * @returns {boolean} - Devuelve true si es válido, false en caso contrario.
+         */
+        function validarDniNie(valor) {
+            if (typeof valor !== 'string') {
+                return false;
+            }
+
+            const valorUpper = valor.toUpperCase().trim();
+            
+            // Expresión regular para validar el formato de DNI o NIE
+            // Acepta: 8 números + letra, o X/Y/Z + 7 números + letra
+            const nifRegex = /^([XYZ]?\d{7,8})([A-Z])$/;
+            
+            if (!nifRegex.test(valorUpper)) {
+                return false; // El formato no es válido
+            }
+            
+            const match = valorUpper.match(nifRegex);
+            let numero = match[1];
+            const letra = match[2];
+            
+            // Si es un NIE (empieza por X, Y, Z), se reemplaza la letra inicial por un número
+            numero = numero.replace('X', '0').replace('Y', '1').replace('Z', '2');
+            
+            // Se calcula la letra de control
+            const resto = parseInt(numero, 10) % 23;
+            const letras = "TRWAGMYFPDXBNJZSQVHLCKE";
+            const letraCalculada = letras.charAt(resto);
+            
+            // Se compara la letra introducida con la calculada
+            return letra === letraCalculada;
+        }
+    </script>
 </body>
 </html>
