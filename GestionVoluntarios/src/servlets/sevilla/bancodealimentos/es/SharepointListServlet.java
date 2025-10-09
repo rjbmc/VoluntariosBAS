@@ -1,8 +1,9 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import com.google.gson.Gson;
-import com.microsoft.graph.requests.GraphServiceClient;
-import com.microsoft.graph.requests.ListItemCollectionPage;
+import com.google.gson.GsonBuilder;
+import com.microsoft.graph.models.ListItem; // IMPORT CORREGIDO para v6
+import com.microsoft.graph.serviceclient.GraphServiceClient; // IMPORT CORREGIDO para v6
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +12,7 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.List;
 import java.util.Objects;
 
 public class SharepointListServlet extends HttpServlet {
@@ -20,11 +22,9 @@ public class SharepointListServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         
-        // Obtener IDs desde las variables de entorno
         String siteId = System.getenv("SP_SITE_ID");
         String listId = System.getenv("SP_LIST_ID");
 
-        // Validar que los IDs del sitio y la lista están configurados
         if (Objects.isNull(siteId) || Objects.isNull(listId) || siteId.isEmpty() || listId.isEmpty()) {
             System.err.println("Error: Faltan las variables de entorno SP_SITE_ID o SP_LIST_ID.");
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "La configuración del servidor para SharePoint está incompleta.");
@@ -32,24 +32,22 @@ public class SharepointListServlet extends HttpServlet {
         }
 
         try {
-            // 1. Obtener el cliente de Graph autenticado
-            GraphServiceClient<okhttp3.Request> graphClient = SharepointUtil.getGraphClient();
+            GraphServiceClient graphClient = SharepointUtil.getGraphClient();
 
-            // 2. Construir la petición para obtener los items de la lista.
-            //    - .expand("fields") es importante para que nos devuelva los datos de las columnas.
-            ListItemCollectionPage listItems = graphClient
-                .sites(siteId)
-                .lists(listId)
+            // Construir la petición para v6 (la sintaxis ha cambiado)
+            List<ListItem> listItems = graphClient.sites().bySiteId(siteId)
+                .lists().byListId(listId)
                 .items()
-                .buildRequest()
-                .expand("fields")
-                .get();
+                .get(requestConfiguration -> {
+                    // .expand es ahora un parámetro de configuración de la petición
+                    requestConfiguration.queryParameters.expand = new String[]{"fields"};
+                }).getValue();
 
-            // 3. Convertir la lista de resultados a JSON usando GSON
-            Gson gson = new Gson();
-            String jsonResponse = gson.toJson(listItems.getCurrentPage());
+            // Usar Gson para serializar la respuesta. 
+            // Usar GsonBuilder para un formato más legible si se desea.
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            String jsonResponse = gson.toJson(listItems);
             
-            // 4. Escribir la respuesta JSON al cliente
             response.setContentType("application/json");
             response.setCharacterEncoding("UTF-8");
             PrintWriter out = response.getWriter();

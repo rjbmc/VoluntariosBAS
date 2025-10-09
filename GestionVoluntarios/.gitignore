@@ -1,18 +1,15 @@
-# Eclipse project files
-.project
-.classpath
-.settings/
-
-# Compiled output
-/bin/
+# Maven build output directory
 /target/
 
-# Other IDE files
+# Log files
+*.log
+logs/
+
+# Eclipse project files (optional, but good practice)
+.classpath
+.project
+.settings/
+
+# OS-specific files
 .DS_Store
-*.class
-*.war
-<<<<<<< HEAD
-*.ear
-=======
-*.ear
->>>>>>> branch 'master' of https://github.com/rjbmc/VoluntariosBAS
+Thumbs.db
