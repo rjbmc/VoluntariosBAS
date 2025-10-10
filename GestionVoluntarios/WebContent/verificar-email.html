@@ -46,7 +46,6 @@
             }
 
             try {
-                // CAMBIO: Usar la URL del fichero de configuración
                 const response = await fetch(AppConfig.getUrl('VERIFICAR_EMAIL'), {
                     method: 'POST',
                     headers: {

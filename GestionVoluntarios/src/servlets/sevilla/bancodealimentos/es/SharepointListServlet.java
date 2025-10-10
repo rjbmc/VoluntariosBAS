@@ -21,13 +21,14 @@ public class SharepointListServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         
 //      String siteId = System.getenv("SP_SITE_ID");
 //      String listId = System.getenv("SP_LIST_ID");
+//      String listId = request.getParameter("lista");
+
     	String siteId = "SP_SITE_ID";
         String listId = "SP_LIST_ID";
-
         if (Objects.isNull(siteId) || Objects.isNull(listId) || siteId.isEmpty() || listId.isEmpty()) {
             System.err.println("Error: Faltan las variables de entorno SP_SITE_ID o SP_LIST_ID.");
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "La configuración del servidor para SharePoint está incompleta.");
