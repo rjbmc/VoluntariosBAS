@@ -2,9 +2,10 @@ package servlets.sevilla.bancodealimentos.es;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.microsoft.graph.models.ListItem; // IMPORT CORREGIDO para v6
-import com.microsoft.graph.serviceclient.GraphServiceClient; // IMPORT CORREGIDO para v6
+import com.microsoft.graph.models.ListItem;
+import com.microsoft.graph.serviceclient.GraphServiceClient; 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,7 +15,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
 import java.util.Objects;
-
+@WebServlet("/lista-sharepoint")
 public class SharepointListServlet extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
@@ -22,8 +23,10 @@ public class SharepointListServlet extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         
-        String siteId = System.getenv("SP_SITE_ID");
-        String listId = System.getenv("SP_LIST_ID");
+//      String siteId = System.getenv("SP_SITE_ID");
+//      String listId = System.getenv("SP_LIST_ID");
+    	String siteId = "SP_SITE_ID";
+        String listId = "SP_LIST_ID";
 
         if (Objects.isNull(siteId) || Objects.isNull(listId) || siteId.isEmpty() || listId.isEmpty()) {
             System.err.println("Error: Faltan las variables de entorno SP_SITE_ID o SP_LIST_ID.");

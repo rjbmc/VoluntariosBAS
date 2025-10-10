@@ -19,9 +19,13 @@ public class SharepointUtil {
     public static GraphServiceClient getGraphClient() {
         if (graphClient == null) {
             // Leer las credenciales desde las variables de entorno del sistema
-            String tenantId = System.getenv("MS_TENANT_ID");
-            String clientId = System.getenv("MS_CLIENT_ID");
-            String clientSecret = System.getenv("MS_CLIENT_SECRET");
+//            String tenantId = System.getenv("MS_TENANT_ID"); // aaea4167-1f45-4bba-ac5a-0bfb33dd3dec 
+//            String clientId = System.getenv("MS_CLIENT_ID"); // e15a2c05-a43a-487f-a78b-aa7fade86e7a 
+//            String clientSecret = System.getenv("MS_CLIENT_SECRET"); // 2HR8Q~TTaWnWOoKCbJJ-A1Ipc2IGQX1tRqFiQdpd 
+            
+        	String tenantId = " aaea4167-1f45-4bba-ac5a-0bfb33dd3dec "; // tu TENANT_ID real 
+        	String clientId = " e15a2c05-a43a-487f-a78b-aa7fade86e7a"; // Application (client) ID 
+        	String clientSecret = "2HR8Q~TTaWnWOoKCbJJ-A1Ipc2IGQX1tRqFiQdpd "; // valor del secreto 
 
             // Validar que todas las variables de entorno necesarias están presentes
             if (Objects.isNull(tenantId) || Objects.isNull(clientId) || Objects.isNull(clientSecret) ||
