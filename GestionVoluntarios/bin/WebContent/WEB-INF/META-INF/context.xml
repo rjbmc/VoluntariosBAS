@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 
+    Fichero de configuración de contexto para el servidor Tomcat gestionado por Eclipse.
+    Añadir aquí los recursos JNDI y las configuraciones globales de la aplicación.
+-->
+<Context sessionCookiePath="/">
+    <!-- 
+        sessionCookiePath="/" asegura que la cookie de sesión sea válida para todas
+        las rutas de la aplicación, solucionando problemas de pérdida de sesión entre servlets.
+    -->
+
+    <!-- Definición del DataSource JNDI para la conexión a la base de datos en pruebas--> 
+    <!--
+    <Resource name="jdbc/VoluntariosDB"
+              auth="Container"
+              type="javax.sql.DataSource"
+              maxTotal="100" 
+              maxIdle="30" 
+              maxWaitMillis="10000"
+              username="root"
+              password=""
+              driverClassName="org.mariadb.jdbc.Driver"
+              url="jdbc:mariadb://localhost:3306/voluntarioscampanas"/>
+    -->
+    <!-- Si estás en el entorno de producción, comenta el Resource de arriba y descomenta este -->
+    <Resource name="jdbc/VoluntariosDB"
+              auth="Container"
+              type="javax.sql.DataSource"
+              maxTotal="100" 
+              maxIdle="30" 
+              maxWaitMillis="10000"
+              username="BASvoluntarios"
+              password="v0luntari0sB@s"
+              driverClassName="com.mysql.cj.jdbc.Driver"
+              url="jdbc:mysql://bancodealimentosdesevilla.org:3306/voluntarioscampanas?autoReconnect=true"/>   
+
+</Context>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmando Baja - Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Montserrat', sans-serif;
+        }
+        .spinner {
+            border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-lg p-8 space-y-6 bg-white rounded-2xl shadow-lg text-center">
+        <div>
+            <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48 mx-auto mb-6">
+        </div>
+        
+        <div id="loading-state">
+            <div class="spinner w-12 h-12 rounded-full border-4 border-gray-300 mx-auto mb-4"></div>
+            <h2 class="text-2xl font-bold text-gray-800">Procesando tu solicitud de baja...</h2>
+            <p class="text-md text-gray-600 mt-2">Por favor, espera un momento.</p>
+        </div>
+
+        <div id="result-state" class="hidden">
+            <h2 id="result-title" class="text-2xl font-bold"></h2>
+            <p id="result-message" class="text-md text-gray-700 mt-2"></p>
+            <a href="/VoluntariosBAS/index.html" class="mt-6 inline-block px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700">
+                Volver a la página principal
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Este script se ejecuta automáticamente cuando la página carga
+        window.addEventListener('DOMContentLoaded', async () => {
+            // 1. Obtener el token de la URL
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+
+            const loadingDiv = document.getElementById('loading-state');
+            const resultDiv = document.getElementById('result-state');
+            const resultTitle = document.getElementById('result-title');
+            const resultMessage = document.getElementById('result-message');
+
+            if (!token) {
+                showResult('Error en la Solicitud', 'No se ha proporcionado un token de confirmación. El enlace podría estar incompleto.', 'error');
+                return;
+            }
+
+            try {
+                // 2. Hacer la petición POST al servlet ConfirmarBajaServlet
+                // Usamos URLSearchParams para enviar el token como si fuera un formulario
+                const response = await fetch('/VoluntariosBAS/confirmar-baja', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `token=${encodeURIComponent(token)}`
+                });
+
+                const result = await response.json();
+
+                // 3. Mostrar el resultado al usuario
+                if (result.success) {
+                    showResult('Baja Confirmada', result.message, 'success');
+                } else {
+                    showResult('Error al procesar la baja', result.message, 'error');
+                }
+
+            } catch (error) {
+                console.error('Error de conexión:', error);
+                showResult('Error de Conexión', 'No se pudo comunicar con el servidor. Por favor, inténtalo de nuevo más tarde.', 'error');
+            }
+
+            function showResult(title, message, type) {
+                loadingDiv.classList.add('hidden');
+                resultTitle.textContent = title;
+                resultMessage.textContent = message;
+                
+                if (type === 'success') {
+                    resultTitle.className = 'text-2xl font-bold text-green-600';
+                } else {
+                    resultTitle.className = 'text-2xl font-bold text-red-600';
+                }
+                
+                resultDiv.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
+

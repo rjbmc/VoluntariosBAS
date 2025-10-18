@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración- Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="min-h-screen">
+
+    <!-- Cabecera -->
+    <header class="bg-white shadow-md">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
+                <span class="ml-4 text-xl font-bold text-gray-700">Panel de Administración</span>
+            </div>
+            <div>
+                <button onclick="logout()" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition">Cerrar Sesión</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="container mx-auto px-6 py-12">
+        <h1 id="welcome-admin" class="text-3xl font-bold text-gray-800 mb-8">Bienvenido/a, Administrador</h1>
+        
+        <div id="message-container" class="mb-4"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- Tarjeta para Gestionar Campañas -->
+            <a href="admin-campanas.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center">
+                <div class="icon-bg text-white rounded-full p-4 w-20 h-20 mx-auto flex items-center justify-center mb-4">
+                    <!-- CAMBIO: Se usa <img> en lugar de <svg> -->
+                    <img src="images/icons/campaign.svg" class="h-10 w-10" alt="Icono de Campañas">
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">Gestionar Campañas</h2>
+                <p class="text-gray-500 mt-2">Crear, editar y activar campañas de recogida.</p>
+            </a>
+
+            <!-- Tarjeta para Gestionar Tiendas -->
+            <a href="admin-tiendas.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center">
+                <div class="icon-bg text-white rounded-full p-4 w-20 h-20 mx-auto flex items-center justify-center mb-4">
+                     <!-- CAMBIO: Se usa <img> en lugar de <svg> -->
+                     <img src="images/icons/store.svg" class="h-10 w-10" alt="Icono de Tiendas">
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">Gestionar Tiendas</h2>
+                <p class="text-gray-500 mt-2">Añadir, modificar y gestionar los puntos de recogida.</p>
+            </a>
+
+            <!-- Tarjeta para Gestionar Voluntarios -->
+            <a href="admin-voluntarios.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center">
+                <div class="icon-bg text-white rounded-full p-4 w-20 h-20 mx-auto flex items-center justify-center mb-4">
+                    <!-- CAMBIO: Se usa <img> en lugar de <svg> -->
+                    <img src="images/icons/volunteers.svg" class="h-10 w-10" alt="Icono de Voluntarios">
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">Gestionar Voluntarios</h2>
+                <p class="text-gray-500 mt-2">Consultar y editar la información de los voluntarios.</p>
+            </a>
+
+            <!-- Tarjeta para Ver Asignaciones -->
+            <a href="admin-asignaciones.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center">
+                <div class="icon-bg text-white rounded-full p-4 w-20 h-20 mx-auto flex items-center justify-center mb-4">
+                    <!-- CAMBIO: Se usa <img> en lugar de <svg> -->
+                    <img src="images/icons/assignments.svg" class="h-10 w-10" alt="Icono de Asignaciones">
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">Ver Asignaciones</h2>
+                <p class="text-gray-500 mt-2">Consultar los turnos asignados a los voluntarios.</p>
+            </a>
+            
+            <!-- Tarjeta para Resumen de Campaña -->
+            <a href="admin-resumen.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center">
+                <div class="icon-bg text-white rounded-full p-4 w-20 h-20 mx-auto flex items-center justify-center mb-4">
+                    <!-- CAMBIO: Se usa <img> en lugar de <svg> -->
+                    <img src="images/icons/summary.svg" class="h-10 w-10" alt="Icono de Resumen">
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">Resumen de Campaña</h2>
+                <p class="text-gray-500 mt-2">Ver estadísticas de ocupación y exportar datos.</p>
+            </a>
+            
+            <!-- Tarjeta para Refrescar Power App -->
+            <div onclick="refreshPowerApp()" class="admin-card bg-white p-6 rounded-lg card-shadow text-center cursor-pointer">
+                <div class="icon-bg text-white rounded-full p-4 w-20 h-20 mx-auto flex items-center justify-center mb-4">
+                    <img src="images/icons/refresh.svg" class="h-10 w-10" alt="Icono de Refrescar">
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">Refrescar Power App</h2>
+                <p class="text-gray-500 mt-2">Enviar actualizaciones por correo y reiniciar notificaciones.</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="../js/config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
+                if (!response.ok) {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                window.location.href = 'login.html';
+            }
+        });
+
+        async function logout() {
+            try {
+                await fetch(AppConfig.getUrl('LOGOUT'), { method: 'POST' });
+            } catch (error) {
+                console.error("Error al cerrar sesión, redirigiendo de todas formas.", error);
+            } finally {
+                window.location.href = 'login.html';
+            }
+        }
+
+        async function refreshPowerApp() {
+            if (!confirm("¿Estás seguro de que quieres enviar los datos actualizados y reiniciar las notificaciones? Esta acción no se puede deshacer.")) {
+                return;
+            }
+
+            displayMessage('Procesando... El envío de correos puede tardar un momento.', 'info');
+
+            try {
+                const response = await fetch(AppConfig.getUrl('REFRESCAR_POWERAPP'), {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    displayMessage(result.message, 'success');
+                } else {
+                    throw new Error(result.message || 'Error desconocido');
+                }
+            } catch (error) {
+                displayMessage(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        function displayMessage(msg, type) {
+            const container = document.getElementById('message-container');
+            const colors = {
+                success: 'bg-green-100 border-green-400 text-green-700',
+                error: 'bg-red-100 border-red-400 text-red-700',
+                info: 'bg-blue-100 border-blue-400 text-blue-700'
+            };
+            container.innerHTML = `<div class="border px-4 py-3 rounded relative ${colors[type]}" role="alert">
+                                       <span class="block sm:inline">${msg}</span>
+                                   </div>`;
+            if (type !== 'info') {
+                setTimeout(() => container.innerHTML = '', 5000);
+            }
+        }
+    </script>
+</body>
+</html>

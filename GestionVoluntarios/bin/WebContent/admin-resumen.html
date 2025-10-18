@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumen de Campaña- Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Librería para generar PDFs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --banco-orange: #F36C21;
+            --banco-dark-blue: #2E3D4C;
+        }
+        body { font-family: 'Montserrat', sans-serif; background-color: #f0f2f5; }
+        .btn { padding: 0.625rem 1rem; border-radius: 0.375rem; font-weight: 500; transition: all 0.2s; }
+        .btn-secondary { background-color: var(--banco-dark-blue); color: white; }
+        .btn-secondary:hover { background-color: #1f2a35; }
+        .btn-primary { background-color: var(--banco-orange); color: white; }
+        .btn-primary:hover { background-color: #d85b1a; }
+        .table-cell { padding: 0.75rem 1.5rem; white-space: nowrap; }
+        .table-cell-center { padding: 0.75rem 1.5rem; white-space: nowrap; text-align: center; }
+        .occupancy-low { background-color: #f0fdf4; }
+        .occupancy-medium { background-color: #fefce8; }
+        .occupancy-high { background-color: #fff1f2; }
+        .occupancy-full { background-color: #fee2e2; font-weight: bold; color: #b91c1c; }
+        .clickable-cell { cursor: pointer; text-decoration: underline; color: #2563eb; }
+        .clickable-cell:hover { color: #1d4ed8; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); z-index: 40; display: flex; align-items: center; justify-content: center; }
+        .modal-content { background-color: white; padding: 2rem; border-radius: 0.5rem; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+    </style>
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="min-h-screen">
+
+    <!-- Cabecera -->
+    <header class="bg-white shadow-md">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
+                <span class="ml-4 text-xl font-bold text-gray-700">Resumen de Campaña</span>
+            </div>
+            <div>
+                <a href="admin.html" class="px-4 py-2 text-gray-600 hover:text-orange-600">Volver al Panel</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="container mx-auto px-6 py-12">
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <h1 class="text-3xl font-bold text-gray-800">Ocupación de Tiendas</h1>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="campaign-select" class="text-sm font-medium">Seleccionar Campaña:</label>
+                    <select id="campaign-select" onchange="loadResumen()" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block w-full p-2.5">
+                    </select>
+                </div>
+                <button onclick="exportarCSV()" class="btn btn-secondary flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Exportar CSV
+                </button>
+                <button id="pdf-button" onclick="generarInformePDF()" class="btn btn-primary flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Informe PDF
+                </button>
+            </div>
+        </div>
+
+        <div id="message-container" class="mb-4"></div>
+
+        <!-- Tabla de Resumen -->
+        <div class="bg-white shadow-md rounded-lg overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th rowspan="2" class="table-cell text-left text-xs font-medium text-gray-500 uppercase tracking-wider align-bottom">Tienda</th>
+                        <th colspan="2" class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Turno 1</th>
+                        <th colspan="2" class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Turno 2</th>
+                        <th colspan="2" class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Turno 3</th>
+                        <th colspan="2" class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Turno 4</th>
+                    </tr>
+                    <tr>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Huecos</th>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ocup.</th>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Huecos</th>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ocup.</th>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Huecos</th>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ocup.</th>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider border-l">Huecos</th>
+                        <th class="table-cell-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ocup.</th>
+                    </tr>
+                </thead>
+                <tbody id="resumen-table-body" class="bg-white divide-y divide-gray-200">
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Modal para Detalle de Turno -->
+    <div id="detalle-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="detalle-modal-title" class="text-2xl font-bold mb-4">Voluntarios Asignados</h3>
+            <div id="detalle-modal-body" class="text-sm">
+                <!-- Contenido dinámico -->
+            </div>
+            <button onclick="closeDetalleModal()" class="w-full mt-6 py-2 btn btn-secondary">Cerrar</button>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script>
+        // --- CORRECCIÓN: Se han expandido y verificado todas las funciones ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCampaignsSelect();
+            await loadResumen();
+        });
+
+        async function loadCampaignsSelect() {
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_CAMPANAS'));
+                if (!response.ok) throw new Error('Error al cargar campañas');
+                const campaigns = await response.json();
+                const select = document.getElementById('campaign-select');
+                
+                let activeCampaignId = null;
+                campaigns.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.campana;
+                    option.textContent = c.denominacion;
+                    select.appendChild(option);
+                    if (c.estado === 'S') activeCampaignId = c.campana;
+                });
+                if (activeCampaignId) select.value = activeCampaignId;
+            } catch (error) {
+                displayMessage(error.message, 'error');
+            }
+        }
+
+        async function loadResumen() {
+            const selectedCampaign = document.getElementById('campaign-select').value;
+            if (!selectedCampaign) return;
+
+            try {
+                const url = `${AppConfig.getUrl('ADMIN_RESUMEN')}?campana=${selectedCampaign}`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    if (response.status === 403) window.location.href = 'login.html';
+                    throw new Error('Error al cargar el resumen.');
+                }
+                const resumen = await response.json();
+                
+                const tableBody = document.getElementById('resumen-table-body');
+                tableBody.innerHTML = '';
+
+                if (resumen.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="9" class="text-center py-4">No hay tiendas disponibles para esta campaña.</td></tr>';
+                    return;
+                }
+
+                resumen.forEach(tienda => {
+                    const tr = document.createElement('tr');
+                    let cellsHtml = `<td class="table-cell"><div class="text-sm font-medium text-gray-900">${tienda.denominacion}</div><div class="text-xs text-gray-500">Cód: ${tienda.codigo}</div></td>`;
+                    
+                    for (let i = 1; i <= 4; i++) {
+                        const huecos = tienda[`huecosTurno${i}`];
+                        const voluntarios = tienda[`voluntariosTurno${i}`];
+                        const acompanantes = tienda[`acompanantesTurno${i}`];
+                        const ocupacionTotal = voluntarios + acompanantes;
+                        
+                        let occupancyClass = 'occupancy-low';
+                        if (huecos > 0) {
+                            const ratio = ocupacionTotal / huecos;
+                            if (ratio >= 1) occupancyClass = 'occupancy-full';
+                            else if (ratio >= 0.7) occupancyClass = 'occupancy-high';
+                            else if (ratio >= 0.4) occupancyClass = 'occupancy-medium';
+                        } else if (ocupacionTotal > 0) {
+                             occupancyClass = 'occupancy-full';
+                        }
+
+                        const safeDenominacion = escapeForJS(tienda.denominacion);
+                        const ocupacionText = voluntarios > 0 
+                            ? `<button onclick="showDetalle(${tienda.codigo}, ${i}, '${safeDenominacion}')" class="clickable-cell">${voluntarios} (+${acompanantes})</button>`
+                            : `${voluntarios} (+${acompanantes})`;
+
+                        cellsHtml += `
+                            <td class="table-cell-center text-sm text-gray-500 border-l">${huecos}</td>
+                            <td class="table-cell-center text-sm text-gray-900 ${occupancyClass}">${ocupacionText}</td>
+                        `;
+                    }
+                    tr.innerHTML = cellsHtml;
+                    tableBody.appendChild(tr);
+                });
+            } catch (error) {
+                displayMessage(error.message, 'error');
+            }
+        }
+
+        function escapeForJS(str) {
+            if (!str) return '';
+            return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        }
+
+        async function showDetalle(tiendaId, turnoNum, tiendaNombre) {
+            const selectedCampaign = document.getElementById('campaign-select').value;
+            const modal = document.getElementById('detalle-modal');
+            const modalTitle = document.getElementById('detalle-modal-title');
+            const modalBody = document.getElementById('detalle-modal-body');
+
+            modalTitle.textContent = `Voluntarios en ${tiendaNombre} - Turno ${turnoNum}`;
+            modalBody.innerHTML = '<p>Cargando...</p>';
+            modal.classList.remove('hidden');
+
+            try {
+                const url = `${AppConfig.getUrl('ADMIN_DETALLE_TURNO')}?campana=${selectedCampaign}&tienda=${tiendaId}&turno=${turnoNum}`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('No se pudo cargar el detalle.');
+                const voluntarios = await response.json();
+
+                if (voluntarios.length === 0) {
+                    modalBody.innerHTML = '<p>No se encontraron voluntarios para este turno.</p>';
+                    return;
+                }
+
+                let voluntariosHtml = '<ul class="divide-y divide-gray-200">';
+                voluntarios.forEach(v => {
+                    voluntariosHtml += `
+                        <li class="py-3">
+                            <p class="font-semibold text-gray-800">${v.apellidos}, ${v.nombre}</p>
+                            <p class="text-gray-600">${v.email} - ${v.telefono}</p>
+                            <p class="text-sm text-orange-600 font-medium">Acompañantes: ${v.acompanantes}</p>
+                        </li>
+                    `;
+                });
+                voluntariosHtml += '</ul>';
+                modalBody.innerHTML = voluntariosHtml;
+
+            } catch (error) {
+                modalBody.innerHTML = `<p class="text-red-500">${error.message}</p>`;
+            }
+        }
+
+        function closeDetalleModal() {
+            document.getElementById('detalle-modal').classList.add('hidden');
+        }
+
+        function exportarCSV() {
+            const selectedCampaign = document.getElementById('campaign-select').value;
+            if (!selectedCampaign) {
+                displayMessage('Por favor, selecciona una campaña para exportar.', 'error');
+                return;
+            }
+            const url = `${AppConfig.getUrl('EXPORTAR_RESUMEN')}?campana=${selectedCampaign}`;
+            window.location.href = url;
+        }
+
+        function displayMessage(msg, type) {
+            const container = document.getElementById('message-container');
+            const colors = {
+                error: 'bg-red-100 border-red-400 text-red-700'
+            };
+            container.innerHTML = `<div class="border px-4 py-3 rounded relative ${colors[type]}" role="alert">
+                                       <span class="block sm:inline">${msg}</span>
+                                   </div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        async function generarInformePDF() {
+            const selectedCampaign = document.getElementById('campaign-select').value;
+            if (!selectedCampaign) {
+                displayMessage('Por favor, selecciona una campaña para generar el informe.', 'error');
+                return;
+            }
+
+            if (typeof window.jspdf === 'undefined') {
+                displayMessage('Error: La librería de PDF no se pudo cargar. Revisa tu conexión a internet.', 'error');
+                return;
+            }
+
+            const pdfButton = document.getElementById('pdf-button');
+            pdfButton.disabled = true;
+            pdfButton.textContent = 'Generando...';
+
+            try {
+                const url = `${AppConfig.getUrl('INFORME_CAMPANA')}?campana=${selectedCampaign}`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('No se pudieron obtener los datos para el informe.');
+                const data = await response.json();
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const formatDate = (dateStr) => new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+                const pageHeight = doc.internal.pageSize.getHeight();
+                const margin = 20;
+
+                data.tiendas.forEach((tienda, index) => {
+                    if (index > 0) doc.addPage();
+                    let yPos = margin;
+
+                    doc.setFontSize(16);
+                    doc.setFont(undefined, 'bold');
+                    doc.text(data.campana.denominacion, doc.internal.pageSize.getWidth() / 2, yPos, { align: 'center' });
+                    yPos += 8;
+                    doc.setFontSize(12);
+                    doc.setFont(undefined, 'normal');
+                    doc.text(tienda.denominacion, doc.internal.pageSize.getWidth() / 2, yPos, { align: 'center' });
+                    yPos += 6;
+                    doc.setLineWidth(0.5);
+                    doc.line(margin, yPos, doc.internal.pageSize.getWidth() - margin, yPos);
+                    yPos += 10;
+
+                    const turnos = [
+                        { id: 1, fecha: data.campana.fecha1, momento: 'Mañana' },
+                        { id: 2, fecha: data.campana.fecha1, momento: 'Tarde' },
+                        { id: 3, fecha: data.campana.fecha2, momento: 'Mañana' },
+                        { id: 4, fecha: data.campana.fecha2, momento: 'Tarde' }
+                    ];
+
+                    turnos.forEach(turnoInfo => {
+                        const voluntarios = tienda.turnos['turno' + turnoInfo.id];
+                        if (voluntarios && voluntarios.length > 0) {
+                            if (yPos > pageHeight - 30) {
+                                doc.addPage();
+                                yPos = margin;
+                            }
+                            doc.setFontSize(12);
+                            doc.setFont(undefined, 'bold');
+                            doc.text(`Turno ${turnoInfo.id}: ${formatDate(turnoInfo.fecha)} - ${turnoInfo.momento}`, margin, yPos);
+                            yPos += 7;
+
+                            doc.setFontSize(10);
+                            doc.setFont(undefined, 'normal');
+                            voluntarios.forEach(v => {
+                                if (yPos > pageHeight - 15) {
+                                    doc.addPage();
+                                    yPos = margin;
+                                }
+                                doc.text(`- ${v.apellidos}, ${v.nombre} (+${v.acompanantes} acompañantes)`, margin + 5, yPos);
+                                yPos += 6;
+                            });
+                            yPos += 5;
+                        }
+                    });
+                });
+
+                doc.save(`informe_voluntarios_${data.campana.id}.pdf`);
+
+            } catch (error) {
+                displayMessage(error.message, 'error');
+            } finally {
+                pdfButton.disabled = false;
+                pdfButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg> Informe PDF`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asignar Turnos - Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+    <style>
+        .modal-overlay { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            right: 0; 
+            bottom: 0; 
+            background-color: rgba(0, 0, 0, 0.5); 
+            z-index: 40; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content { 
+            z-index: 50;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #map { 
+            height: 400px; 
+            width: 100%; 
+            border-radius: 0.5rem; 
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen py-12">
+
+    <div class="w-full max-w-4xl p-8 space-y-6 bg-white rounded-2xl card-shadow m-4">
+        <div class="flex justify-center">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48 mb-4">
+        </div>
+        <div class="text-center">
+            <h2 class="text-2xl font-bold text-gray-800">Asignación de Turnos</h2>
+            <p id="welcome-message" class="text-md text-gray-600 mt-1"></p>
+            <p id="campaign-name" class="mt-2 text-xl font-semibold" style="color: var(--banco-orange);">Cargando campaña...</p>
+        </div>
+        
+        <div class="text-center border-t border-b py-4">
+            <a href="modificar-datos.html" class="inline-block px-6 py-2 text-sm font-medium text-white rounded-md btn-secondary">Modificar Mis Datos Personales</a>
+        </div>
+
+        <form id="turnosForm" onsubmit="handleSubmit(event)">
+            <input type="hidden" id="campanaId" name="campanaId">
+
+            <div id="turnos-container" class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <!-- Los 4 turnos se generarán aquí dinámicamente -->
+            </div>
+
+            <div class="pt-8">
+                <button type="submit" class="w-full px-4 py-3 font-medium text-white border border-transparent rounded-md btn-primary">
+                    Guardar Mis Turnos
+                </button>
+            </div>
+        </form>
+        
+        <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
+    </div>
+
+    <!-- Modal para el Mapa -->
+    <div id="map-modal" class="modal-overlay hidden">
+        <div class="modal-content bg-white p-6 rounded-lg shadow-xl w-11/12 md:w-3/4 lg:w-1/2">
+            <h3 id="modal-title" class="text-xl font-bold mb-2">Selecciona una tienda</h3>
+            <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4" role="alert">
+                <p class="font-bold">Selecciona tu tienda entre las de máxima prioridad.</p>
+                <p>Si no encuentras una que te venga bien, puedes ampliar la búsqueda.</p>
+            </div>
+            <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mb-4">
+                <button id="btn-prio1" onclick="showOnlyPriority1()" class="w-full px-4 py-2 text-sm font-medium text-white rounded-md btn-primary">Sólo Máxima Prioridad</button>
+                <button id="btn-prio2" onclick="showPriority(2)" class="w-full px-4 py-2 text-sm font-medium text-white rounded-md btn-secondary">Mostrar Prioridad Media</button>
+                <button id="btn-prio3" onclick="showPriority(3)" class="w-full px-4 py-2 text-sm font-medium text-white rounded-md btn-secondary">Mostrar Todas</button>
+            </div>
+            <div id="map">Cargando mapa...</div>
+            <!-- CAMBIO: Leyenda de colores para los marcadores -->
+            <div class="flex justify-center items-center space-x-4 mt-2 text-xs text-gray-600">
+                <div class="flex items-center">
+                    <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png" class="h-4 mr-1">
+                    <span>Prioridad Alta</span>
+                </div>
+                <div class="flex items-center">
+                    <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png" class="h-4 mr-1">
+                    <span>Prioridad Media</span>
+                </div>
+                <div class="flex items-center">
+                    <img src="https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png" class="h-4 mr-1">
+                    <span>Prioridad Baja</span>
+                </div>
+            </div>
+            <button onclick="closeMapModal()" class="w-full mt-4 px-4 py-2 font-medium text-white rounded-md btn-secondary">Cerrar</button>
+        </div>
+    </div>
+
+    <script src="../js/config.js"></script>
+    <script>
+        let campanaActiva = null;
+        let mapInstance = null;
+        let todasTiendasCache = new Map();
+        let referenciaTiendaId = null;
+        let priorityLayers = {
+            1: L.layerGroup(),
+            2: L.layerGroup(),
+            3: L.layerGroup()
+        };
+
+        // --- CAMBIO: Definición de los iconos de colores ---
+        const redIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+        const orangeIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-orange.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+        const greenIcon = new L.Icon({
+            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png',
+            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
+                if (!response.ok) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                const data = await response.json();
+                
+                if (data.usuario) {
+                    await loadInitialData(data.usuario);
+                } else {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                handleError("Error al verificar la sesión. Por favor, intenta iniciar sesión de nuevo.");
+            }
+        });
+
+        async function loadInitialData(usuario) {
+            await loadAllTiendas();
+            const voluntarioData = await loadVoluntarioData();
+            
+            if (voluntarioData && voluntarioData.nombre) {
+                document.getElementById('welcome-message').textContent = `Bienvenido/a, ${voluntarioData.nombre}. Elige o modifica tus turnos:`;
+            } else {
+                 document.getElementById('welcome-message').textContent = `Bienvenido/a. Elige o modifica tus turnos:`;
+            }
+
+            if (voluntarioData && voluntarioData.tiendaReferencia) {
+                referenciaTiendaId = voluntarioData.tiendaReferencia;
+            }
+            
+            await loadCampaignData();
+            await loadMisTurnos();
+        }
+
+        async function loadVoluntarioData() {
+            try {
+                const response = await fetch(AppConfig.getUrl('VOLUNTARIO_DETALLES'));
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.error("Error al cargar los datos del voluntario:", error);
+                return null;
+            }
+        }
+
+        async function loadAllTiendas() {
+            try {
+                const response = await fetch(AppConfig.getUrl('TODAS_LAS_TIENDAS'));
+                if (!response.ok) throw new Error('Error al cargar tiendas');
+                const tiendas = await response.json();
+                tiendas.forEach(tienda => todasTiendasCache.set(tienda.id, tienda));
+            } catch (error) {
+                console.error("Error al precargar la lista de tiendas:", error);
+            }
+        }
+
+        async function loadCampaignData() {
+            try {
+                const response = await fetch(AppConfig.getUrl('CAMPANA_ACTIVA'));
+                if (!response.ok) throw new Error('Campaña no encontrada');
+                campanaActiva = await response.json();
+
+                document.getElementById('campaign-name').textContent = campanaActiva.denominacion;
+                document.getElementById('campanaId').value = campanaActiva.campana;
+
+                const turnosContainer = document.getElementById('turnos-container');
+                turnosContainer.innerHTML = ''; 
+
+                const turnos = [
+                    { fecha: campanaActiva.fecha1, momento: 'Mañana', id: 1 },
+                    { fecha: campanaActiva.fecha1, momento: 'Tarde', id: 2 },
+                    { fecha: campanaActiva.fecha2, momento: 'Mañana', id: 3 },
+                    { fecha: campanaActiva.fecha2, momento: 'Tarde', id: 4 }
+                ];
+
+                turnos.forEach(turno => {
+                    turnosContainer.insertAdjacentHTML('beforeend', createTurnoCard(turno.id, turno.fecha, turno.momento));
+                });
+            } catch (error) {
+                handleError('No hay ninguna campaña activa en este momento.');
+                document.getElementById('turnosForm').style.display = 'none';
+            }
+        }
+
+        function createTurnoCard(id, fecha, momento) {
+            const formattedDate = new Date(fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+            return `
+                <div class="turno-card" id="turno-card-${id}">
+                    <h3 class="text-lg font-bold text-gray-800">Turno ${id}: ${momento}</h3>
+                    <p class="text-sm text-gray-600 mb-4">${formattedDate}</p>
+                    <div class="bg-gray-100 p-3 rounded-md text-center mb-4">
+                        <span id="tienda-nombre-${id}" class="text-gray-700 font-semibold">Ninguna tienda seleccionada</span>
+                    </div>
+                    <input type="hidden" id="tienda_${id}" name="tienda_${id}">
+                    <div class="flex space-x-2 mb-4">
+                        <button type="button" onclick="openMapModal(${id})" class="w-full px-4 py-2 text-sm font-medium text-white rounded-md btn-secondary">Elegir / Cambiar Tienda</button>
+                        <button type="button" id="btn-borrar-${id}" onclick="clearTurno(${id})" class="w-full px-4 py-2 text-sm font-medium text-white rounded-md btn-danger hidden">Quitar Asignación</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="acompanantes_${id}" class="input-label">Acompañantes</label>
+                            <input type="number" id="acompanantes_${id}" name="acompanantes_${id}" min="0" max="5" value="0" class="w-full p-2 border rounded-md">
+                        </div>
+                        <div>
+                            <label for="comentario_${id}" class="input-label">Comentario</label>
+                            <input type="text" id="comentario_${id}" name="comentario_${id}" class="w-full p-2 border rounded-md" placeholder="Opcional">
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function loadMisTurnos() {
+            try {
+                const url = `${AppConfig.getUrl('MIS_TURNOS')}?campana=${encodeURIComponent(campanaActiva.campana)}`;
+                const response = await fetch(url);
+                if (!response.ok) return;
+                const misTurnos = await response.json();
+
+                if (Object.keys(misTurnos).length > 0) {
+                    for (let i = 1; i <= 4; i++) {
+                        const tiendaId = misTurnos['Turno' + i];
+                        const comentarioCompleto = misTurnos['Comentario' + i];
+
+                        if (tiendaId && tiendaId > 0) {
+                            const tienda = todasTiendasCache.get(tiendaId);
+                            document.getElementById(`tienda-nombre-${i}`).textContent = tienda ? tienda.nombre : `Tienda Desconocida (ID: ${tiendaId})`;
+                            document.getElementById(`tienda_${i}`).value = tiendaId;
+                            document.getElementById(`btn-borrar-${i}`).classList.remove('hidden');
+
+                            if (comentarioCompleto) {
+                                const match = comentarioCompleto.match(/Voluntarios: (\d+)/);
+                                if (match) {
+                                    document.getElementById(`acompanantes_${i}`).value = match[1];
+                                    const textoComentario = comentarioCompleto.replace(/Voluntarios: \d+\.?\s*/, '');
+                                    document.getElementById(`comentario_${i}`).value = textoComentario;
+                                } else {
+                                    document.getElementById(`comentario_${i}`).value = comentarioCompleto;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error al cargar los turnos guardados:", error);
+            }
+        }
+
+        function clearTurno(turnoId) {
+            document.getElementById(`tienda-nombre-${turnoId}`).textContent = 'Ninguna tienda seleccionada';
+            document.getElementById(`tienda_${turnoId}`).value = '';
+            document.getElementById(`acompanantes_${turnoId}`).value = 0;
+            document.getElementById(`comentario_${turnoId}`).value = '';
+            document.getElementById(`btn-borrar-${turnoId}`).classList.add('hidden');
+        }
+
+        async function openMapModal(turnoId) {
+            document.getElementById('modal-title').textContent = `Selecciona una tienda para el Turno ${turnoId}`;
+            document.getElementById('map-modal').classList.remove('hidden');
+            
+            showOnlyPriority1();
+
+            if (mapInstance) {
+                mapInstance.remove();
+                mapInstance = null;
+            }
+            
+            setTimeout(async () => {
+                let initialCoords = [37.3891, -5.9845];
+                let initialZoom = 12;
+
+                if (referenciaTiendaId && todasTiendasCache.has(referenciaTiendaId)) {
+                    const tiendaRef = todasTiendasCache.get(referenciaTiendaId);
+                    initialCoords = [tiendaRef.lat, tiendaRef.lon];
+                    initialZoom = 16;
+                }
+
+                mapInstance = L.map('map').setView(initialCoords, initialZoom);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(mapInstance);
+
+                Object.values(priorityLayers).forEach(layer => layer.clearLayers());
+
+                try {
+                    const url = `${AppConfig.getUrl('PUNTOS_DISPONIBLES')}?turno=${turnoId}&campana=${campanaActiva.campana}`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error('Error al cargar tiendas');
+                    const tiendas = await response.json();
+
+                    if (tiendas.length === 0) {
+                        document.getElementById('map').innerHTML = '<div class="text-center p-4">No hay tiendas con huecos disponibles para este turno.</div>';
+                        return;
+                    }
+
+                    tiendas.forEach(tienda => {
+                        // --- CAMBIO: Asignar el icono de color según la prioridad ---
+                        let currentIcon = greenIcon;
+                        if (tienda.prioridad === 1) currentIcon = redIcon;
+                        else if (tienda.prioridad === 2) currentIcon = orangeIcon;
+
+                        const marker = L.marker([tienda.lat, tienda.lon], {icon: currentIcon});
+                        marker.bindPopup(`<b>${tienda.nombre}</b><br>${tienda.direccion}<br><b>Prioridad: ${tienda.prioridad}</b>`);
+                        marker.bindTooltip(tienda.nombre); 
+                        
+                        marker.on('click', () => selectStore(turnoId, tienda));
+                        
+                        if (priorityLayers[tienda.prioridad]) {
+                            priorityLayers[tienda.prioridad].addLayer(marker);
+                        }
+                    });
+
+                    priorityLayers[1].addTo(mapInstance);
+
+                } catch (error) {
+                    handleError('No se pudieron cargar las tiendas disponibles.');
+                }
+            }, 100);
+        }
+        
+        function showPriority(level) {
+            if (!mapInstance) return;
+            if (!mapInstance.hasLayer(priorityLayers[1])) priorityLayers[1].addTo(mapInstance);
+            if (!mapInstance.hasLayer(priorityLayers[level])) priorityLayers[level].addTo(mapInstance);
+            
+            if (level === 3) {
+                setActiveButton('btn-prio3');
+                if (!mapInstance.hasLayer(priorityLayers[2])) {
+                    priorityLayers[2].addTo(mapInstance);
+                }
+            }
+            if (level === 2) {
+                setActiveButton('btn-prio2');
+                if (mapInstance.hasLayer(priorityLayers[3])) {
+                    mapInstance.removeLayer(priorityLayers[3]);
+                }
+            }
+        }
+
+        function showOnlyPriority1() {
+            if (!mapInstance) return;
+            if (mapInstance.hasLayer(priorityLayers[2])) mapInstance.removeLayer(priorityLayers[2]);
+            if (mapInstance.hasLayer(priorityLayers[3])) mapInstance.removeLayer(priorityLayers[3]);
+            if (!mapInstance.hasLayer(priorityLayers[1])) priorityLayers[1].addTo(mapInstance);
+            setActiveButton('btn-prio1');
+        }
+
+        function selectStore(turnoId, tienda) {
+            document.getElementById(`tienda-nombre-${turnoId}`).textContent = tienda.nombre;
+            document.getElementById(`tienda_${turnoId}`).value = tienda.id;
+            document.getElementById(`btn-borrar-${turnoId}`).classList.remove('hidden');
+            closeMapModal();
+        }
+
+        function closeMapModal() {
+            document.getElementById('map-modal').classList.add('hidden');
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            
+            displayMessage('Guardando tus turnos...', 'info');
+
+            try {
+                const response = await fetch(AppConfig.getUrl('GUARDAR_TURNOS'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    displayMessage(result.message, 'success');
+                    setTimeout(() => window.location.href = 'login.html', 2000);
+                } else {
+                    displayMessage(result.message, 'error');
+                }
+            } catch (error) {
+                handleError('Error de conexión con el servidor.');
+            }
+        }
+
+        function displayMessage(msg, type) {
+            const messageDiv = document.getElementById('message');
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            messageDiv.textContent = msg;
+            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colors[type]}`;
+        }
+
+        function handleError(message) {
+            console.error(message);
+            displayMessage(message, 'error');
+        }
+        function setActiveButton(buttonId) {
+            const btn1 = document.getElementById('btn-prio1');
+            const btn2 = document.getElementById('btn-prio2');
+            const btn3 = document.getElementById('btn-prio3');
+
+            // Primero, ponemos todos como inactivos (btn-secondary)
+            btn1.classList.remove('btn-primary');
+            btn1.classList.add('btn-secondary');
+            
+            btn2.classList.remove('btn-primary');
+            btn2.classList.add('btn-secondary');
+
+            btn3.classList.remove('btn-primary');
+            btn3.classList.add('btn-secondary');
+
+            // Luego, activamos solo el que se ha seleccionado
+            const activeButton = document.getElementById(buttonId);
+            activeButton.classList.remove('btn-secondary');
+            activeButton.classList.add('btn-primary');
+        }
+
+        // Así la llamarías
+        // setActiveButton('btn-prio1');
+    </script>
+</body>
+</html>
