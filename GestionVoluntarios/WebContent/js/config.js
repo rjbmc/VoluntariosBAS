@@ -40,7 +40,8 @@ const AppConfig = {
         INFORME_CAMPANA: '/informe-campana',
         REFRESCAR_POWERAPP: '/refrescar-powerapp',
 		SOLICITAR_BAJA: '/solicitar-baja',
-		SHAREPOINT_LIST: '/lista-sharepoint'
+		SHAREPOINT_LIST: '/lista-sharepoint',		
+		SHAREPOINT_CRUD: '/crud-sharepoint'
     },
 
     /**

@@ -7,95 +7,306 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="js/config.js"></script>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .table-auto th, .table-auto td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; white-space: nowrap; }
+        .table-auto th { background-color: #f7fafc; font-weight: bold; position: sticky; top: 0; z-index: 1; }
+        #resultList { max-height: 60vh; overflow: auto; position: relative; }
+        #resultList::-webkit-scrollbar { -webkit-appearance: none; height: 12px; width: 12px; }
+        #resultList::-webkit-scrollbar-thumb { background-color: #a0aec0; border-radius: 6px; border: 2px solid #edf2f7; }
+        #resultList::-webkit-scrollbar-track { background-color: #edf2f7; }
+        #crudModal.hidden { display: none; }
+    </style>
 </head>
 <body class="bg-gray-100">
 
-    <div class="container mx-auto mt-10 p-8 bg-white max-w-2xl rounded-lg shadow-md">
+    <div class="mx-4 sm:mx-8 md:mx-16 my-10 p-8 bg-white rounded-lg shadow-md">
         
         <div class="flex justify-center mb-6">
             <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
         </div>
 
         <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold text-gray-800">Test de SharePoint List Servlet</h1>
-            <p class="text-md text-gray-600 mt-1">Introduce el ID o nombre de una lista de SharePoint para ver su contenido.</p>
+            <h1 class="text-2xl font-bold text-gray-800">Gestor Básico de Listas de SharePoint</h1>
+            <p class="text-md text-gray-600 mt-1">Consulta, crea, edita y borra elementos de listas.</p>
         </div>
 
-        <form id="sharepointForm">
+        <form id="sharepointForm" class="max-w-4xl mx-auto">
+             <div class="mb-4">
+                <label for="siteSelection" class="block text-sm font-medium text-gray-700">Sitio de SharePoint:</label>
+                <select id="siteSelection" name="siteSelection" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm">
+                    <option value="voluntarios">Voluntarios</option>
+                    <option value="informatica">Informática</option>
+                </select>
+            </div>
             <div>
-                <label for="listaNombre" class="block text-sm font-medium text-gray-700">Nombre o ID de la Lista:</label>
-                <input type="text" id="listaNombre" name="lista" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" placeholder="Ej: Voluntarios, Tiendas, etc." required>
+                <label for="listaNombre" class="block text-sm font-medium text-gray-700">Nombre o ID de la Lista (déjalo vacío para listar todas):</label>
+                <input type="text" id="listaNombre" name="lista" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" placeholder="Ej: Voluntarios, Tiendas, etc.">
             </div>
             <div class="mt-4">
                 <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white btn-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
-                    Consultar Lista
+                    Consultar
                 </button>
             </div>
         </form>
 
-        <!-- Contenedor para mostrar resultados o errores -->
         <div id="resultContainer" class="mt-6">
-            <h2 class="text-xl font-semibold text-gray-800">Resultados:</h2>
+            <div class="flex justify-between items-center mb-4">
+                 <h2 class="text-xl font-semibold text-gray-800">Resultados:</h2>
+                 <button id="createNewItemBtn" class="hidden bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                    Crear Nuevo Elemento
+                </button>
+            </div>
             <div id="messageDiv" class="p-4 mt-2 text-sm text-center rounded-md hidden"></div>
-            <ul id="resultList" class="list-disc list-inside mt-2 text-gray-700">
-                <!-- Los resultados se insertarán aquí -->
-            </ul>
+            <div id="resultList" class="mt-2"></div>
+        </div>
+    </div>
+    
+    <div id="crudModal" class="hidden fixed z-10 inset-0 overflow-y-auto">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalTitle"></h3>
+                    <div class="mt-2" id="modalFormContent">
+                        <!-- El contenido del formulario se generará aquí dinámicamente -->
+                    </div>
+                </div>
+                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button type="button" id="saveModalBtn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 sm:ml-3 sm:w-auto sm:text-sm">Guardar</button>
+                    <button type="button" id="cancelModalBtn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">Cancelar</button>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
+        let currentItemId = null;
+        let currentColumns = []; // Guardará la definición de las columnas
+
+        function refreshTable() {
+            document.getElementById('sharepointForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+
         document.getElementById('sharepointForm').addEventListener('submit', async function(event) {
             event.preventDefault();
-
-            const listaNombre = document.getElementById('listaNombre').value;
+            const createBtn = document.getElementById('createNewItemBtn');
             const resultList = document.getElementById('resultList');
             const messageDiv = document.getElementById('messageDiv');
-
-            resultList.innerHTML = '';
-            messageDiv.className = 'p-4 mt-2 text-sm text-center rounded-md hidden';
-            messageDiv.textContent = '';
+            const listaNombreValue = document.getElementById('listaNombre').value.trim();
+            
+            resultList.innerHTML = '<div class="text-center p-4">Cargando...</div>';
+            messageDiv.className = 'hidden';
+            createBtn.classList.add('hidden');
+            currentColumns = [];
 
             try {
-                const response = await fetch(AppConfig.getUrl('SHAREPOINT_LIST'), {
+                const response = await fetch(AppConfig.getUrl('SHAREPOINT_LIST'), { 
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `lista=${encodeURIComponent(listaNombre)}`
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams(new FormData(this))
                 });
-
                 const data = await response.json();
-                
-                if (response.ok) {
-                    if (data.error) {
-                        messageDiv.textContent = data.error;
-                        messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-red-500';
-                    } else if (Array.isArray(data) && data.length > 0) {
-                        data.forEach(item => {
-                            const li = document.createElement('li');
-                            li.textContent = item;
-                            resultList.appendChild(li);
-                        });
-                        messageDiv.textContent = `Se encontraron ${data.length} elementos.`;
-                        messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-green-500';
+
+                resultList.innerHTML = '';
+
+                if (response.ok && !data.error) {
+                    if (listaNombreValue) {
+                        // --- VISTA DE ITEMS DE LISTA (NUEVA LÓGICA) ---
+                        handleListItemsView(data.columns, data.items, listaNombreValue);
                     } else {
-                        messageDiv.textContent = 'La lista existe pero no contiene elementos.';
-                        messageDiv.className = 'p-4 mt-2 text-sm text-center text-black rounded-md bg-yellow-300';
+                        // --- VISTA DE LISTAS (LÓGICA ANTERIOR) ---
+                        handleListsView(data);
                     }
                 } else {
-                    // Si el servidor devuelve un error (ej. 404, 500) pero con un cuerpo JSON
-                    messageDiv.textContent = data.error || `Error del servidor: ${response.status}`;
-                    messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-red-500';
+                    showMessage(data.error || `Error del servidor: ${response.status}`, 'error');
                 }
 
             } catch (error) {
-                console.error('Error al llamar al servlet:', error);
-                messageDiv.textContent = 'No se pudo conectar con el servidor. Revisa la consola para más detalles.';
-                messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-red-500';
+                console.error('Error de red:', error);
+                showMessage('No se pudo conectar con el servidor.', 'error');
             }
-            
-            messageDiv.classList.remove('hidden');
         });
+        
+        function handleListsView(listsData) {
+             if (listsData.length > 0) {
+                const headers = Object.keys(listsData[0]);
+                const table = createTable(headers, listsData, false);
+                document.getElementById('resultList').appendChild(table);
+                showMessage(`Se encontraron ${listsData.length} listas.`, 'success');
+            } else {
+                showMessage('No se encontraron listas en este sitio.', 'warning');
+            }
+        }
+
+        function handleListItemsView(columns, items, listName) {
+            currentColumns = columns.filter(c => c.internalName !== 'Title' || items.some(i => i['Title']));
+            
+            if (items && items.length > 0) {
+                document.getElementById('createNewItemBtn').classList.remove('hidden');
+                
+                const displayHeaders = currentColumns.map(c => c.displayName);
+                displayHeaders.push('Acciones');
+                
+                const table = createTable(displayHeaders, items, true);
+                document.getElementById('resultList').appendChild(table);
+                showMessage(`Se encontraron ${items.length} elementos en la lista '${listName}'.`, 'success');
+            } else {
+                document.getElementById('createNewItemBtn').classList.remove('hidden');
+                showMessage(`La lista '${listName}' está vacía o no se encontraron elementos.`, 'warning');
+            }
+        }
+
+        function createTable(headers, data, includeActions) {
+            const table = document.createElement('table');
+            table.className = 'table-auto w-full';
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            
+            headers.forEach(headerText => {
+                const th = document.createElement('th');
+                th.textContent = headerText;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                // Determina las claves a usar para las celdas (displayNames o internalNames)
+                const cellKeys = includeActions ? currentColumns.map(c => c.internalName) : headers;
+
+                cellKeys.forEach(key => {
+                    const cell = document.createElement('td');
+                    cell.textContent = item[key] ?? '';
+                    row.appendChild(cell);
+                });
+
+                if (includeActions) {
+                    const actionCell = document.createElement('td');
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = 'Editar';
+                    editBtn.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs';
+                    editBtn.onclick = () => handleEdit(item);
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Borrar';
+                    deleteBtn.className = 'bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs ml-2';
+                    deleteBtn.onclick = () => handleDelete(item.id);
+
+                    actionCell.appendChild(editBtn);
+                    actionCell.appendChild(deleteBtn);
+                    row.appendChild(actionCell);
+                }
+                tbody.appendChild(row);
+            });
+            table.appendChild(tbody);
+            return table;
+        }
+
+        function showMessage(msg, type) {
+            const div = document.getElementById('messageDiv');
+            div.textContent = msg;
+            const typeClasses = { success: 'bg-green-500 text-white', error: 'bg-red-500 text-white', warning: 'bg-yellow-300 text-black' };
+            div.className = `p-4 mt-2 text-sm text-center rounded-md ${typeClasses[type] || 'bg-gray-500 text-white'}`;
+        }
+
+        function openModal(title, itemData = {}) {
+            document.getElementById('modalTitle').textContent = title;
+            const formContent = document.getElementById('modalFormContent');
+            formContent.innerHTML = '';
+
+            currentColumns.forEach(col => {
+                if(col.readOnly) return; // No mostrar campos de solo lectura en el formulario
+
+                const value = itemData[col.internalName] ?? '';
+                const fieldDiv = document.createElement('div');
+                fieldDiv.className = 'mb-4';
+                fieldDiv.innerHTML = `
+                    <label for="field-${col.internalName}" class="block text-sm font-medium text-gray-700">${col.displayName}</label>
+                    <input type="text" id="field-${col.internalName}" name="${col.internalName}" value="${value}" 
+                           class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm sm:text-sm">
+                `;
+                formContent.appendChild(fieldDiv);
+            });
+            document.getElementById('crudModal').classList.remove('hidden');
+        }
+
+        document.getElementById('createNewItemBtn').onclick = () => {
+            currentItemId = null;
+            openModal('Crear Nuevo Elemento');
+        };
+
+        function handleEdit(item) {
+            currentItemId = item.id;
+            openModal(`Editando Elemento (ID: ${item.id})`, item);
+        }
+
+        async function handleDelete(id) {
+            if (!confirm(`¿Estás seguro de que quieres BORRAR el elemento con ID: ${id}?`)) return;
+            
+            const formData = new FormData(document.getElementById('sharepointForm'));
+            const params = new URLSearchParams({
+                siteId: document.getElementById('siteSelection').options[document.getElementById('siteSelection').selectedIndex].text,
+                listId: formData.get('lista'),
+                action: 'DELETE',
+                itemId: id
+            });
+
+            try {
+                const response = await fetch(AppConfig.getUrl('SHAREPOINT_CRUD'), { method: 'POST', body: params });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    showMessage('Elemento borrado con éxito.', 'success');
+                    refreshTable();
+                } else {
+                    showMessage(result.error || 'Error al borrar.', 'error');
+                }
+            } catch (error) {
+                showMessage('Error de red al intentar borrar.', 'error');
+            }
+        }
+
+        document.getElementById('saveModalBtn').onclick = async () => {
+            const formData = new FormData(document.getElementById('sharepointForm'));
+            const action = currentItemId ? 'UPDATE' : 'CREATE';
+            const payload = {};
+            
+            currentColumns.forEach(col => {
+                if(!col.readOnly) { // Solo incluir en el payload los campos que no son de solo lectura
+                    const input = document.getElementById(`field-${col.internalName}`);
+                    if(input) payload[col.internalName] = input.value;
+                }
+            });
+
+            const params = new URLSearchParams({
+                siteId: document.getElementById('siteSelection').options[document.getElementById('siteSelection').selectedIndex].text,
+                listId: formData.get('lista'),
+                action: action,
+                payload: JSON.stringify(payload)
+            });
+            if(currentItemId) params.append('itemId', currentItemId);
+
+            try {
+                const response = await fetch(AppConfig.getUrl('SHAREPOINT_CRUD'), { method: 'POST', body: params });
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(`Elemento ${action === 'CREATE' ? 'creado' : 'actualizado'} con éxito.`, 'success');
+                    document.getElementById('crudModal').classList.add('hidden');
+                    refreshTable();
+                } else {
+                     showMessage(result.error || `Error al ${action.toLowerCase()}r.`, 'error');
+                }
+            } catch(e) {
+                showMessage(`Error de red al ${action.toLowerCase()}r.`, 'error');
+            }
+        };
+
+        document.getElementById('cancelModalBtn').onclick = () => document.getElementById('crudModal').classList.add('hidden');
     </script>
 
 </body>

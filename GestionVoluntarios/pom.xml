@@ -38,17 +38,19 @@
     </dependency>
 
     <!-- Microsoft Graph SDK v6 (Sharepoint) -->
+       <!-- Microsoft Graph SDK v6 (Sharepoint) -->
     <dependency>
       <groupId>com.microsoft.graph</groupId>
       <artifactId>microsoft-graph</artifactId>
       <version>6.54.0</version>
     </dependency>
+    <!-- La dependencia de autenticación que necesita Graph SDK v6 -->
     <dependency>
         <groupId>com.azure</groupId>
         <artifactId>azure-identity</artifactId>
         <version>1.18.0</version>
     </dependency>
-
+ 
     <!-- Apache POI (Excel Files) -->
     <dependency>
       <groupId>org.apache.poi</groupId>
