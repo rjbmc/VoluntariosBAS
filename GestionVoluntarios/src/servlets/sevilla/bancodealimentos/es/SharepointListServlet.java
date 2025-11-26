@@ -3,6 +3,7 @@ package servlets.sevilla.bancodealimentos.es;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +70,7 @@ public class SharepointListServlet extends HttpServlet {
             GraphServiceClient graphClient = SharepointUtil.getGraphClient();
             
             if (listIdOrName != null && !listIdOrName.trim().isEmpty()) {
-                // Obtenemos las columnas para la UI
+                // PASO 1: OBTENER DEFINICIONES DE COLUMNA Y MARCAR CORRECTAMENTE LOS LOOKUPS
                 List<ColumnDefinition> columns = graphClient.sites().bySiteId(siteId)
                     .lists().byListId(listIdOrName)
                     .columns()
@@ -83,12 +84,16 @@ public class SharepointListServlet extends HttpServlet {
                         map.put("internalName", c.getName());
                         map.put("displayName", c.getDisplayName());
                         map.put("readOnly", c.getReadOnly());
+                        
+                        // SOLUCIÓN: Un campo es lookup si es de tipo Lookup o si es un campo proyectado (contiene _x003a_)
+                        if (c.getLookup() != null || c.getName().contains("_x003a_")) {
+                            map.put("isLookup", true);
+                        }
                         return map;
                     })
                     .collect(Collectors.toList());
 
-                // --- SOLUCIÓN ESTABLE: Usar la única sintaxis que no da error ---
-                // Esto traerá los campos simples, pero los lookups no se resolverán.
+                // PASO 2: OBTENER DATOS Y PROCESARLOS CON LA LÓGICA DE DOBLE PASADA
                 List<ListItem> listItems = graphClient.sites().bySiteId(siteId)
                     .lists().byListId(listIdOrName)
                     .items()
@@ -100,21 +105,36 @@ public class SharepointListServlet extends HttpServlet {
                 List<Map<String, Object>> itemDetails = new ArrayList<>();
                 if (listItems != null) {
                     for (ListItem item : listItems) {
-                        if (item.getFields() != null) {
-                            Map<String, Object> itemData = new LinkedHashMap<>(item.getFields().getAdditionalData());
-                            itemData.put("id", item.getId());
-                            itemDetails.add(itemData);
+                         if (item.getFields() != null) {
+                            Map<String, Object> processedData = new HashMap<>(item.getFields().getAdditionalData());
+
+                            List<String> lookupKeys = new ArrayList<>();
+                            for (String key : processedData.keySet()) {
+                                if (key.endsWith("LookupId")) {
+                                    lookupKeys.add(key);
+                                }
+                            }
+
+                            for (String lookupKey : lookupKeys) {
+                                Object value = processedData.get(lookupKey);
+                                String originalKey = lookupKey.substring(0, lookupKey.length() - "LookupId".length());
+                                processedData.put(originalKey, value);
+                                processedData.remove(lookupKey);
+                            }
+                            
+                            processedData.put("id", item.getId());
+                            itemDetails.add(processedData);
                         }
                     }
                 }
 
+                // PASO 3: ENVIAR EL RESULTADO FINAL
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("columns", columnDetails);
                 result.put("items", itemDetails);
                 out.print(gson.toJson(result));
 
             } else {
-                // --- OBTENER LISTAS DEL SITIO ---
                 List<Map<String, String>> results = new ArrayList<>();
                 ListCollectionResponse currentPage = graphClient.sites().bySiteId(siteId).lists().get(config -> {
                     config.queryParameters.select = new String[]{"id", "displayName", "list"};

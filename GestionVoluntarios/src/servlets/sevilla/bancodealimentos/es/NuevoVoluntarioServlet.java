@@ -8,6 +8,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -34,6 +36,7 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.PasswordUtils;
+import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 
 @WebServlet("/nuevo-voluntario")
 public class NuevoVoluntarioServlet extends HttpServlet {
@@ -44,7 +47,6 @@ public class NuevoVoluntarioServlet extends HttpServlet {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
-        // Recoger todos los parámetros del formulario
         String usuario = request.getParameter("usuario");
         String nombre = request.getParameter("nombre");
         String apellidos = request.getParameter("apellidos");
@@ -60,14 +62,11 @@ public class NuevoVoluntarioServlet extends HttpServlet {
         
         try {
             LocalDate fechaNacimiento = LocalDate.parse(fechaNacimientoStr);
-            LocalDate hoy = LocalDate.now();
-            int edad = Period.between(fechaNacimiento, hoy).getYears();
-
-            if (edad < 16) {
+            if (Period.between(fechaNacimiento, LocalDate.now()).getYears() < 16) {
                 jsonResponse.addProperty("success", false);
                 jsonResponse.addProperty("message", "Debes tener al menos 16 años para poder registrarte.");
                 response.getWriter().write(jsonResponse.toString());
-                return; // Detiene la ejecución del servlet
+                return;
             }
         } catch (java.time.format.DateTimeParseException e) {
             jsonResponse.addProperty("success", false);
@@ -76,15 +75,14 @@ public class NuevoVoluntarioServlet extends HttpServlet {
             return;
         }
         
-        
         Connection conn = null;
+        String sqlRowUuid = null; // REPLICACIÓN SHAREPOINT: Variable para guardar el UUID
 
         try {
         	conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
 
-            // PASO 1: Comprobar si el usuario o DNI ya existen
-            String checkSql = "SELECT Usuario, fecha_baja, verificado  FROM voluntarios WHERE Usuario = ? OR `DNI NIF` = ?";
+            String checkSql = "SELECT Usuario, fecha_baja, verificado FROM voluntarios WHERE Usuario = ? OR `DNI NIF` = ?";
             String existingUser = null;
             boolean isInactive = false;
             boolean isVerified = false; 
@@ -101,7 +99,6 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                 }
             }
 
-         // CASO 1: El usuario ya existe, está activo Y VERIFICADO.
             if (existingUser != null && !isInactive && isVerified) {
                 jsonResponse.addProperty("success", false);
                 jsonResponse.addProperty("message", "El nombre de usuario o el DNI ya están registrados en una cuenta activa y verificada.");
@@ -113,27 +110,18 @@ public class NuevoVoluntarioServlet extends HttpServlet {
             String hashedPassword = PasswordUtils.hashPassword(clave);
             String verificationToken = UUID.randomUUID().toString();
             
-         // CASO 2: El usuario existe, está activo PERO NO VERIFICADO. ¡Quiere corregir el email!
             if (existingUser != null && !isInactive && !isVerified) {
-                // Es el mismo usuario intentando corregir datos, principalmente el email.
-                // Generamos un nuevo token y actualizamos sus datos.
                 String newVerificationToken = UUID.randomUUID().toString();
                 String updateUserSql = "UPDATE voluntarios SET Email = ?, token_verificacion = ? WHERE Usuario = ?";
-                
                 try (PreparedStatement psUpdate = conn.prepareStatement(updateUserSql)) {
-                    psUpdate.setString(1, email); // Actualizamos al nuevo email
+                    psUpdate.setString(1, email);
                     psUpdate.setString(2, newVerificationToken);
                     psUpdate.setString(3, existingUser);
                     psUpdate.executeUpdate();
                 }
                 
                 conn.commit();
-                String scheme = request.getScheme(); 
-                String serverName = request.getServerName(); 
-                int serverPort = request.getServerPort(); 
-                String contextPath = request.getContextPath(); 
-                String urlBase = scheme + "://" + serverName + ":" + serverPort + contextPath;
-                sendVerificationEmail(urlBase, email, existingUser, newVerificationToken); 
+                sendVerificationEmail(request, email, existingUser, newVerificationToken); 
                 
                 jsonResponse.addProperty("success", true);
                 jsonResponse.addProperty("message", "Parece que ya estabas registrado pero sin verificar. Hemos actualizado tu email y reenviado el correo de verificación.");
@@ -142,8 +130,10 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                 return; 
             }
 
-            // CASO 3: El usuario existe pero está inactivo. ¡Vamos a rehabilitarlo!
             if (existingUser != null && isInactive) {
+                // TODO: REPLICACIÓN SHAREPOINT - Manejar la rehabilitación de un usuario. 
+                // Esto podría ser un INSERT o un UPDATE en SharePoint dependiendo de si el usuario existía antes.
+                // Por ahora, se omite para centrarse en el flujo de nuevo usuario.
                 String updateSql = "UPDATE voluntarios SET Nombre = ?, Apellidos = ?, `DNI NIF` = ?, Clave = ?, tiendaReferencia = ?, " +
                                    "Email = ?, telefono = ?, fechaNacimiento = ?, cp = ?, administrador = 'N', " +
                                    "verificado = 'N', token_verificacion = ?, fecha_baja = NULL, notificar = 'S' " +
@@ -166,9 +156,11 @@ public class NuevoVoluntarioServlet extends HttpServlet {
 
             } else {
                 // CASO 4: El usuario es completamente nuevo
+                sqlRowUuid = SharepointReplicationUtil.generateUuid(); // REPLICACIÓN SHAREPOINT: Generar UUID
+
                 String insertSql = "INSERT INTO voluntarios (Usuario, Nombre, Apellidos, `DNI NIF`, Clave, tiendaReferencia, " +
-                                   "Email, telefono, fechaNacimiento, cp, administrador, verificado, token_verificacion, notificar) " +
-                                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?, 'S')";
+                                   "Email, telefono, fechaNacimiento, cp, administrador, verificado, token_verificacion, notificar, SqlRowUUID) " +
+                                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', 'N', ?, 'S', ?)"; // REPLICACIÓN SHAREPOINT: Añadida columna y placeholder
                 try (PreparedStatement psInsert = conn.prepareStatement(insertSql)) {
                     psInsert.setString(1, usuario);
                     psInsert.setString(2, nombre);
@@ -181,19 +173,36 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                     psInsert.setDate(9, java.sql.Date.valueOf(fechaNacimientoStr));
                     psInsert.setString(10, cp);
                     psInsert.setString(11, verificationToken);
+                    psInsert.setString(12, sqlRowUuid); // REPLICACIÓN SHAREPOINT: Establecer el UUID
                     psInsert.executeUpdate();
                 }
                  LogUtil.logOperation(conn, "ALTA", usuario, "Nuevo voluntario registrado.");
             }
 
             conn.commit();
-            String scheme = request.getScheme(); // Por ejemplo, "http"
-            String serverName = request.getServerName(); // Por ejemplo, "localhost"
-            int serverPort = request.getServerPort(); // Por ejemplo, "8080"
-            String contextPath = request.getContextPath(); // Por ejemplo, "/mi-aplicacion"
 
-            String urlBase = scheme + "://" + serverName + ":" + serverPort + contextPath;
-            sendVerificationEmail(urlBase, email, usuario, verificationToken);
+            // --- INICIO: REPLICACIÓN A SHAREPOINT ---
+            if (sqlRowUuid != null) { // Solo replicar si hemos generado un UUID (caso de nuevo usuario)
+                try {
+                    Map<String, Object> spData = new HashMap<>();
+                    // OJO: Las claves (ej. "Nombre_x0020_voluntario") deben ser los NOMBRES INTERNOS de las columnas en SharePoint.
+                    spData.put("field_1", nombre); // Usamos Title como un estándar común para la columna principal.
+                    spData.put("field_2", apellidos);
+                    spData.put("field_3", dni); // Ejemplo de cómo se codificaría 'DNI NIF'
+                    spData.put("field_6", email);
+                    spData.put("field_7", telefono);
+                    spData.put("field_9", cp);
+                    
+                    SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.INSERT, sqlRowUuid);
+
+                } catch (Exception e) {
+                    // La replicación no debe detener el flujo principal. El error ya se loguea en el replicador.
+                    System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
+                }
+            }
+            // --- FIN: REPLICACIÓN A SHAREPOINT ---
+
+            sendVerificationEmail(request, email, usuario, verificationToken);
 
             jsonResponse.addProperty("success", true);
             jsonResponse.addProperty("message", "¡Registro casi completo! Se ha enviado un correo de verificación a tu email. Por favor, revísalo para activar tu cuenta.");
@@ -202,7 +211,7 @@ public class NuevoVoluntarioServlet extends HttpServlet {
         } catch (SQLException e) {
             if (conn != null) try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
             
-            if (e.getErrorCode() == 1062) { // Error de entrada duplicada
+            if (e.getErrorCode() == 1062) {
                  jsonResponse.addProperty("success", false);
                  jsonResponse.addProperty("message", "El nombre de usuario, DNI o Email ya están registrados.");
             } else {
@@ -218,8 +227,13 @@ public class NuevoVoluntarioServlet extends HttpServlet {
         response.getWriter().write(jsonResponse.toString());
     }
     
-    private void sendVerificationEmail(String path, String emailDestino, String usuario, String token){
-        String verificationLink = path + "/verificar-email.html?token=" + token;
+    private void sendVerificationEmail(HttpServletRequest request, String emailDestino, String usuario, String token){
+        String scheme = request.getScheme();
+        String serverName = request.getServerName();
+        int serverPort = request.getServerPort();
+        String contextPath = request.getContextPath();
+        String urlBase = scheme + "://" + serverName + ":" + serverPort + contextPath;
+        String verificationLink = urlBase + "/verificar-email.html?token=" + token;
         
         final String username = Config.SMTP_USER;
         final String password = Config.SMTP_PASSWORD;
@@ -233,25 +247,21 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                 return new PasswordAuthentication(username, password);
             }
         });
-        Message message = new MimeMessage(session);
+
         try {
+            Message message = new MimeMessage(session);
 			message.setFrom(new InternetAddress(username));
 			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailDestino));
 		    message.setSubject("Verificacion correo - App VoluntariosBAS - Banco de Alimentos de Sevilla");
-		} catch (AddressException e) {
-			e.printStackTrace();
-		} catch (MessagingException e) {
-			e.printStackTrace();
-		}       
-        String emailBody = "Se ha recibido una nueva solicitud de incorporación al voluntariado del Banco De Alimentos de Sevilla, con el código de usuario:"+usuario+".<br><br>"
+            String emailBody = "Se ha recibido una nueva solicitud de incorporación al voluntariado del Banco De Alimentos de Sevilla, con el código de usuario:"+usuario+".<br><br>"
                          + "Si la has realizado tu, por favor, pulsa el siguiente enlace. En caso contrario, no es necesaria ninguna acción.<br>"
                          + "<strong>Enlace de verificación:</strong><br>"
                          + "<a href=\"" + verificationLink + "\">Pulsa aquí para verificar tu cuenta</a>"
                          + "<strong>La dirección de correo desde donde se envía este mensaje es de sólo envío. Por favor, no la uses para responder.</strong><br>";
-        try {
 			message.setContent(emailBody, "text/html; charset=utf-8");
 	        Transport.send(message);
 		} catch (MessagingException e) {
+            System.err.println("ERROR: No se pudo enviar el email de verificación a " + emailDestino + ": " + e.getMessage());
 			e.printStackTrace();
 		}
     }

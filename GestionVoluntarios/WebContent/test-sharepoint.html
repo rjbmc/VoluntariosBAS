@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Prueba de Conexión con SharePoint</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Rutas relativas corregidas -->
     <script src="js/config.js"></script>
     <link rel="stylesheet" href="css/style.css">
     <style>
@@ -15,6 +16,10 @@
         #resultList::-webkit-scrollbar-thumb { background-color: #a0aec0; border-radius: 6px; border: 2px solid #edf2f7; }
         #resultList::-webkit-scrollbar-track { background-color: #edf2f7; }
         #crudModal.hidden { display: none; }
+        .lookup-id {
+            color: #718096; /* gray-600 */
+            font-style: italic;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -38,276 +43,156 @@
                     <option value="informatica">Informática</option>
                 </select>
             </div>
-            <div>
-                <label for="listaNombre" class="block text-sm font-medium text-gray-700">Nombre o ID de la Lista (déjalo vacío para listar todas):</label>
-                <input type="text" id="listaNombre" name="lista" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" placeholder="Ej: Voluntarios, Tiendas, etc.">
+            <div class="mb-4">
+                <label for="lista" class="block text-sm font-medium text-gray-700">Nombre o ID de la Lista:</label>
+                <input type="text" id="lista" name="lista" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" placeholder="Ej: MiListaDePrueba">
             </div>
-            <div class="mt-4">
-                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white btn-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+            <div class="mt-4 flex justify-center">
+                <button type="submit" class="w-full sm:w-auto px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[#F36C21] hover:bg-[#d85b1a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
                     Consultar
                 </button>
             </div>
         </form>
 
-        <div id="resultContainer" class="mt-6">
-            <div class="flex justify-between items-center mb-4">
-                 <h2 class="text-xl font-semibold text-gray-800">Resultados:</h2>
-                 <button id="createNewItemBtn" class="hidden bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                    Crear Nuevo Elemento
-                </button>
+        <div id="result" class="mt-8">
+            <div id="loading" class="text-center hidden">
+                <p class="text-lg text-gray-600">Cargando...</p>
             </div>
-            <div id="messageDiv" class="p-4 mt-2 text-sm text-center rounded-md hidden"></div>
-            <div id="resultList" class="mt-2"></div>
+            <div id="error" class="text-center text-red-500 hidden"></div>
+            <div id="resultList" class="shadow-md rounded-lg overflow-x-auto"></div>
+        </div>
+         <div class="mt-4 text-center">
+            <button id="createItemBtn" class="hidden px-6 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                Crear Nuevo Elemento
+            </button>
         </div>
     </div>
-    
+
+    <!-- Modal para CRUD -->
     <div id="crudModal" class="hidden fixed z-10 inset-0 overflow-y-auto">
-        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div class="fixed inset-0 transition-opacity" aria-hidden="true">
                 <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
             </div>
             <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
             <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                    <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalTitle"></h3>
-                    <div class="mt-2" id="modalFormContent">
-                        <!-- El contenido del formulario se generará aquí dinámicamente -->
+                <form id="crudForm">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900" id="modalTitle">Crear/Editar Elemento</h3>
+                                <div class="mt-2" id="crudFormFields">
+                                    <!-- Campos del formulario se insertarán aquí -->
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                    <button type="button" id="saveModalBtn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 sm:ml-3 sm:w-auto sm:text-sm">Guardar</button>
-                    <button type="button" id="cancelModalBtn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:w-auto sm:text-sm">Cancelar</button>
-                </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+                            Guardar
+                        </button>
+                        <button type="button" id="cancelBtn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm">
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 
     <script>
-        let currentItemId = null;
-        let currentColumns = []; // Guardará la definición de las columnas
-
-        function refreshTable() {
-            document.getElementById('sharepointForm').dispatchEvent(new Event('submit', { cancelable: true }));
-        }
-
-        document.getElementById('sharepointForm').addEventListener('submit', async function(event) {
+        document.getElementById('sharepointForm').addEventListener('submit', function(event) {
             event.preventDefault();
-            const createBtn = document.getElementById('createNewItemBtn');
+            const site = document.getElementById('siteSelection').value;
+            const list = document.getElementById('lista').value;
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
             const resultList = document.getElementById('resultList');
-            const messageDiv = document.getElementById('messageDiv');
-            const listaNombreValue = document.getElementById('listaNombre').value.trim();
-            
-            resultList.innerHTML = '<div class="text-center p-4">Cargando...</div>';
-            messageDiv.className = 'hidden';
+            const createBtn = document.getElementById('createItemBtn');
+
+            loading.classList.remove('hidden');
+            errorDiv.classList.add('hidden');
+            resultList.innerHTML = '';
             createBtn.classList.add('hidden');
-            currentColumns = [];
-
-            try {
-                const response = await fetch(AppConfig.getUrl('SHAREPOINT_LIST'), { 
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams(new FormData(this))
-                });
-                const data = await response.json();
-
-                resultList.innerHTML = '';
-
-                if (response.ok && !data.error) {
-                    if (listaNombreValue) {
-                        // --- VISTA DE ITEMS DE LISTA (NUEVA LÓGICA) ---
-                        handleListItemsView(data.columns, data.items, listaNombreValue);
-                    } else {
-                        // --- VISTA DE LISTAS (LÓGICA ANTERIOR) ---
-                        handleListsView(data);
+            
+            const servletUrl = AppConfig.getUrl('SHAREPOINT_LIST');
+            
+            fetch(`${servletUrl}?siteSelection=${site}&lista=${list}`)
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(err => { throw new Error(err.error || 'Error del servidor'); });
                     }
-                } else {
-                    showMessage(data.error || `Error del servidor: ${response.status}`, 'error');
-                }
-
-            } catch (error) {
-                console.error('Error de red:', error);
-                showMessage('No se pudo conectar con el servidor.', 'error');
-            }
-        });
-        
-        function handleListsView(listsData) {
-             if (listsData.length > 0) {
-                const headers = Object.keys(listsData[0]);
-                const table = createTable(headers, listsData, false);
-                document.getElementById('resultList').appendChild(table);
-                showMessage(`Se encontraron ${listsData.length} listas.`, 'success');
-            } else {
-                showMessage('No se encontraron listas en este sitio.', 'warning');
-            }
-        }
-
-        function handleListItemsView(columns, items, listName) {
-            currentColumns = columns.filter(c => c.internalName !== 'Title' || items.some(i => i['Title']));
-            
-            if (items && items.length > 0) {
-                document.getElementById('createNewItemBtn').classList.remove('hidden');
-                
-                const displayHeaders = currentColumns.map(c => c.displayName);
-                displayHeaders.push('Acciones');
-                
-                const table = createTable(displayHeaders, items, true);
-                document.getElementById('resultList').appendChild(table);
-                showMessage(`Se encontraron ${items.length} elementos en la lista '${listName}'.`, 'success');
-            } else {
-                document.getElementById('createNewItemBtn').classList.remove('hidden');
-                showMessage(`La lista '${listName}' está vacía o no se encontraron elementos.`, 'warning');
-            }
-        }
-
-        function createTable(headers, data, includeActions) {
-            const table = document.createElement('table');
-            table.className = 'table-auto w-full';
-            const thead = document.createElement('thead');
-            const headerRow = document.createElement('tr');
-            
-            headers.forEach(headerText => {
-                const th = document.createElement('th');
-                th.textContent = headerText;
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            table.appendChild(thead);
-
-            const tbody = document.createElement('tbody');
-            data.forEach(item => {
-                const row = document.createElement('tr');
-                // Determina las claves a usar para las celdas (displayNames o internalNames)
-                const cellKeys = includeActions ? currentColumns.map(c => c.internalName) : headers;
-
-                cellKeys.forEach(key => {
-                    const cell = document.createElement('td');
-                    cell.textContent = item[key] ?? '';
-                    row.appendChild(cell);
+                    return response.json();
+                })
+                .then(data => {
+                    loading.classList.add('hidden');
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+                    if (data.items) {
+                        handleListItemsView(data);
+                    } else {
+                        handleListOfListsView(data);
+                    }
+                })
+                .catch(error => {
+                    loading.classList.add('hidden');
+                    errorDiv.textContent = 'Error: ' + error.message;
+                    errorDiv.classList.remove('hidden');
                 });
+        });
 
-                if (includeActions) {
-                    const actionCell = document.createElement('td');
-                    const editBtn = document.createElement('button');
-                    editBtn.textContent = 'Editar';
-                    editBtn.className = 'bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded text-xs';
-                    editBtn.onclick = () => handleEdit(item);
-                    
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.textContent = 'Borrar';
-                    deleteBtn.className = 'bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs ml-2';
-                    deleteBtn.onclick = () => handleDelete(item.id);
+        function handleListOfListsView(data) {
+            const displayNames = data.map(item => ({ Nombre: item.Nombre, ID: item.ID }));
+            document.getElementById('resultList').innerHTML = createTable(displayNames, ['Nombre', 'ID']);
+        }
 
-                    actionCell.appendChild(editBtn);
-                    actionCell.appendChild(deleteBtn);
-                    row.appendChild(actionCell);
+        function handleListItemsView(response) {
+            const items = response.items;
+            const columns = response.columns; 
+            
+            document.getElementById('resultList').innerHTML = createTable(items, columns);
+            document.getElementById('createItemBtn').classList.remove('hidden');
+        }
+
+        function createTable(data, columns) {
+            if (!data || data.length === 0) {
+                return '<p class="text-center text-gray-500">No se encontraron datos.</p>';
+            }
+
+            const isItemView = typeof columns[0] === 'object';
+            const internalNames = isItemView ? columns.map(c => c.internalName) : columns;
+
+            let table = '<table class="min-w-full table-auto">';
+            
+            table += '<thead><tr>';
+            columns.forEach(column => {
+                let displayName = isItemView ? column.displayName : column;
+                if (isItemView && column.isLookup) {
+                    displayName += ' (ID)';
                 }
-                tbody.appendChild(row);
+                table += `<th class="px-4 py-2">${displayName}</th>`;
             });
-            table.appendChild(tbody);
+            table += '</tr></thead>';
+
+            table += '<tbody>';
+            data.forEach(row => {
+                table += '<tr>';
+                internalNames.forEach((key, index) => {
+                    const value = row[key] !== null && row[key] !== undefined ? row[key] : '';
+                    let cellClass = '';
+                    if (isItemView && columns[index] && columns[index].isLookup) {
+                        cellClass = 'lookup-id';
+                    }
+                    table += `<td class="px-4 py-2 ${cellClass}">${value}</td>`;
+                });
+                table += '</tr>';
+            });
+            table += '</tbody></table>';
+
             return table;
         }
 
-        function showMessage(msg, type) {
-            const div = document.getElementById('messageDiv');
-            div.textContent = msg;
-            const typeClasses = { success: 'bg-green-500 text-white', error: 'bg-red-500 text-white', warning: 'bg-yellow-300 text-black' };
-            div.className = `p-4 mt-2 text-sm text-center rounded-md ${typeClasses[type] || 'bg-gray-500 text-white'}`;
-        }
-
-        function openModal(title, itemData = {}) {
-            document.getElementById('modalTitle').textContent = title;
-            const formContent = document.getElementById('modalFormContent');
-            formContent.innerHTML = '';
-
-            currentColumns.forEach(col => {
-                if(col.readOnly) return; // No mostrar campos de solo lectura en el formulario
-
-                const value = itemData[col.internalName] ?? '';
-                const fieldDiv = document.createElement('div');
-                fieldDiv.className = 'mb-4';
-                fieldDiv.innerHTML = `
-                    <label for="field-${col.internalName}" class="block text-sm font-medium text-gray-700">${col.displayName}</label>
-                    <input type="text" id="field-${col.internalName}" name="${col.internalName}" value="${value}" 
-                           class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm sm:text-sm">
-                `;
-                formContent.appendChild(fieldDiv);
-            });
-            document.getElementById('crudModal').classList.remove('hidden');
-        }
-
-        document.getElementById('createNewItemBtn').onclick = () => {
-            currentItemId = null;
-            openModal('Crear Nuevo Elemento');
-        };
-
-        function handleEdit(item) {
-            currentItemId = item.id;
-            openModal(`Editando Elemento (ID: ${item.id})`, item);
-        }
-
-        async function handleDelete(id) {
-            if (!confirm(`¿Estás seguro de que quieres BORRAR el elemento con ID: ${id}?`)) return;
-            
-            const formData = new FormData(document.getElementById('sharepointForm'));
-            const params = new URLSearchParams({
-                siteId: document.getElementById('siteSelection').options[document.getElementById('siteSelection').selectedIndex].text,
-                listId: formData.get('lista'),
-                action: 'DELETE',
-                itemId: id
-            });
-
-            try {
-                const response = await fetch(AppConfig.getUrl('SHAREPOINT_CRUD'), { method: 'POST', body: params });
-                const result = await response.json();
-                if (response.ok && result.success) {
-                    showMessage('Elemento borrado con éxito.', 'success');
-                    refreshTable();
-                } else {
-                    showMessage(result.error || 'Error al borrar.', 'error');
-                }
-            } catch (error) {
-                showMessage('Error de red al intentar borrar.', 'error');
-            }
-        }
-
-        document.getElementById('saveModalBtn').onclick = async () => {
-            const formData = new FormData(document.getElementById('sharepointForm'));
-            const action = currentItemId ? 'UPDATE' : 'CREATE';
-            const payload = {};
-            
-            currentColumns.forEach(col => {
-                if(!col.readOnly) { // Solo incluir en el payload los campos que no son de solo lectura
-                    const input = document.getElementById(`field-${col.internalName}`);
-                    if(input) payload[col.internalName] = input.value;
-                }
-            });
-
-            const params = new URLSearchParams({
-                siteId: document.getElementById('siteSelection').options[document.getElementById('siteSelection').selectedIndex].text,
-                listId: formData.get('lista'),
-                action: action,
-                payload: JSON.stringify(payload)
-            });
-            if(currentItemId) params.append('itemId', currentItemId);
-
-            try {
-                const response = await fetch(AppConfig.getUrl('SHAREPOINT_CRUD'), { method: 'POST', body: params });
-                const result = await response.json();
-
-                if (response.ok) {
-                    showMessage(`Elemento ${action === 'CREATE' ? 'creado' : 'actualizado'} con éxito.`, 'success');
-                    document.getElementById('crudModal').classList.add('hidden');
-                    refreshTable();
-                } else {
-                     showMessage(result.error || `Error al ${action.toLowerCase()}r.`, 'error');
-                }
-            } catch(e) {
-                showMessage(`Error de red al ${action.toLowerCase()}r.`, 'error');
-            }
-        };
-
-        document.getElementById('cancelModalBtn').onclick = () => document.getElementById('crudModal').classList.add('hidden');
     </script>
-
 </body>
 </html>

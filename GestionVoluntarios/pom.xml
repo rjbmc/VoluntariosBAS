@@ -14,7 +14,6 @@
   </properties>
 
   <build>
-    <!-- ESTA ES LA PARTE CLAVE: LE DECIMOS A MAVEN DÓNDE ESTÁN TUS FICHEROS -->
     <sourceDirectory>src</sourceDirectory>
     <plugins>
       <plugin>
@@ -28,6 +27,22 @@
     </plugins>
   </build>
 
+  <dependencyManagement>
+    <dependencies>
+        <!-- ¡SOLUCIÓN! Forzar una versión única para la librería CORE de Graph para evitar conflictos -->
+        <dependency>
+            <groupId>com.microsoft.graph</groupId>
+            <artifactId>microsoft-graph-core</artifactId>
+            <version>3.6.5</version> <!-- Usamos la versión más reciente que viste -->
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.7</version>
+        </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <!-- Jakarta EE - Para Servlets. El scope 'provided' significa que el servidor (Tomcat) ya lo tiene. -->
     <dependency>
@@ -38,11 +53,10 @@
     </dependency>
 
     <!-- Microsoft Graph SDK v6 (Sharepoint) -->
-       <!-- Microsoft Graph SDK v6 (Sharepoint) -->
     <dependency>
       <groupId>com.microsoft.graph</groupId>
       <artifactId>microsoft-graph</artifactId>
-      <version>6.54.0</version>
+      <version>6.57.0</version>
     </dependency>
     <!-- La dependencia de autenticación que necesita Graph SDK v6 -->
     <dependency>
@@ -77,16 +91,12 @@
         <version>2.0.3</version>
     </dependency>
 
-    <!-- Logging (Log4j 2) -->
+    <!-- SOLUCIÓN DE LOGGING -->
     <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-api</artifactId>
-      <version>2.18.0</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.logging.log4j</groupId>
-      <artifactId>log4j-core</artifactId>
-      <version>2.18.0</version>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>2.0.7</version>
+        <scope>runtime</scope>
     </dependency>
 
     <!-- Password Hashing -->
@@ -103,4 +113,5 @@
       <version>2.9.0</version>
     </dependency>
   </dependencies>
+  
 </project>

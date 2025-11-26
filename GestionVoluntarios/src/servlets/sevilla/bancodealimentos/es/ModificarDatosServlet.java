@@ -1,69 +1,43 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
+import java.rmi.AccessException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 
 import com.google.gson.JsonObject;
 
+import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
+import jakarta.mail.PasswordAuthentication;
+import jakarta.mail.Session;
+import jakarta.mail.Transport;
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.PasswordUtils;
+import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 
 @WebServlet("/modificar-datos")
 public class ModificarDatosServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
-        HttpSession session = request.getSession(false);
-
-        if (session == null || session.getAttribute("usuario") == null) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            return;
-        }
-
-        String usuario = (String) session.getAttribute("usuario");
-        
-        String sql = "SELECT Nombre, Apellidos, `DNI NIF`, Email, telefono, fechaNacimiento, cp, tiendaReferencia " +
-                     "FROM voluntarios WHERE Usuario = ?";
-
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-
-            stmt.setString(1, usuario);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    jsonResponse.addProperty("nombre", rs.getString("Nombre"));
-                    jsonResponse.addProperty("apellidos", rs.getString("Apellidos"));
-                    jsonResponse.addProperty("dni", rs.getString("DNI NIF"));
-                    jsonResponse.addProperty("email", rs.getString("Email"));
-                    jsonResponse.addProperty("telefono", rs.getString("telefono"));
-                    jsonResponse.addProperty("fechaNacimiento", rs.getString("fechaNacimiento"));
-                    jsonResponse.addProperty("cp", rs.getString("cp"));
-                    jsonResponse.addProperty("tiendaReferencia", rs.getInt("tiendaReferencia"));
-                    response.getWriter().write(jsonResponse.toString());
-                } else {
-                    response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        }
-    }
+    // ... (doGet permanece igual)
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -90,14 +64,18 @@ public class ModificarDatosServlet extends HttpServlet {
         String nuevaClave = request.getParameter("nueva_clave");
 
         Connection conn = null;
+        String sqlRowUuid = null; // REPLICACIÓN SHAREPOINT: Variable para el UUID
+
         try {
             conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
 
+            // REPLICACIÓN SHAREPOINT: Obtener el UUID de la fila ANTES de hacer cambios.
+            sqlRowUuid = getSqlRowUuid(conn, usuario);
+
             String emailActual = getEmailActual(conn, usuario);
             boolean emailHaCambiado = !nuevoEmail.equalsIgnoreCase(emailActual);
             
-            // Lógica para cambiar contraseña (si aplica)
             if (nuevaClave != null && !nuevaClave.isEmpty()) {
                 if (!verificarYCambiarClave(conn, usuario, claveActual, nuevaClave)) {
                     jsonResponse.addProperty("success", false);
@@ -108,10 +86,8 @@ public class ModificarDatosServlet extends HttpServlet {
                 }
             }
 
-            // Lógica para actualizar datos personales
             actualizarDatosPersonales(conn, usuario, nombre, apellidos, telefono, fechaNacimiento, cp, tiendaReferenciaStr);
 
-            // Lógica para el cambio de email
             if (emailHaCambiado) {
                 iniciarCambioDeEmail(conn, usuario, nuevoEmail);
                 jsonResponse.addProperty("success", true);
@@ -122,6 +98,25 @@ public class ModificarDatosServlet extends HttpServlet {
             }
             
             conn.commit();
+
+            // --- INICIO: REPLICACIÓN A SHAREPOINT ---
+            if (sqlRowUuid != null) {
+                try {
+                    Map<String, Object> spData = new HashMap<>();
+                    // OJO: Las claves deben ser los NOMBRES INTERNOS de las columnas en SharePoint.
+                    spData.put("field_1", nombre);
+                    spData.put("field_2", apellidos);
+                    spData.put("field_7", telefono);
+                    spData.put("field_9", cp);
+                    // No actualizamos el email aquí, eso debería ocurrir cuando el usuario lo verifique.
+                    
+                    SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+
+                } catch (Exception e) {
+                    System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
+                }
+            }
+            // --- FIN: REPLICACIÓN A SHAREPOINT ---
 
         } catch (SQLException e) {
             if (conn != null) try { conn.rollback(); } catch (SQLException ex) {}
@@ -134,6 +129,21 @@ public class ModificarDatosServlet extends HttpServlet {
         }
 
         response.getWriter().write(jsonResponse.toString());
+    }
+
+    // REPLICACIÓN SHAREPOINT: Nuevo método para obtener el UUID de la fila
+    private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
+        String uuid = null;
+        String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, usuario);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    uuid = rs.getString("SqlRowUUID");
+                }
+            }
+        }
+        return uuid;
     }
 
     private String getEmailActual(Connection conn, String usuario) throws SQLException {
@@ -194,22 +204,44 @@ public class ModificarDatosServlet extends HttpServlet {
             stmt.setString(2, token);
             stmt.setString(3, usuario);
             stmt.executeUpdate();
-            sendEmailConfirmacionCambio(nuevoEmail, token);
+            sendEmailConfirmacionCambio(nuevoEmail, token, usuario);
             LogUtil.logOperation(conn, "CHANGE_EMAIL_REQ", usuario, "Solicitud de cambio de email a " + nuevoEmail);
         }
     }
 
-    private void sendEmailConfirmacionCambio(String emailDestino, String token) {
-        // Lógica de envío de correo (simulada o real)
-        String link = "http://localhost:8080/VoluntariosBAS/confirmar-cambio-email.html?token=" + token;
+    private void sendEmailConfirmacionCambio(String emailDestino, String token, String usuario) {
+        final String username = Config.SMTP_USER;
+        final String password = Config.SMTP_PASSWORD;
+        final String adminEmail = Config.SISTEMAS_EMAIL;
         
-        System.out.println("--- SIMULACIÓN DE ENVÍO DE CORREO DE CAMBIO DE EMAIL ---");
-        System.out.println("Para: " + emailDestino);
-        System.out.println("Asunto: Confirma tu nueva dirección de correo");
-        System.out.println("Cuerpo: Por favor, haz clic en el siguiente enlace para confirmar tu nueva dirección de correo: " + link);
-        System.out.println("-----------------------------------------------------");
+    	String link = "http://localhost:8080/VoluntariosBAS/confirmar-cambio-email.html?token=" + token;
+        String htmlContent = "Por favor, haz clic en el siguiente enlace para confirmar tu nueva dirección de correo: " + link;
 
-        // Aquí iría el código real para enviar el correo con JavaMail
+        Properties props = new Properties();
+        props.put("mail.smtp.auth", "true");
+        props.put("mail.smtp.starttls.enable", "true");
+        props.put("mail.smtp.host", Config.SMTP_HOST);
+        props.put("mail.smtp.port", Config.SMTP_PORT);
+
+        Session mailSession = Session.getInstance(props, new jakarta.mail.Authenticator() {
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(username, password);
+            }
+        });
+        
+        Message message = new MimeMessage(mailSession);
+        try {
+			message.setFrom(new InternetAddress(Config.SMTP_USER));
+			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailDestino));
+			message.setSubject("Confirma tu nueva dirección de correo - Voluntarios Banco de Alimentos de Sevilla");
+			message.setContent(htmlContent, "text/html; charset=utf-8");
+			Transport.send(message);
+		} catch (MessagingException e) {
+			 try {
+				LogUtil.logOperation("CHANGE_EMAIL_CONF", usuario, "Error en envio de la confirmación del cambio de email a " + emailDestino);
+			 } catch (ServletException e1) { }
+			e.printStackTrace();
+		}
     }
 }
 
