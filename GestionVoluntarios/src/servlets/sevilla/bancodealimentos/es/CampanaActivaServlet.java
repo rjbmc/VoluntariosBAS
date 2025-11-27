@@ -30,15 +30,6 @@ public class CampanaActivaServlet extends HttpServlet {
     // --- CAMBIO: Se eliminan las variables de conexi�n locales ---
 
     @Override
-    public void init() throws ServletException {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e) {
-            throw new ServletException("Error: No se pudo cargar el driver de MySQL.", e);
-        }
-    }
-
-    @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");

@@ -25,15 +25,6 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 public class GuardarTurnosServlet extends HttpServlet {
     private static final long serialVersionUID = 3L; // Versi�n actualizada
 
-    @Override
-    public void init() throws ServletException {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e) {
-            throw new ServletException("Error: No se pudo cargar el driver de MySQL.", e);
-        }
-    }
-
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
         Object isAdminAttr = session.getAttribute("isAdmin");

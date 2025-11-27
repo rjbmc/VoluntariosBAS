@@ -36,15 +36,6 @@ public class RecuperarClaveServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
     @Override
-    public void init() throws ServletException {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e) {
-            throw new ServletException("Error: No se pudo cargar el driver de MySQL.", e);
-        }
-    }
-
-    @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         String email = request.getParameter("email");
 

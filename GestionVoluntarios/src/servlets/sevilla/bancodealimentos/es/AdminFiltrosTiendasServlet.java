@@ -26,15 +26,6 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 public class AdminFiltrosTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    @Override
-    public void init() throws ServletException {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e) {
-            throw new ServletException("Error: No se pudo cargar el driver de MySQL.", e);
-        }
-    }
-
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         return session != null && session.getAttribute("isAdmin") != null && (boolean) session.getAttribute("isAdmin");

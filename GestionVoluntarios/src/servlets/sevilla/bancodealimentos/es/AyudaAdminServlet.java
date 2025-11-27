@@ -1,4 +1,3 @@
-// Paquete: servlets.sevilla.bancodealimentos.es
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
@@ -21,20 +20,11 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
 /**
- * Servlet para que los usuarios env�en una petici�n de ayuda al administrador.
+ * Servlet para que los usuarios enven una peticin de ayuda al administrador.
  */
 @WebServlet("/ayuda-admin")
 public class AyudaAdminServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
-
-    @Override
-    public void init() throws ServletException {
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-        } catch (ClassNotFoundException e) {
-            throw new ServletException("Error: No se pudo cargar el driver de MySQL.", e);
-        }
-    }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -51,7 +41,7 @@ public class AyudaAdminServlet extends HttpServlet {
             
             String operador = (email != null && !email.isEmpty()) ? email : "desconocido";
             
-            // --- CAMBIO: Se elimina el �ltimo par�metro de la llamada al log ---
+            // --- CAMBIO: Se elimina el ltimo parmetro de la llamada al log ---
             LogUtil.logOperation("AYUDA", operador, "Solicitud de ayuda enviada por: " + nombre);
 
             response.setStatus(HttpServletResponse.SC_OK);
@@ -60,7 +50,7 @@ public class AyudaAdminServlet extends HttpServlet {
         } catch (Exception e) {
             e.printStackTrace();
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            response.getWriter().print("{\"success\": false, \"message\": \"No se pudo enviar la solicitud de ayuda. Por favor, int�ntalo m�s tarde.\"}");
+            response.getWriter().print("{\"success\": false, \"message\": \"No se pudo enviar la solicitud de ayuda. Por favor, intntalo ms tarde.\"}");
         }
     }
 
@@ -86,15 +76,15 @@ public class AyudaAdminServlet extends HttpServlet {
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(adminEmail));
         message.setSubject("Solicitud de Ayuda - App VoluntariosBAS");
 
-        String emailBody = "Se ha recibido una nueva solicitud de ayuda desde la aplicaci�n de voluntarios.<br><br>"
+        String emailBody = "Se ha recibido una nueva solicitud de ayuda desde la aplicacin de voluntarios.<br><br>"
                          + "<strong>Nombre del Voluntario:</strong> " + escapeHtml(nombre) + "<br>"
                          + "<strong>Email de Contacto:</strong> " + escapeHtml(email) + "<br><br>"
-                         + "<strong>Descripci�n del Problema:</strong><br>"
+                         + "<strong>Descripcin del Problema:</strong><br>"
                          + "<pre style=\"font-family: sans-serif; white-space: pre-wrap;\">" + escapeHtml(problema) + "</pre>"
-        				 + "<strong>La dirección de correo desde donde se envía este mensaje es de sólo envío. Por favor, no la uses para responder.</strong><br>";
+        				 + "<strong>La direccin de correo desde donde se enva este mensaje es de slo envo. Por favor, no la uses para responder.</strong><br>";
         message.setContent(emailBody, "text/html; charset=utf-8");
         Transport.send(message);
-//        System.out.println("--- SIMULACI�N DE ENV�O DE CORREO DE AYUDA ---");
+//        System.out.println("--- SIMULACIN DE ENVO DE CORREO DE AYUDA ---");
 //        System.out.println("De: " + username);
 //        System.out.println("Para: " + adminEmail);
 //        System.out.println("Asunto: Solicitud de Ayuda - App VoluntariosBAS");
