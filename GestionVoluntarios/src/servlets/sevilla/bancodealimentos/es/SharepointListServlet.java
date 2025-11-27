@@ -45,18 +45,19 @@ public class SharepointListServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         PrintWriter out = response.getWriter();
-        
-        String siteId;
+     
+        String siteId= SharepointUtil.SITE_ID;
 
         if ("voluntarios".equalsIgnoreCase(siteSelection)) {
             siteId = siteIdVoluntarios;
         } else if ("informatica".equalsIgnoreCase(siteSelection)) {
             siteId = siteIdInformatica;
-        } else {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.print(gson.toJson(Map.of("error", "No se ha especificado un sitio de SharePoint válido.")));
-            return;
-        }
+        } 
+//        else {
+//            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+//            out.print(gson.toJson(Map.of("error", "No se ha especificado un sitio de SharePoint válido.")));
+//            return;
+//        }
         
         if (Objects.isNull(siteId) || siteId.isEmpty() || siteId.startsWith("ID_DEL_SITIO")) {
             String errorMessage = "El ID del sitio '" + siteSelection + "' no está configurado. Por favor, edita el fichero SharepointUtil.java y rellena la variable correspondiente.";

@@ -21,11 +21,15 @@ public final class SharepointUtil {
     private static final String MS_CLIENT_SECRET = "2HR8Q~TTaWnWOoKCbJJ-A1Ipc2IGQX1tRqFiQdpd";
 
     // --- 2. IDS DE SITIOS Y LISTAS ---
-    private static final String SITE_ID = "bancodealimentosdesevilla.sharepoint.com,85233b3b-482a-453b-8f3b-619f71c43ab3,7701358f-1a92-4f05-b1a1-8e07ad76e542";
-    private static final String LIST_ID_VOLUNTARIOS = "a7b8e5c3-00d9-4884-a131-a20e3a6c9e07";
-    private static final String LIST_ID_CAMPANAS = "LIST_ID_DE_CAMPANAS_AQUI"; // Reemplazar
-    private static final String LIST_ID_TIENDAS = "LIST_ID_DE_TIENDAS_AQUI"; // Reemplazar
-    private static final String LIST_ID_VOLUNTARIOS_EN_CAMPANA = "LIST_ID_DE_VOLUNTARIOS_EN_CAMPANA_AQUI"; // Reemplazar
+    public static final String SITE_ID = "bancodealimentosdesevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db";
+    public static final String SP_SITE_ID_VOLUNTARIOS = "bancodealimentosdesevilla.sharepoint.com,85233b3b-482a-453b-8f3b-619f71c43ab3,7701358f-1a92-4f05-b1a1-8e07ad76e542";
+    public static final String SP_SITE_ID_INFORMATICA = "bancodealimentosdesevilla.sharepoint.com,85233b3b-482a-453b-8f3b-619f71c43ab3,7701358f-1a92-4f05-b1a1-8e07ad76e542";
+    
+    // ***** CAMBIO AQUÍ: Hecho 'public' para que sea visible desde otros ficheros *****
+    public static final String LIST_ID_VOLUNTARIOS = "61fc2903-5b45-42da-8ad6-276f0215f084";
+    public static final String LIST_ID_CAMPANAS = "f4ad1ff5-2fbf-472e-b0a6-3d1564950e0a";
+    public static final String LIST_ID_TIENDAS = "89d67278-a9f3-49b0-a306-8c7f232d9c90";
+    public static final String LIST_ID_VOLUNTARIOS_EN_CAMPANA = "0bdc7d33-4168-410f-b129-61f2e86b4b4f";
 
     private static GraphServiceClient graphClient = null;
 
@@ -55,7 +59,8 @@ public final class SharepointUtil {
         return graphClient;
     }
     
-    private static String getListId(String listName) {
+    // ***** CAMBIO AQUÍ: Hecho 'public' para poder usarlo desde cualquier servlet *****
+    public static String getListId(String listName) {
         switch (listName.toLowerCase()) {
             case "voluntarios": return LIST_ID_VOLUNTARIOS;
             case "campanas": return LIST_ID_CAMPANAS;
@@ -78,7 +83,7 @@ public final class SharepointUtil {
         String listId = getListId(listName);
         FieldValueSet fieldValueSet = new FieldValueSet();
         fieldValueSet.setAdditionalData(data);
-        getGraphClient().sites().bySiteId(SITE_ID).lists().byListId(listId).items().byListItemId(itemId).getFields().patch(fieldValueSet);
+        getGraphClient().sites().bySiteId(SITE_ID).lists().byListId(listId).items().byListItemId(itemId).fields().patch(fieldValueSet);
     }
 
     public static void deleteListItem(String listName, String itemId) {

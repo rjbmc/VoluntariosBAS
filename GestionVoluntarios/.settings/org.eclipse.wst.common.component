@@ -1,32 +1,9 @@
-<?xml version="1.0" encoding="UTF-8"?><project-modules id="moduleCoreId" project-version="1.5.0">
-                    
-    
-    
-    
-    <wb-module deploy-name="gestion-voluntarios-1.0.0">
-                
-        <wb-resource deploy-path="/" source-path="/target/m2e-wtp/web-resources"/>
-                        
-        
+<?xml version="1.0" encoding="UTF-8"?>
+<project-modules id="moduleCoreId" project-version="1.5.0">
+    <wb-module deploy-name="VoluntariosBAS">
         <wb-resource deploy-path="/" source-path="/WebContent" tag="defaultRootSource"/>
-                        
-        
-        <wb-resource deploy-path="/" source-path="/WebContent/WEB-INF/lib"/>
         <wb-resource deploy-path="/WEB-INF/classes" source-path="/src"/>
-                                        
-        
-        
-        
+        <property name="context-root" value="VoluntariosBAS"/>
         <property name="java-output-path" value="/GestionVoluntarios/build/classes"/>
-                
-        <property name="context-root" value="gestion-voluntarios"/>
-                                    
-    
-    
-    
     </wb-module>
-                
-
-
-
 </project-modules>

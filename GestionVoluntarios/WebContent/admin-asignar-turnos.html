@@ -178,7 +178,10 @@
         try {
             const url = `${AppConfig.getUrl('MIS_TURNOS')}?campana=${encodeURIComponent(campanaActiva.campana)}&usuario=${encodeURIComponent(usuario)}`;
             const response = await fetch(url);
-            if (!response.ok) return;
+            // Si la respuesta no es OK, lanzamos un error para que sea capturado por el catch
+            if (!response.ok) {
+                throw new Error(`El servidor respondió con un error: ${response.status}`);
+            };
             const misTurnos = await response.json();
 
             if (Object.keys(misTurnos).length > 0) {
@@ -206,9 +209,12 @@
                 }
             }
         } catch (error) {
-            console.error("Error al cargar los turnos guardados:", error);
+            // *** MEJORA AQUÍ ***
+            // Ahora usamos la función handleError para notificar al administrador
+            handleError("No se pudieron cargar los turnos guardados para este voluntario.");
         }
     }
+
 
     function clearTurno(turnoId) {
         document.getElementById(`tienda-nombre-${turnoId}`).textContent = 'Ninguna tienda seleccionada';
