@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
+import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/confirmar-baja")
 public class ConfirmarBajaServlet extends HttpServlet {
@@ -76,7 +77,8 @@ public class ConfirmarBajaServlet extends HttpServlet {
                         // --- INICIO: REPLICACIÓN A SHAREPOINT ---
                         if (sqlRowUuid != null) {
                             try {
-                                SharepointReplicationUtil.replicate(conn, "voluntarios", null, SharepointReplicationUtil.Operation.DELETE, sqlRowUuid);
+                                // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
+                                SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", null, SharepointReplicationUtil.Operation.DELETE, sqlRowUuid);
                             } catch (Exception e) {
                                 System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación (DELETE) a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
                             }

@@ -26,6 +26,7 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
+import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/solicitar-baja")
 public class SolicitarBajaServlet extends HttpServlet {
@@ -88,7 +89,8 @@ public class SolicitarBajaServlet extends HttpServlet {
                 Map<String, Object> spData = new HashMap<>();
                 String fechaBajaString = new SimpleDateFormat("yyyy-MM-dd").format(fechaBajaSql);
                 spData.put("field_21", fechaBajaString); 
-                SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
+                SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
             }
             
             LogUtil.logOperation(conn, "BAJA_OK", usuario, "El usuario se ha dado de baja.");

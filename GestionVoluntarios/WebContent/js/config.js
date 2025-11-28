@@ -38,10 +38,12 @@ const AppConfig = {
         ADMIN_DETALLE_TURNO: '/admin-detalle-turno',
         ADMIN_FILTROS_TIENDAS: '/admin-filtros-tiendas',
         INFORME_CAMPANA: '/informe-campana',
-        REFRESCAR_POWERAPP: '/refrescar-powerapp',
 		SOLICITAR_BAJA: '/solicitar-baja',
-		SHAREPOINT_LIST: '/lista-sharepoint',		
-		SHAREPOINT_CRUD: '/crud-sharepoint'
+		
+        // Endpoints de SharePoint
+        REFRESCAR_SHAREPOINT: '/refrescar-sharepoint',
+        VER_LOGS_ERROR: '/ver-logs-error',
+        INSPECCIONAR_LISTA: '/inspeccionar-lista' // <-- AÑADIDO
     },
 
     /**

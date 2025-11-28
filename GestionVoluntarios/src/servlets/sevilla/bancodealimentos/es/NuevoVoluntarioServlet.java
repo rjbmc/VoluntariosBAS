@@ -31,6 +31,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.PasswordUtils;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
+import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/nuevo-voluntario")
 public class NuevoVoluntarioServlet extends HttpServlet {
@@ -191,14 +192,14 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                     // --- REPLICACIÓN DE REACTIVACIÓN (UPDATE) ---
                     if (sqlRowUuid != null) {
                         spData.put("field_21", null);
-                        SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                        SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                     } else {
                         System.err.println("ADVERTENCIA: No se encontró SqlRowUUID para reactivar al usuario '" + usuario + "'. No se puede replicar la reactivación a SharePoint.");
                     }
                 } else {
                     // --- REPLICACIÓN DE NUEVO USUARIO (INSERT) ---
                     if (sqlRowUuid != null) {
-                        SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.INSERT, sqlRowUuid);
+                        SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.INSERT, sqlRowUuid);
                     }
                 }
             } catch (Exception e) {

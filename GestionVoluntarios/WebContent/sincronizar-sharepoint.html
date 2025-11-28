@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sincronización con SharePoint - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .log-entry {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 8px 4px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .log-entry strong {
+            color: #4a5568;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- Cabecera -->
+    <header class="bg-white shadow-md">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
+                <a href="admin.html" class="ml-4 text-xl font-bold text-gray-700">Panel de Administración</a>
+            </div>
+            <div>
+                <button onclick="logout()" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition">Cerrar Sesión</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="container mx-auto px-6 py-12">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">Sincronización con SharePoint</h1>
+        <p class="text-gray-600 mb-8">Desde aquí puedes forzar la resincronización de los datos y diagnosticar problemas con las listas de SharePoint.</p>
+
+        <div class="bg-white p-6 rounded-lg card-shadow mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Acciones de Sincronización</h2>
+            <div class="flex flex-col md:flex-row flex-wrap gap-4">
+                <button onclick="sincronizarTabla('Campanas')" class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition w-full md:w-auto">Sincronizar Campañas</button>
+                <button onclick="sincronizarTabla('Voluntarios')" class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition w-full md:w-auto">Sincronizar Voluntarios</button>
+                <button onclick="verLogs()" class="px-6 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition w-full md:w-auto">Ver Errores de Sincronización</button>
+                <button onclick="inspeccionarLista('Campanas')" class="px-6 py-3 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition w-full md:w-auto">Inspeccionar Campanas</button>
+            </div>
+        </div>
+
+        <!-- Contenedor para mensajes y logs -->
+        <div id="message-container" class="mt-4"></div>
+    </main>
+
+    <script src="/VoluntariosBAS/js/config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
+                if (!response.ok) {
+                    window.location.href = 'login.html';
+                    return;
+                }
+                const user = await response.json();
+                if (!user.isAdmin) {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                window.location.href = 'login.html';
+            }
+        });
+
+        async function logout() {
+             try {
+                await fetch(AppConfig.getUrl('LOGOUT'), { method: 'POST' });
+            } catch (error) {
+                console.error("Error al cerrar sesión, redirigiendo de todas formas.", error);
+            } finally {
+                window.location.href = 'login.html';
+            }
+        }
+
+        const messageContainer = document.getElementById('message-container');
+
+        function displayMessage(message, isSuccess) {
+            const color = isSuccess ? 'green' : 'red';
+            messageContainer.innerHTML = `<div class="p-4 rounded-md bg-${color}-100 text-${color}-800 border border-${color}-300">${message}</div>`;
+        }
+
+        async function sincronizarTabla(tabla) {
+            displayMessage('Iniciando sincronización para la tabla \'' + tabla + '\'... Por favor, espera.', true);
+            try {
+                const response = await fetch(AppConfig.getUrl('REFRESCAR_SHAREPOINT'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'table=' + tabla
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    displayMessage(`¡Éxito! ${result.message}`, true);
+                } else {
+                    displayMessage(`Error: ${result.message || 'Error desconocido del servidor.'}`, false);
+                }
+            } catch (error) {
+                displayMessage('Error de red al intentar sincronizar. Revisa la consola.', false);
+            }
+        }
+
+        async function verLogs() {
+            displayMessage('Cargando logs de errores...', true);
+            try {
+                const response = await fetch(AppConfig.getUrl('VER_LOGS_ERROR'));
+                if (!response.ok) {
+                    const errorResult = await response.json();
+                    displayMessage(`Error al cargar logs: ${errorResult.message}`, false);
+                    return;
+                }
+                const logs = await response.json();
+                if (logs.length === 0) {
+                    displayMessage('No se encontraron errores de sincronización.', true);
+                    return;
+                }
+                let logHtml = '<h3 class="text-xl font-semibold text-gray-800 mb-4">Logs de Errores</h3>';
+                logHtml += '<div class="bg-white p-4 rounded-lg card-shadow">';
+                logs.forEach(log => {
+                    logHtml += `<div class="log-entry"><strong>[${log.hora}]</strong>: ${log.comentario}</div>`;
+                });
+                logHtml += '</div>';
+                messageContainer.innerHTML = logHtml;
+            } catch (error) {
+                displayMessage('Error de red al cargar los logs. Revisa la consola.', false);
+            }
+        }
+
+        async function inspeccionarLista(listName) {
+            displayMessage(`Inspeccionando la lista '${listName}'... Por favor, espera.`, true);
+            try {
+                const response = await fetch(`${AppConfig.getUrl('INSPECCIONAR_LISTA')}?listName=${listName}`);
+                if (!response.ok) {
+                    const errorResult = await response.json();
+                    displayMessage(`Error al inspeccionar la lista: ${errorResult.error}`, false);
+                    return;
+                }
+                const columns = await response.json();
+                if (columns.length === 0) {
+                    displayMessage('No se encontraron columnas para esta lista.', true);
+                    return;
+                }
+
+                let tableHtml = `<h3 class="text-xl font-semibold text-gray-800 mb-4">Columnas de la Lista '${listName}'</h3>`;
+                tableHtml += '<div class="bg-white p-4 rounded-lg card-shadow"><table class="w-full text-left"><thead><tr class="border-b"><th class="pb-2 font-semibold">Nombre a Mostrar</th><th class="pb-2 font-semibold">Nombre Interno (API)</th></tr></thead><tbody>';
+                columns.forEach(col => {
+                    tableHtml += `<tr class="border-b"><td class="py-2">${col.displayName}</td><td class="py-2 font-mono">${col.internalName}</td></tr>`;
+                });
+                tableHtml += '</tbody></table></div>';
+                messageContainer.innerHTML = tableHtml;
+
+            } catch (error) {
+                displayMessage('Error de red al inspeccionar la lista. Revisa la consola.', false);
+                console.error("Error en inspeccionarLista:", error);
+            }
+        }
+    </script>
+
+</body>
+</html>

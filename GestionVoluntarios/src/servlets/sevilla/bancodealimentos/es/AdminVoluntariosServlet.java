@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
+import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/admin-voluntarios")
 public class AdminVoluntariosServlet extends HttpServlet {
@@ -49,7 +50,6 @@ public class AdminVoluntariosServlet extends HttpServlet {
         PrintWriter out = response.getWriter();
         StringBuilder jsonBuilder = new StringBuilder("[");
 
-        // CORRECCIÓN: Añadidos 'tiendaReferencia' y 'administrador' a la consulta
         String sql = "SELECT Usuario, Nombre, Apellidos, `DNI NIF`, Email, telefono, administrador, cp, fechaNacimiento, tiendaReferencia FROM voluntarios ORDER BY Apellidos, Nombre";
 
         try (Connection conn = DatabaseUtil.getConnection();
@@ -68,8 +68,8 @@ public class AdminVoluntariosServlet extends HttpServlet {
                 jsonBuilder.append("\"telefono\":\"").append(escapeJson(rs.getString("telefono"))).append("\",");
                 jsonBuilder.append("\"cp\":\"").append(escapeJson(rs.getString("cp"))).append("\",");
                 jsonBuilder.append("\"fechaNacimiento\":\"").append(rs.getDate("fechaNacimiento")).append("\",");
-                jsonBuilder.append("\"tiendaReferencia\":").append(rs.getInt("tiendaReferencia")).append(","); // CORRECCIÓN
-                jsonBuilder.append("\"esAdmin\":\"").append(escapeJson(rs.getString("administrador"))).append("\""); // CORRECCIÓN
+                jsonBuilder.append("\"tiendaReferencia\":").append(rs.getInt("tiendaReferencia")).append(",");
+                jsonBuilder.append("\"esAdmin\":\"").append(escapeJson(rs.getString("administrador"))).append("\"");
                 jsonBuilder.append("}");
                 first = false;
             }
@@ -111,7 +111,6 @@ public class AdminVoluntariosServlet extends HttpServlet {
         try (Connection conn = DatabaseUtil.getConnection()) {
             conn.setAutoCommit(false);
             
-            // CORRECCIÓN: Añadido 'tiendaReferencia' a la actualización
             String sql = "UPDATE voluntarios SET Nombre = ?, Apellidos = ?, `DNI NIF` = ?, Email = ?, telefono = ?, fechaNacimiento = ?, cp = ?, tiendaReferencia = ?, notificar = 'S' WHERE Usuario = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, request.getParameter("nombre"));
@@ -121,7 +120,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
                 stmt.setString(5, request.getParameter("telefono"));
                 stmt.setDate(6, java.sql.Date.valueOf(request.getParameter("fechaNacimiento")));
                 stmt.setString(7, request.getParameter("cp"));
-                stmt.setInt(8, Integer.parseInt(request.getParameter("tiendaReferencia"))); // CORRECCIÓN
+                stmt.setInt(8, Integer.parseInt(request.getParameter("tiendaReferencia")));
                 stmt.setString(9, usuarioToUpdate);
                 stmt.executeUpdate();
             }
@@ -138,13 +137,14 @@ public class AdminVoluntariosServlet extends HttpServlet {
                     spData.put("field_1", request.getParameter("nombre"));
                     spData.put("field_2", request.getParameter("apellidos"));
                     spData.put("field_3", request.getParameter("dni"));
-                    spData.put("field_5", Integer.parseInt(request.getParameter("tiendaReferencia"))); // CORRECCIÓN
+                    spData.put("field_5", Integer.parseInt(request.getParameter("tiendaReferencia")));
                     spData.put("field_6", request.getParameter("email"));
                     spData.put("field_7", request.getParameter("telefono"));
                     spData.put("field_8", request.getParameter("fechaNacimiento"));
                     spData.put("field_9", request.getParameter("cp"));
                     
-                    SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                    // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
+                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
                     System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint la modificación de datos para " + usuarioToUpdate + ". Causa: " + e.getMessage());
                 }
@@ -193,7 +193,8 @@ public class AdminVoluntariosServlet extends HttpServlet {
                     Map<String, Object> spData = new HashMap<>();
                     spData.put("field_10", "S".equals(newAdminStatus) ? "Si" : "No");
                     
-                    SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                    // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
+                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
                     System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de rol para " + usuarioToUpdate + ". Causa: " + e.getMessage());
                 }
