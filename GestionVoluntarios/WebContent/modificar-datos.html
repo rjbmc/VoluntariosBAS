@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -152,7 +152,8 @@
 
         async function loadVoluntarioData() {
             try {
-                const response = await fetch(AppConfig.getUrl('MODIFICAR_DATOS'));
+                const response = await fetch(AppConfig.getUrl('VOLUNTARIO_DETALLES'));
+                
                 if (!response.ok) {
                     if (response.status === 401) window.location.href = 'login.html';
                     throw new Error('No se pudieron cargar los datos del voluntario.');
@@ -172,10 +173,12 @@
                 if (todasTiendasCache.has(tiendaRefId)) {
                     document.getElementById('tiendaReferenciaNombre').textContent = todasTiendasCache.get(tiendaRefId).nombre;
                 } else {
-                    document.getElementById('tiendaReferenciaNombre').textContent = `Tienda ID: ${tiendaRefId}`;
+                    document.getElementById('tiendaReferenciaNombre').textContent = 'Tienda no asignada';
                 }
             } catch (error) {
-                displayMessage(error.message, 'error');
+                const messageDiv = document.getElementById('message');
+                messageDiv.textContent = error.message;
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
             }
         }
 
@@ -185,7 +188,6 @@
             const nuevaClave = document.getElementById('nueva_clave').value;
             const claveActual = document.getElementById('clave_actual').value;
 
-            // Validación de contraseña
             if (nuevaClave || claveActual) {
                 if (!claveActual) {
                     displayMessage('Debes introducir tu contraseña actual para poder cambiarla.', 'error');
@@ -199,7 +201,9 @@
             
             const form = event.target;
             const formData = new FormData(form);
-            displayMessage('Guardando cambios...', 'info');
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = 'Guardando cambios...';
+            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
 
             try {
                 const response = await fetch(AppConfig.getUrl('MODIFICAR_DATOS'), {
@@ -207,12 +211,12 @@
                     body: new URLSearchParams(formData)
                 });
                 const result = await response.json();
-                if (result.success) {
+                if (response.ok) {
                     displayMessage(result.message, 'success');
                     document.getElementById('clave_actual').value = '';
                     document.getElementById('nueva_clave').value = '';
                 } else {
-                    displayMessage(result.message, 'error');
+                    displayMessage(result.message || 'Error desconocido al guardar.', 'error');
                 }
             } catch (error) {
                 displayMessage('Error de conexión con el servidor.', 'error');
@@ -228,7 +232,7 @@
         }
         
         async function handleBaja(event) {
-            event.preventDefault(); // Evita que el formulario se envíe de la manera tradicional
+            event.preventDefault(); 
             const form = document.getElementById('bajaForm');
             const password = document.getElementById('clave_baja').value;
 
@@ -243,19 +247,21 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ password: password }) // Enviamos la contraseña para verificación
+                    body: JSON.stringify({ password: password })
                 });
 
                 const result = await response.json();
 
-                if (response.ok) {
-                    // Éxito: el servidor ha enviado el email
+                if (response.ok && result.redirectUrl) {
                     closeBajaModal();
-                    alert(result.message); // "Se ha enviado un email a tu correo para confirmar la baja."
-                    form.reset(); // Limpia el campo de contraseña
+                    alert(result.message);
+                    
+                    setTimeout(() => {
+                        window.location.href = result.redirectUrl;
+                    }, 2000);
+
                 } else {
-                    // Error: contraseña incorrecta, token inválido, etc.
-                    alert(`Error: ${result.message}`);
+                    alert(result.message || "Ha ocurrido un error inesperado.");
                 }
 
             } catch (error) {
@@ -272,9 +278,11 @@
                 mapInstance = L.map('map').setView([37.3891, -5.9845], 12);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' }).addTo(mapInstance);
                 todasTiendasCache.forEach(tienda => {
-                    const marker = L.marker([tienda.lat, tienda.lon]).addTo(mapInstance);
-                    marker.bindPopup(`<b>${tienda.nombre}</b><br>${tienda.direccion}`);
-                    marker.on('click', () => selectStore(tienda));
+                    if(tienda.lat && tienda.lon) {
+                        const marker = L.marker([tienda.lat, tienda.lon]).addTo(mapInstance);
+                        marker.bindPopup(`<b>${tienda.nombre}</b><br>${tienda.direccion}`);
+                        marker.on('click', () => selectStore(tienda));
+                    }
                 });
             }, 100);
         }
@@ -298,4 +306,3 @@
     </script>
 </body>
 </html>
-

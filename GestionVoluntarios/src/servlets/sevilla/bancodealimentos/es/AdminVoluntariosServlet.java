@@ -1,13 +1,13 @@
-// Paquete: servlets.sevilla.bancodealimentos.es
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -16,18 +16,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
-import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
+import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 
-/**
- * Servlet para la gesti�n de Voluntarios por parte de los administradores.
- * GET: Devuelve la lista de todos los voluntarios.
- * POST: Actualiza los datos de un voluntario (incluyendo rol de administrador).
- */
 @WebServlet("/admin-voluntarios")
 public class AdminVoluntariosServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versi�n actualizada
+    private static final long serialVersionUID = 2L;
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -42,7 +37,6 @@ public class AdminVoluntariosServlet extends HttpServlet {
         return "sistema";
     }
 
-    // GET: Devuelve la lista de todos los voluntarios
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         if (!isAdmin(request)) {
@@ -55,8 +49,8 @@ public class AdminVoluntariosServlet extends HttpServlet {
         PrintWriter out = response.getWriter();
         StringBuilder jsonBuilder = new StringBuilder("[");
 
-        // Se piden todos los campos necesarios para la edici�n
-        String sql = "SELECT Usuario, Nombre, Apellidos, `DNI NIF`, Email, telefono, administrador, cp, fechaNacimiento FROM voluntarios ORDER BY Apellidos, Nombre";
+        // CORRECCIÓN: Añadidos 'tiendaReferencia' y 'administrador' a la consulta
+        String sql = "SELECT Usuario, Nombre, Apellidos, `DNI NIF`, Email, telefono, administrador, cp, fechaNacimiento, tiendaReferencia FROM voluntarios ORDER BY Apellidos, Nombre";
 
         try (Connection conn = DatabaseUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
@@ -74,7 +68,8 @@ public class AdminVoluntariosServlet extends HttpServlet {
                 jsonBuilder.append("\"telefono\":\"").append(escapeJson(rs.getString("telefono"))).append("\",");
                 jsonBuilder.append("\"cp\":\"").append(escapeJson(rs.getString("cp"))).append("\",");
                 jsonBuilder.append("\"fechaNacimiento\":\"").append(rs.getDate("fechaNacimiento")).append("\",");
-                jsonBuilder.append("\"esAdmin\":\"").append(escapeJson(rs.getString("administrador"))).append("\"");
+                jsonBuilder.append("\"tiendaReferencia\":").append(rs.getInt("tiendaReferencia")).append(","); // CORRECCIÓN
+                jsonBuilder.append("\"esAdmin\":\"").append(escapeJson(rs.getString("administrador"))).append("\""); // CORRECCIÓN
                 jsonBuilder.append("}");
                 first = false;
             }
@@ -89,7 +84,6 @@ public class AdminVoluntariosServlet extends HttpServlet {
         out.flush();
     }
 
-    // POST: Maneja la actualizaci�n de voluntarios
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         if (!isAdmin(request)) {
@@ -102,41 +96,65 @@ public class AdminVoluntariosServlet extends HttpServlet {
         
         if ("toggleAdmin".equals(action)) {
             handleToggleAdmin(request, response);
-        } else if ("save".equals(action)) { // --- CAMBIO: Nueva acci�n ---
+        } else if ("save".equals(action)) {
             handleSave(request, response);
         } else {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Acci�n desconocida.");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Acción desconocida.");
         }
     }
     
     private void handleSave(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String usuarioToUpdate = request.getParameter("usuario");
         String adminUser = getUsuario(request);
+        String sqlRowUuid = null;
         
-        String sql = "UPDATE voluntarios SET Nombre = ?, Apellidos = ?, `DNI NIF` = ?, Email = ?, telefono = ?, fechaNacimiento = ?, cp = ?, notificar = 'S' WHERE Usuario = ?";
-
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            conn.setAutoCommit(false);
             
-            stmt.setString(1, request.getParameter("nombre"));
-            stmt.setString(2, request.getParameter("apellidos"));
-            stmt.setString(3, request.getParameter("dni"));
-            stmt.setString(4, request.getParameter("email"));
-            stmt.setString(5, request.getParameter("telefono"));
-            stmt.setDate(6, java.sql.Date.valueOf(request.getParameter("fechaNacimiento")));
-            stmt.setString(7, request.getParameter("cp"));
-            stmt.setString(8, usuarioToUpdate);
-
-            stmt.executeUpdate();
+            // CORRECCIÓN: Añadido 'tiendaReferencia' a la actualización
+            String sql = "UPDATE voluntarios SET Nombre = ?, Apellidos = ?, `DNI NIF` = ?, Email = ?, telefono = ?, fechaNacimiento = ?, cp = ?, tiendaReferencia = ?, notificar = 'S' WHERE Usuario = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, request.getParameter("nombre"));
+                stmt.setString(2, request.getParameter("apellidos"));
+                stmt.setString(3, request.getParameter("dni"));
+                stmt.setString(4, request.getParameter("email"));
+                stmt.setString(5, request.getParameter("telefono"));
+                stmt.setDate(6, java.sql.Date.valueOf(request.getParameter("fechaNacimiento")));
+                stmt.setString(7, request.getParameter("cp"));
+                stmt.setInt(8, Integer.parseInt(request.getParameter("tiendaReferencia"))); // CORRECCIÓN
+                stmt.setString(9, usuarioToUpdate);
+                stmt.executeUpdate();
+            }
             
-            String logComment = "Admin " + adminUser + " modific� los datos del voluntario: " + usuarioToUpdate;
+            String logComment = "Admin " + adminUser + " modificó los datos del voluntario: " + usuarioToUpdate;
             LogUtil.logOperation(conn, "ADMIN_UPDATE_VOL", adminUser, logComment);
+            
+            sqlRowUuid = getSqlRowUuid(conn, usuarioToUpdate);
+            conn.commit();
+            
+            if (sqlRowUuid != null) {
+                try {
+                    Map<String, Object> spData = new HashMap<>();
+                    spData.put("field_1", request.getParameter("nombre"));
+                    spData.put("field_2", request.getParameter("apellidos"));
+                    spData.put("field_3", request.getParameter("dni"));
+                    spData.put("field_5", Integer.parseInt(request.getParameter("tiendaReferencia"))); // CORRECCIÓN
+                    spData.put("field_6", request.getParameter("email"));
+                    spData.put("field_7", request.getParameter("telefono"));
+                    spData.put("field_8", request.getParameter("fechaNacimiento"));
+                    spData.put("field_9", request.getParameter("cp"));
+                    
+                    SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                } catch (Exception e) {
+                    System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint la modificación de datos para " + usuarioToUpdate + ". Causa: " + e.getMessage());
+                }
+            }
 
             sendSuccess(response, "Datos del voluntario actualizados correctamente.");
 
         } catch (SQLException e) {
             e.printStackTrace();
-            sendError(response, "Error al actualizar los datos. El DNI o el email podr�an estar ya en uso.");
+            sendError(response, "Error al actualizar los datos. El DNI o el email podrían estar ya en uso.");
         } catch (Exception e) {
             e.printStackTrace();
             sendError(response, "Error en los datos enviados.");
@@ -147,24 +165,39 @@ public class AdminVoluntariosServlet extends HttpServlet {
         String usuarioToUpdate = request.getParameter("usuario");
         String newAdminStatus = request.getParameter("esAdmin");
         String adminUser = getUsuario(request);
+        String sqlRowUuid = null;
 
         if (usuarioToUpdate == null || newAdminStatus == null || (!"S".equals(newAdminStatus) && !"N".equals(newAdminStatus))) {
-            sendError(response, "Datos inv�lidos para la actualizaci�n.");
+            sendError(response, "Datos inválidos para la actualización.");
             return;
         }
 
-        String sql = "UPDATE voluntarios SET administrador = ?, notificar = 'S' WHERE Usuario = ?";
-
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            conn.setAutoCommit(false);
             
-            stmt.setString(1, newAdminStatus);
-            stmt.setString(2, usuarioToUpdate);
-
-            stmt.executeUpdate();
+            String sql = "UPDATE voluntarios SET administrador = ?, notificar = 'S' WHERE Usuario = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+                stmt.setString(1, newAdminStatus);
+                stmt.setString(2, usuarioToUpdate);
+                stmt.executeUpdate();
+            }
             
-            String logComment = "Admin " + adminUser + " cambi� el rol de " + usuarioToUpdate + " a admin=" + newAdminStatus;
+            String logComment = "Admin " + adminUser + " cambió el rol de " + usuarioToUpdate + " a admin=" + newAdminStatus;
             LogUtil.logOperation(conn, "ADMIN_ROLE_CHANGE", adminUser, logComment);
+
+            sqlRowUuid = getSqlRowUuid(conn, usuarioToUpdate);
+            conn.commit();
+            
+            if (sqlRowUuid != null) {
+                try {
+                    Map<String, Object> spData = new HashMap<>();
+                    spData.put("field_10", "S".equals(newAdminStatus) ? "Si" : "No");
+                    
+                    SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                } catch (Exception e) {
+                    System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de rol para " + usuarioToUpdate + ". Causa: " + e.getMessage());
+                }
+            }
 
             sendSuccess(response, "Rol de administrador actualizado correctamente.");
 
@@ -172,6 +205,20 @@ public class AdminVoluntariosServlet extends HttpServlet {
             e.printStackTrace();
             sendError(response, "Error al actualizar el rol del voluntario.");
         }
+    }
+    
+    private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
+        String uuid = null;
+        String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, usuario);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    uuid = rs.getString("SqlRowUUID");
+                }
+            }
+        }
+        return uuid;
     }
 
     private void sendSuccess(HttpServletResponse response, String message) throws IOException {

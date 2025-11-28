@@ -37,8 +37,6 @@ import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 public class ModificarDatosServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    // ... (doGet permanece igual)
-
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
@@ -64,13 +62,12 @@ public class ModificarDatosServlet extends HttpServlet {
         String nuevaClave = request.getParameter("nueva_clave");
 
         Connection conn = null;
-        String sqlRowUuid = null; // REPLICACIÓN SHAREPOINT: Variable para el UUID
+        String sqlRowUuid = null;
 
         try {
             conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
 
-            // REPLICACIÓN SHAREPOINT: Obtener el UUID de la fila ANTES de hacer cambios.
             sqlRowUuid = getSqlRowUuid(conn, usuario);
 
             String emailActual = getEmailActual(conn, usuario);
@@ -99,16 +96,15 @@ public class ModificarDatosServlet extends HttpServlet {
             
             conn.commit();
 
-            // --- INICIO: REPLICACIÓN A SHAREPOINT ---
             if (sqlRowUuid != null) {
                 try {
                     Map<String, Object> spData = new HashMap<>();
-                    // OJO: Las claves deben ser los NOMBRES INTERNOS de las columnas en SharePoint.
                     spData.put("field_1", nombre);
                     spData.put("field_2", apellidos);
+                    spData.put("field_5", Integer.parseInt(tiendaReferenciaStr));
                     spData.put("field_7", telefono);
+                    spData.put("field_8", fechaNacimiento);
                     spData.put("field_9", cp);
-                    // No actualizamos el email aquí, eso debería ocurrir cuando el usuario lo verifique.
                     
                     SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
 
@@ -116,7 +112,6 @@ public class ModificarDatosServlet extends HttpServlet {
                     System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
                 }
             }
-            // --- FIN: REPLICACIÓN A SHAREPOINT ---
 
         } catch (SQLException e) {
             if (conn != null) try { conn.rollback(); } catch (SQLException ex) {}
@@ -131,7 +126,6 @@ public class ModificarDatosServlet extends HttpServlet {
         response.getWriter().write(jsonResponse.toString());
     }
 
-    // REPLICACIÓN SHAREPOINT: Nuevo método para obtener el UUID de la fila
     private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
         String uuid = null;
         String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
@@ -244,4 +238,3 @@ public class ModificarDatosServlet extends HttpServlet {
 		}
     }
 }
-

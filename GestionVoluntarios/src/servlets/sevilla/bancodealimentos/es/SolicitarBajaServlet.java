@@ -6,23 +6,15 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.util.Properties;
-import java.util.UUID;
+import java.sql.Date;
+import java.text.SimpleDateFormat;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.mindrot.jbcrypt.BCrypt;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
-
-import jakarta.mail.Authenticator;
-import jakarta.mail.Message;
-import jakarta.mail.MessagingException;
-import jakarta.mail.PasswordAuthentication;
-import jakarta.mail.Session;
-import jakarta.mail.Transport;
-import jakarta.mail.internet.InternetAddress;
-import jakarta.mail.internet.MimeMessage;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -30,17 +22,14 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-import util.sevilla.bancodealimentos.es.Config;
+
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
+import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 
-/**
- * Servlet para gestionar la solicitud de baja de un voluntario.
- * Utiliza HttpSession para la autenticación y contiene la lógica de negocio directamente.
- */
 @WebServlet("/solicitar-baja")
 public class SolicitarBajaServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 4L; // Versión actualizada
     private final Gson gson = new Gson();
 
     @Override
@@ -49,7 +38,6 @@ public class SolicitarBajaServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
         JsonObject jsonResponse = new JsonObject();
 
-        // 1. AUTENTICACIÓN: Validar la sesión del usuario
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("usuario") == null) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
@@ -59,63 +47,73 @@ public class SolicitarBajaServlet extends HttpServlet {
         }
         String usuario = (String) session.getAttribute("usuario");
 
-        try {
-            // 2. OBTENER CONTRASEÑA: Leer la contraseña del cuerpo de la petición
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            conn.setAutoCommit(false); 
+
             JsonObject body = gson.fromJson(request.getReader(), JsonObject.class);
             String plainPassword = body.get("password").getAsString();
             
-            try (Connection conn = DatabaseUtil.getConnection()) {
-                // 3. VERIFICAR CONTRASEÑA: Lógica directamente aquí
-                String hashedPassword = null;
-                String sqlSelectClave = "SELECT Clave FROM voluntarios WHERE Usuario = ?";
-                try (PreparedStatement ps = conn.prepareStatement(sqlSelectClave)) {
-                    ps.setString(1, usuario);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        if (rs.next()) {
-                            hashedPassword = rs.getString("Clave");
-                        }
+            String hashedPassword = null;
+            String sqlRowUuid = null; 
+
+            String sqlSelect = "SELECT Clave, SqlRowUUID FROM voluntarios WHERE Usuario = ?";
+            try (PreparedStatement ps = conn.prepareStatement(sqlSelect)) {
+                ps.setString(1, usuario);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        hashedPassword = rs.getString("Clave");
+                        sqlRowUuid = rs.getString("SqlRowUUID");
                     }
                 }
-                
-                if (hashedPassword == null || !BCrypt.checkpw(plainPassword, hashedPassword)) {
-                    response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                    jsonResponse.addProperty("message", "La contraseña es incorrecta.");
-                    response.getWriter().write(jsonResponse.toString());
-                    LogUtil.logOperation(conn, "SOLICITUD_BAJA_FAIL", usuario, "Intento de baja con contraseña incorrecta.");
-                    return;
-                }
-
-                // 4. GENERAR TOKEN DE BAJA: Crear token único y fecha de expiración (1 hora)
-                String bajaToken = UUID.randomUUID().toString();
-                Timestamp expiryDate = new Timestamp(System.currentTimeMillis() + 3600 * 1000);
-
-                // 5. GUARDAR TOKEN EN BD
-                String sqlUpdate = "UPDATE voluntarios SET token_baja = ?, token_baja_expiry = ? WHERE Usuario = ?";
-                try (PreparedStatement psUpdate = conn.prepareStatement(sqlUpdate)) {
-                    psUpdate.setString(1, bajaToken);
-                    psUpdate.setTimestamp(2, expiryDate);
-                    psUpdate.setString(3, usuario);
-                    psUpdate.executeUpdate();
-                }
-
-                // 6. ENVIAR EMAIL: Lógica directamente aquí
-                enviarEmailConfirmacion(conn, usuario, bajaToken, request);
-
-                // 7. RESPUESTA DE ÉXITO
-                jsonResponse.addProperty("success", true);
-                jsonResponse.addProperty("message", "Se ha enviado un correo a tu email para confirmar la baja. Por favor, revisa tu bandeja de entrada.");
-                response.getWriter().write(jsonResponse.toString());
-                LogUtil.logOperation(conn, "SOLICITUD_BAJA_OK", usuario, "Se ha enviado el email de confirmación de baja.");
-
-            } catch (SQLException e) {
-                e.printStackTrace();
-                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                jsonResponse.addProperty("message", "Error de base de datos al procesar la solicitud.");
-                response.getWriter().write(jsonResponse.toString());
             }
+            
+            if (hashedPassword == null || !BCrypt.checkpw(plainPassword, hashedPassword)) {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                jsonResponse.addProperty("message", "La contraseña es incorrecta.");
+                response.getWriter().write(jsonResponse.toString());
+                LogUtil.logOperation(conn, "SOLICITUD_BAJA_FAIL", usuario, "Intento de baja con contraseña incorrecta.");
+                conn.rollback();
+                return;
+            }
+
+            Date fechaBajaSql = new Date(System.currentTimeMillis());
+            String sqlUpdateBaja = "UPDATE voluntarios SET fecha_baja = ? WHERE Usuario = ?";
+            try (PreparedStatement psUpdate = conn.prepareStatement(sqlUpdateBaja)) {
+                psUpdate.setDate(1, fechaBajaSql);
+                psUpdate.setString(2, usuario);
+                psUpdate.executeUpdate();
+            }
+
+            if (sqlRowUuid != null && !sqlRowUuid.isEmpty()) {
+                Map<String, Object> spData = new HashMap<>();
+                String fechaBajaString = new SimpleDateFormat("yyyy-MM-dd").format(fechaBajaSql);
+                spData.put("field_21", fechaBajaString); 
+                SharepointReplicationUtil.replicate(conn, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+            }
+            
+            LogUtil.logOperation(conn, "BAJA_OK", usuario, "El usuario se ha dado de baja.");
+            conn.commit(); 
+
+            // --- INICIO DE LA NUEVA LÓGICA ---
+            // 1. Invalidar la sesión actual para cerrar sesión
+            session.invalidate();
+
+            // 2. Preparar la respuesta JSON con la instrucción de redirección
+            jsonResponse.addProperty("success", true);
+            jsonResponse.addProperty("message", "Tu solicitud de baja ha sido procesada correctamente. Serás redirigido a la página de inicio.");
+            jsonResponse.addProperty("redirectUrl", "login.html");
+            // --- FIN DE LA NUEVA LÓGICA ---
+
+            response.getWriter().write(jsonResponse.toString());
+
         } catch (JsonSyntaxException | NullPointerException e) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             jsonResponse.addProperty("message", "La solicitud no tiene el formato esperado.");
+            response.getWriter().write(jsonResponse.toString());
+        } catch (SQLException e) {
+            e.printStackTrace();
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            jsonResponse.addProperty("message", "Error de base de datos al procesar la solicitud.");
             response.getWriter().write(jsonResponse.toString());
         } catch (Exception e) {
             e.printStackTrace();
@@ -124,51 +122,4 @@ public class SolicitarBajaServlet extends HttpServlet {
             response.getWriter().write(jsonResponse.toString());
         }
     }
-    
-    /**
-     * Método privado para construir y enviar el email de confirmación.
-     */
-    private void enviarEmailConfirmacion(Connection conn, String usuario, String bajaToken, HttpServletRequest request) throws SQLException, MessagingException {
-        // Obtener el email del usuario
-        String userEmail = null;
-        String sqlSelectEmail = "SELECT Email FROM voluntarios WHERE Usuario = ?";
-        try(PreparedStatement ps = conn.prepareStatement(sqlSelectEmail)) {
-            ps.setString(1, usuario);
-            try(ResultSet rs = ps.executeQuery()) {
-                if(rs.next()) {
-                    userEmail = rs.getString("Email");
-                }
-            }
-        }
-
-        if (userEmail == null) {
-            throw new SQLException("No se pudo encontrar el email del usuario para enviar la confirmación.");
-        }
-        
-
-        Properties props = new Properties();
-        props.put("mail.smtp.auth", "true");
-        props.put("mail.smtp.starttls.enable", "true");
-        props.put("mail.smtp.host", Config.SMTP_HOST);
-        props.put("mail.smtp.port", Config.SMTP_PORT);
-
-        Session mailSession = Session.getInstance(props, new Authenticator() {
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(Config.SMTP_USER, Config.SMTP_PASSWORD);
-            }
-        });
-
-        Message message = new MimeMessage(mailSession);
-        message.setFrom(new InternetAddress(Config.SMTP_USER));
-        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(userEmail));
-        message.setSubject("Confirmación de Baja - Voluntarios Banco de Alimentos de Sevilla");
-
-        String urlBase = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort() + request.getContextPath();
-        String confirmationLink = urlBase + "/confirmacion-baja.html?token=" + bajaToken;
-        String htmlContent = "<h1>Confirmación de Solicitud de Baja</h1><p>Hola,</p><p>Hemos recibido una solicitud para dar de baja tu cuenta. Para completar el proceso, haz clic en el siguiente enlace:</p><p><a href=\"" + confirmationLink + "\">Confirmar mi baja</a></p><p>Si no has solicitado esto, puedes ignorar este correo.</p>";
-        message.setContent(htmlContent, "text/html; charset=utf-8");
-
-        Transport.send(message);
-    }
 }
-
