@@ -12,7 +12,6 @@ import com.microsoft.graph.serviceclient.GraphServiceClient;
 
 public class SharepointUtil {
 
-    // --- CONSTANTES DE SITIOS DE SHAREPOINT (Valores corregidos) --- 
     public static final String SITE_ID = "bancodealimentosdsevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db";
     public static final String SP_SITE_ID_VOLUNTARIOS = "bancodealimentosdsevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db";
     public static final String SP_SITE_ID_INFORMATICA = "bancodealimentosdsevilla.sharepoint.com,98b8faf3-b1b7-4a7b-8cd8-744fbe8c8c79,b2a4e075-4f56-47fe-9fc5-09466a41a27a";
@@ -34,7 +33,14 @@ public class SharepointUtil {
             graphClient = new GraphServiceClient(credential);
         }
     }
-    
+
+    public static ListCollectionResponse getAllLists(String siteId) throws Exception {
+        initializeGraphClient();
+        return graphClient.sites().bySiteId(siteId).lists().get(requestConfiguration -> {
+            requestConfiguration.queryParameters.select = new String[]{"id", "displayName", "webUrl"};
+        });
+    }
+
     public static String getListId(String targetSiteId, String listName) throws Exception {
         initializeGraphClient();
         ListCollectionResponse lists = graphClient.sites().bySiteId(targetSiteId).lists().get(requestConfiguration -> {
@@ -78,11 +84,31 @@ public class SharepointUtil {
     public static void deleteAllListItems(String targetSiteId, String listId) throws Exception {
          initializeGraphClient();
          ListItemCollectionResponse items = getListItems(targetSiteId, listId);
-         if (items != null) {
+         if (items != null && items.getValue() != null) {
              for (ListItem item : items.getValue()) {
-                 graphClient.sites().bySiteId(targetSiteId).lists().byListId(listId).items().byListItemId(item.getId()).delete();
+                 deleteListItem(targetSiteId, listId, item.getId());
              }
          }
+    }
+
+    public static String findItemIdByFieldValue(String siteId, String listId, String fieldName, String fieldValue) throws Exception {
+        initializeGraphClient();
+        if (fieldValue == null || fieldValue.isEmpty()) {
+            return null;
+        }
+
+        ListItemCollectionResponse response = graphClient.sites().bySiteId(siteId).lists().byListId(listId).items().get(requestConfiguration -> {
+            requestConfiguration.queryParameters.filter = "fields/" + fieldName + " eq '" + fieldValue + "'";
+            requestConfiguration.queryParameters.select = new String[]{"id"};
+            requestConfiguration.queryParameters.top = 1;
+            requestConfiguration.headers.add("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly");
+        });
+
+        if (response != null && response.getValue() != null && !response.getValue().isEmpty()) {
+            return response.getValue().get(0).getId();
+        }
+
+        return null;
     }
 
     public static void logError(String listName, String uuid, String message) {

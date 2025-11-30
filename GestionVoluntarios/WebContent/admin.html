@@ -83,12 +83,12 @@
                 // *** NUEVA CONDICIÓN PARA SUPERADMIN ***
                 // Ocultar la tarjeta de sincronización si el usuario no es el superadministrador específico.
                 // Se asume que el JSON de usuario contiene un campo "usuario" con el ID.
-                if (user.usuario !== '28654139A') {
-                    const syncCard = document.getElementById('sync-card');
-                    if (syncCard) {
-                        syncCard.style.display = 'none';
-                    }
-                }
+                //if (user.usuario !== '28654139A') {
+                //    const syncCard = document.getElementById('sync-card');
+                //    if (syncCard) {
+                //        syncCard.style.display = 'none';
+                //    }
+               // }
 
             } catch (error) {
                 console.error("Error al verificar el usuario:", error);

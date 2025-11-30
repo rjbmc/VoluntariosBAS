@@ -44,13 +44,59 @@
             <div class="flex flex-col md:flex-row flex-wrap gap-4">
                 <button onclick="sincronizarTabla('Campanas')" class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition w-full md:w-auto">Sincronizar Campañas</button>
                 <button onclick="sincronizarTabla('Voluntarios')" class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition w-full md:w-auto">Sincronizar Voluntarios</button>
+                <!-- Nuevos botones -->
+                <button onclick="sincronizarTabla('Tiendas')" class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition w-full md:w-auto">Sincronizar Tiendas</button>
+                <button onclick="sincronizarTabla('Asignaciones')" class="px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition w-full md:w-auto">Sincronizar Asignaciones</button>
                 <button onclick="verLogs()" class="px-6 py-3 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition w-full md:w-auto">Ver Errores de Sincronización</button>
-                <button onclick="inspeccionarLista('Campanas')" class="px-6 py-3 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition w-full md:w-auto">Inspeccionar Campanas</button>
             </div>
         </div>
-
-        <!-- Contenedor para mensajes y logs -->
-        <div id="message-container" class="mt-4"></div>
+		<!-- Bloque de Limpieza de Emergencia con Consola -->
+		<div class="bg-gray-800 text-white rounded-lg shadow-lg p-6 mb-8">
+		    <h3 class="font-bold text-xl text-yellow-300">Herramienta de Limpieza de Emergencia</h3>
+		    <p class="mt-2 text-gray-300">Borra **TODOS** los items duplicados de la lista 'Tiendas'. **Úsalo solo una vez.**</p>
+		    
+		    <button onclick="startCleanup()" id="cleanup-button" class="mt-4 w-full px-4 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-800 transition-colors flex items-center justify-center">
+		        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+		        Iniciar Limpieza Profunda de Tiendas
+		    </button>
+		
+		    <!-- Contenedor de la Consola -->
+		    <div id="cleanup-console-container" class="hidden mt-4">
+		        <h4 class="text-lg font-semibold text-gray-200">Progreso de la Limpieza (en vivo):</h4>
+		        <div class="mt-2 bg-black text-green-400 font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto border border-gray-600">
+		            <pre id="cleanup-output" class="whitespace-pre-wrap"></pre>
+		        </div>
+		    </div>
+		</div>
+		<!-- Bloque de Reconstrucción con Consola -->
+		<div class="bg-gray-800 text-white rounded-lg shadow-lg p-6 mb-8">
+		    <h3 class="font-bold text-xl text-cyan-300">Paso 2: Reconstrucción de la Lista de Tiendas</h3>
+		    <p class="mt-2 text-gray-300">Después de una limpieza exitosa, usa este botón para volver a crear las 480 tiendas. El proceso tardará unos 4 minutos.</p>
+		    
+		    <button onclick="startRebuild()" id="rebuild-button" class="mt-4 w-full px-4 py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-800 transition-colors flex items-center justify-center">
+		        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h4M8 7a2 2 0 012-2h4a2 2 0 012 2v8a2 2 0 01-2 2h-4a2 2 0 01-2-2V7z" /></svg>
+		        Iniciar Reconstrucción de Tiendas
+		    </button>
+		
+		    <!-- Contenedor de la Consola de Reconstrucción -->
+		    <div id="rebuild-console-container" class="hidden mt-4">
+		        <h4 class="text-lg font-semibold text-gray-200">Progreso de la Reconstrucción (en vivo):</h4>
+		        <div class="mt-2 bg-black text-cyan-400 font-mono text-xs rounded-lg p-4 h-64 overflow-y-auto border border-gray-600">
+		            <pre id="rebuild-output" class="whitespace-pre-wrap"></pre>
+		        </div>
+		    </div>
+		</div>
+	    <!-- Herramienta de Inspección -->
+	    <div class="bg-white p-6 rounded-lg card-shadow mb-8">
+	        <h2 class="text-xl font-semibold text-gray-800 mb-4">Inspeccionar Lista de SharePoint</h2>
+	        <div class="flex items-center gap-4">
+	            <input type="text" id="listNameInput" placeholder="Nombre de la lista (ej: Tiendas)" class="flex-grow px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+	            <button onclick="inspeccionarListaDesdeInput()" class="px-6 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600 transition">Inspeccionar</button>
+	        </div>
+	    </div>
+	
+	     <!-- Contenedor para mensajes y logs -->
+	    <div id="message-container" class="mt-4"></div>
     </main>
 
     <script src="/VoluntariosBAS/js/config.js"></script>
@@ -70,6 +116,92 @@
                 window.location.href = 'login.html';
             }
         });
+  
+        
+        async function startRebuild() {
+            const consoleContainer = document.getElementById('rebuild-console-container');
+            const outputElement = document.getElementById('rebuild-output');
+            const rebuildButton = document.getElementById('rebuild-button');
+
+            // Mostrar consola y deshabilitar botón
+            consoleContainer.classList.remove('hidden');
+            outputElement.textContent = 'Iniciando conexión con el servidor... Por favor, espera.';
+            rebuildButton.disabled = true;
+            rebuildButton.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Reconstrucción en progreso...';
+
+            try {
+                // Asegúrate de que la URL 'ADMIN_REBUILD_TIENDAS' está en tu config.js
+                const response = await fetch(AppConfig.getUrl('ADMIN_REBUILD_TIENDAS'), { method: 'POST' });
+
+                if (!response.body) {
+                    outputElement.textContent += `\n\nERROR: El navegador no soporta streaming de respuestas.`;
+                    return;
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                outputElement.textContent = ''; // Limpiar mensaje inicial
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        outputElement.textContent += '\n\n--- Conexión cerrada por el servidor. Proceso finalizado. ---';
+                        break;
+                    }
+                    const chunk = decoder.decode(value, { stream: true });
+                    outputElement.textContent += chunk;
+                    // Auto-scroll al final
+                    outputElement.parentElement.scrollTop = outputElement.parentElement.scrollHeight;
+                }
+            } catch (error) {
+                outputElement.textContent += `\n\nERROR DE RED: No se ha podido completar la petición. ${error.message}`;
+            } finally {
+                rebuildButton.disabled = false;
+                rebuildButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h4M8 7a2 2 0 012-2h4a2 2 0 012 2v8a2 2 0 01-2 2h-4a2 2 0 01-2-2V7z" /></svg>Iniciar Reconstrucción de Tiendas';
+            }
+        }
+
+        async function startCleanup() {
+            const consoleContainer = document.getElementById('cleanup-console-container');
+            const outputElement = document.getElementById('cleanup-output');
+            const cleanupButton = document.getElementById('cleanup-button');
+
+            // Mostrar consola y deshabilitar botón
+            consoleContainer.classList.remove('hidden');
+            outputElement.textContent = 'Iniciando conexión con el servidor... Por favor, espera.';
+            cleanupButton.disabled = true;
+            cleanupButton.innerHTML = '<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Limpieza en progreso...';
+
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_CLEANUP_TIENDAS'), { method: 'POST' });
+
+                if (!response.body) {
+                    outputElement.textContent += `\n\nERROR: El navegador no soporta streaming de respuestas.`;
+                    return;
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                outputElement.textContent = ''; // Limpiar mensaje inicial
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) {
+                        outputElement.textContent += '\n\n--- Conexión cerrada por el servidor. Proceso finalizado. ---';
+                        break;
+                    }
+                    const chunk = decoder.decode(value, { stream: true });
+                    outputElement.textContent += chunk;
+                    // Auto-scroll al final
+                    outputElement.parentElement.scrollTop = outputElement.parentElement.scrollHeight;
+                }
+            } catch (error) {
+                outputElement.textContent += `\n\nERROR DE RED: No se ha podido completar la petición. Revisa la consola del navegador (F12) para más detalles. ${error.message}`;
+            } finally {
+                cleanupButton.disabled = false;
+                 cleanupButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>Iniciar Limpieza Profunda de Tiendas';
+            }
+        }
 
         async function logout() {
              try {
@@ -89,13 +221,36 @@
         }
 
         async function sincronizarTabla(tabla) {
-            displayMessage('Iniciando sincronización para la tabla \'' + tabla + '\'... Por favor, espera.', true);
+            displayMessage(`Iniciando sincronización para '${tabla}'... Por favor, espera.`, true);
+
+            // 1. Determinar el "endpoint key" que usaremos para buscar la URL en AppConfig
+            let endpointKey;
+            switch (tabla) {
+                case 'Tiendas':
+                    endpointKey = 'SYNC_TIENDAS';
+                    break;
+                case 'Voluntarios':
+                    endpointKey = 'SYNC_VOLUNTARIOS';
+                    break;
+                case 'Campanas':
+                    endpointKey = 'SYNC_CAMPANAS';
+                    break;
+                case 'Asignaciones':
+                    endpointKey = 'SYNC_ASIGNACIONES';
+                    break;
+                default:
+                    displayMessage(`Error: La tabla '${tabla}' no es reconocida para la sincronización.`, false);
+                    return;
+            }
+
             try {
-                const response = await fetch(AppConfig.getUrl('REFRESCAR_SHAREPOINT'), {
+                // 2. Usar el endpointKey para obtener la URL correcta.
+                // Ya no necesitamos enviar 'body', porque cada URL apunta a un servlet específico.
+                const response = await fetch(AppConfig.getUrl(endpointKey), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'table=' + tabla
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
                 });
+
                 const result = await response.json();
                 if (response.ok && result.success) {
                     displayMessage(`¡Éxito! ${result.message}`, true);
@@ -103,9 +258,11 @@
                     displayMessage(`Error: ${result.message || 'Error desconocido del servidor.'}`, false);
                 }
             } catch (error) {
+                console.error('Error en la función fetch:', error);
                 displayMessage('Error de red al intentar sincronizar. Revisa la consola.', false);
             }
         }
+
 
         async function verLogs() {
             displayMessage('Cargando logs de errores...', true);
@@ -132,19 +289,35 @@
                 displayMessage('Error de red al cargar los logs. Revisa la consola.', false);
             }
         }
+        
+        function inspeccionarListaDesdeInput() {
+            const listName = document.getElementById('listNameInput').value;
+            if (!listName) {
+                displayMessage('Por favor, introduce un nombre de lista para inspeccionar.', false);
+                return;
+            }
+            inspeccionarLista(listName);
+        }
 
         async function inspeccionarLista(listName) {
             displayMessage(`Inspeccionando la lista '${listName}'... Por favor, espera.`, true);
             try {
-                const response = await fetch(`${AppConfig.getUrl('INSPECCIONAR_LISTA')}?listName=${listName}`);
+                const url = new URL(AppConfig.getUrl('INSPECCIONAR_LISTA'), window.location.origin);
+                url.searchParams.append('listName', listName);
+
+                const response = await fetch(url);
+                const result = await response.json(); // Leemos el JSON una sola vez
+
                 if (!response.ok) {
-                    const errorResult = await response.json();
-                    displayMessage(`Error al inspeccionar la lista: ${errorResult.error}`, false);
+                    displayMessage(`Error al inspeccionar la lista: ${result.error}`, false);
                     return;
                 }
-                const columns = await response.json();
-                if (columns.length === 0) {
-                    displayMessage('No se encontraron columnas para esta lista.', true);
+
+                // *** LA CORRECCIÓN CLAVE ESTÁ AQUÍ ***
+                const columns = result.columns; // Extraemos el array del objeto
+
+                if (!columns || columns.length === 0) {
+                    displayMessage('No se encontraron columnas para esta lista o la respuesta no tiene el formato esperado.', true);
                     return;
                 }
 
@@ -157,7 +330,7 @@
                 messageContainer.innerHTML = tableHtml;
 
             } catch (error) {
-                displayMessage('Error de red al inspeccionar la lista. Revisa la consola.', false);
+                displayMessage('Error de red o de parseo al inspeccionar la lista. Revisa la consola.', false);
                 console.error("Error en inspeccionarLista:", error);
             }
         }

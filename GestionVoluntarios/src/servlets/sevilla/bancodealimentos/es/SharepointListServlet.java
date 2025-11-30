@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.google.gson.Gson;
@@ -17,6 +16,7 @@ import com.microsoft.graph.models.ColumnDefinitionCollectionResponse;
 import com.microsoft.graph.models.ListCollectionResponse;
 import com.microsoft.graph.models.ListItem;
 import com.microsoft.graph.models.ListItemCollectionResponse;
+import com.microsoft.graph.models.Site;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -56,7 +56,6 @@ public class SharepointListServlet extends HttpServlet {
             if (listIdOrName != null && !listIdOrName.trim().isEmpty()) {
                 // --- OBTENER COLUMNAS E ITEMS DE UNA LISTA ESPECÍFICA ---
 
-                // PASO 1: OBTENER DEFINICIONES DE COLUMNA (usando el nuevo método)
                 ColumnDefinitionCollectionResponse columnsResponse = SharepointUtil.getListColumns(siteId, listIdOrName);
                 List<ColumnDefinition> columns = columnsResponse.getValue();
 
@@ -74,7 +73,6 @@ public class SharepointListServlet extends HttpServlet {
                     })
                     .collect(Collectors.toList());
 
-                // PASO 2: OBTENER DATOS DE LA LISTA (usando el nuevo método)
                 ListItemCollectionResponse itemsResponse = SharepointUtil.getListItems(siteId, listIdOrName);
                 List<ListItem> listItems = itemsResponse.getValue();
                 
@@ -83,13 +81,12 @@ public class SharepointListServlet extends HttpServlet {
                     for (ListItem item : listItems) {
                          if (item.getFields() != null) {
                             Map<String, Object> processedData = new HashMap<>(item.getFields().getAdditionalData());
-                            processedData.put("id", item.getId()); // Añadir el ID del item
+                            processedData.put("id", item.getId());
                             itemDetails.add(processedData);
                         }
                     }
                 }
 
-                // PASO 3: ENVIAR EL RESULTADO FINAL
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("columns", columnDetails);
                 result.put("items", itemDetails);
@@ -97,12 +94,18 @@ public class SharepointListServlet extends HttpServlet {
 
             } else {
                 // --- OBTENER TODAS LAS LISTAS DEL SITIO ---
-                // Esta parte es más compleja y por ahora la dejamos así, ya que requiere paginación.
-                // Si diera problemas, necesitaríamos un método específico en SharepointUtil para paginar y obtener todas las listas.
-                // Por ahora, asumimos que no hay un método público para obtener el GraphClient, así que esta parte fallaría.
-                // *** SOLUCIÓN TEMPORAL: Se necesita un método para obtener las listas. ***
-                response.setStatus(HttpServletResponse.SC_NOT_IMPLEMENTED);
-                out.print(gson.toJson(Map.of("error", "La funcionalidad para listar todas las listas aún no está implementada con la nueva librería.")));
+                ListCollectionResponse allLists = SharepointUtil.getAllLists(siteId);
+                List<Map<String, String>> listDetails = new ArrayList<>();
+                if (allLists != null && allLists.getValue() != null) {
+                    for (com.microsoft.graph.models.List list : allLists.getValue()) {
+                        Map<String, String> map = new HashMap<>();
+                        map.put("id", list.getId());
+                        map.put("displayName", list.getDisplayName());
+                        map.put("webUrl", list.getWebUrl());
+                        listDetails.add(map);
+                    }
+                }
+                out.print(gson.toJson(listDetails));
             }
 
         } catch (Exception e) {

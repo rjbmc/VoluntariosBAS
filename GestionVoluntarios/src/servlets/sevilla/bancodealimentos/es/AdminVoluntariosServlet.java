@@ -3,9 +3,11 @@ package servlets.sevilla.bancodealimentos.es;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -108,19 +110,51 @@ public class AdminVoluntariosServlet extends HttpServlet {
         String adminUser = getUsuario(request);
         String sqlRowUuid = null;
         
+        // Obtenemos los parámetros de forma segura
+        String nombre = request.getParameter("nombre");
+        String apellidos = request.getParameter("apellidos");
+        String dni = request.getParameter("dni");
+        String email = request.getParameter("email");
+        String telefono = request.getParameter("telefono");
+        String fechaNacimientoStr = request.getParameter("fechaNacimiento");
+        String cp = request.getParameter("cp");
+        String tiendaReferenciaStr = request.getParameter("tiendaReferencia");
+
         try (Connection conn = DatabaseUtil.getConnection()) {
             conn.setAutoCommit(false);
             
             String sql = "UPDATE voluntarios SET Nombre = ?, Apellidos = ?, `DNI NIF` = ?, Email = ?, telefono = ?, fechaNacimiento = ?, cp = ?, tiendaReferencia = ?, notificar = 'S' WHERE Usuario = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, request.getParameter("nombre"));
-                stmt.setString(2, request.getParameter("apellidos"));
-                stmt.setString(3, request.getParameter("dni"));
-                stmt.setString(4, request.getParameter("email"));
-                stmt.setString(5, request.getParameter("telefono"));
-                stmt.setDate(6, java.sql.Date.valueOf(request.getParameter("fechaNacimiento")));
-                stmt.setString(7, request.getParameter("cp"));
-                stmt.setInt(8, Integer.parseInt(request.getParameter("tiendaReferencia")));
+                stmt.setString(1, nombre);
+                stmt.setString(2, apellidos);
+                stmt.setString(3, dni);
+                stmt.setString(4, email);
+                stmt.setString(5, telefono);
+
+                // --- MANEJO ROBUSTO DE FECHA ---
+                if (fechaNacimientoStr != null && !fechaNacimientoStr.trim().isEmpty()) {
+                    try {
+                        stmt.setDate(6, Date.valueOf(fechaNacimientoStr));
+                    } catch (IllegalArgumentException e) {
+                        stmt.setNull(6, Types.DATE); // Si el formato es inválido, guarda NULL
+                    }
+                } else {
+                    stmt.setNull(6, Types.DATE); // Si está vacío, guarda NULL
+                }
+                
+                stmt.setString(7, cp);
+
+                // --- MANEJO ROBUSTO DE NÚMERO (TIENDA) ---
+                if (tiendaReferenciaStr != null && !tiendaReferenciaStr.trim().isEmpty()) {
+                    try {
+                        stmt.setInt(8, Integer.parseInt(tiendaReferenciaStr));
+                    } catch (NumberFormatException e) {
+                        stmt.setNull(8, Types.INTEGER); // Si no es un número válido, guarda NULL
+                    }
+                } else {
+                    stmt.setNull(8, Types.INTEGER); // Si está vacío, guarda NULL
+                }
+                
                 stmt.setString(9, usuarioToUpdate);
                 stmt.executeUpdate();
             }
@@ -131,20 +165,29 @@ public class AdminVoluntariosServlet extends HttpServlet {
             sqlRowUuid = getSqlRowUuid(conn, usuarioToUpdate);
             conn.commit();
             
+            // Replicación a SharePoint (si procede)
             if (sqlRowUuid != null) {
                 try {
                     Map<String, Object> spData = new HashMap<>();
-                    spData.put("field_1", request.getParameter("nombre"));
-                    spData.put("field_2", request.getParameter("apellidos"));
-                    spData.put("field_3", request.getParameter("dni"));
-                    spData.put("field_5", Integer.parseInt(request.getParameter("tiendaReferencia")));
-                    spData.put("field_6", request.getParameter("email"));
-                    spData.put("field_7", request.getParameter("telefono"));
-                    spData.put("field_8", request.getParameter("fechaNacimiento"));
-                    spData.put("field_9", request.getParameter("cp"));
+                    spData.put("field_1", nombre);
+                    spData.put("field_2", apellidos);
+                    spData.put("field_3", dni);
+                    spData.put("field_6", email);
+                    spData.put("field_7", telefono);
                     
-                    // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
-                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                    if (fechaNacimientoStr != null && !fechaNacimientoStr.isEmpty()) {
+                         spData.put("field_8", fechaNacimientoStr);
+                    }
+                    if (cp != null && !cp.isEmpty()) {
+                         spData.put("field_9", cp);
+                    }
+                    if (tiendaReferenciaStr != null && !tiendaReferenciaStr.isEmpty()) {
+                        try {
+                            spData.put("field_5", Integer.parseInt(tiendaReferenciaStr));
+                        } catch (NumberFormatException e) { /* No se envía si no es un número */ }
+                    }
+                    
+                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
                     System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint la modificación de datos para " + usuarioToUpdate + ". Causa: " + e.getMessage());
                 }
@@ -155,9 +198,9 @@ public class AdminVoluntariosServlet extends HttpServlet {
         } catch (SQLException e) {
             e.printStackTrace();
             sendError(response, "Error al actualizar los datos. El DNI o el email podrían estar ya en uso.");
-        } catch (Exception e) {
+        } catch (Exception e) { // Captura genérica para cualquier otro error inesperado
             e.printStackTrace();
-            sendError(response, "Error en los datos enviados.");
+            sendError(response, "Error en los datos enviados. Revisa que todos los campos sean correctos.");
         }
     }
 
@@ -193,8 +236,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
                     Map<String, Object> spData = new HashMap<>();
                     spData.put("field_10", "S".equals(newAdminStatus) ? "Si" : "No");
                     
-                    // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
-                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
                     System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de rol para " + usuarioToUpdate + ". Causa: " + e.getMessage());
                 }
@@ -223,12 +265,16 @@ public class AdminVoluntariosServlet extends HttpServlet {
     }
 
     private void sendSuccess(HttpServletResponse response, String message) throws IOException {
-        response.getWriter().print("{\"success\": true, \"message\": \"" + message + "\"}");
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().print("{\"success\": true, \"message\": \"" + escapeJson(message) + "\"}");
     }
 
     private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        response.getWriter().print("{\"success\": false, \"message\": \"" + message + "\"}");
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        response.getWriter().print("{\"success\": false, \"message\": \"" + escapeJson(message) + "\"}");
     }
     
     private String escapeJson(String str) {
