@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.microsoft.graph.models.FieldValueSet;
-import com.microsoft.graph.models.ListItem;
-import com.microsoft.graph.models.ListItemCollectionResponse;
 
 // UTILIDAD PARA REPLICAR CAMBIOS DE UN ÚNICO ELEMENTO (CRUD)
 public final class SharepointReplicationUtil {
@@ -75,57 +73,30 @@ public final class SharepointReplicationUtil {
             logReplicationWarning(conn, listName, rowUuid, "No hay datos para actualizar en operación UPDATE.");
             return;
         }
-        ListItem itemToUpdate = findListItemByUuid(targetSiteId, listId, rowUuid);
-        if (itemToUpdate == null) {
+
+        String itemId = SharepointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+
+        if (itemId == null) {
             logReplicationWarning(conn, listName, rowUuid, "UPDATE fallido: No se encontró item con el UUID. Se intentará un INSERT como alternativa.");
-            handleInsert(conn, targetSiteId, listId, listName, data, rowUuid);
+            handleInsert(conn, targetSiteId, listId, listName, data, rowUuid); // Intenta crear el registro si no existe
             return;
         }
 
         FieldValueSet fields = new FieldValueSet();
         fields.setAdditionalData(data);
-        SharepointUtil.updateListItem(targetSiteId, listId, itemToUpdate.getId(), fields);
+        SharepointUtil.updateListItem(targetSiteId, listId, itemId, fields);
         logSuccess(conn, "UPDATE", listName, rowUuid);
     }
 
     private static void handleDelete(Connection conn, String targetSiteId, String listId, String listName, String rowUuid) throws Exception {
-        ListItem itemToDelete = findListItemByUuid(targetSiteId, listId, rowUuid);
-        if (itemToDelete == null) {
+        String itemId = SharepointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+
+        if (itemId == null) {
             logReplicationWarning(conn, listName, rowUuid, "DELETE fallido: No se encontró item con el UUID correspondiente.");
             return;
         }
-        SharepointUtil.deleteListItem(targetSiteId, listId, itemToDelete.getId());
+        SharepointUtil.deleteListItem(targetSiteId, listId, itemId);
         logSuccess(conn, "DELETE", listName, rowUuid);
-    }
-
-    private static ListItem findListItemByUuid(String targetSiteId, String listId, String uuid) throws Exception {
-        ListItemCollectionResponse items = SharepointUtil.getListItems(targetSiteId, listId);
-        if (items != null && items.getValue() != null) {
-            for (ListItem item : items.getValue()) {
-                if (item.getFields() != null && item.getFields().getAdditionalData().containsKey(SQL_UUID_FIELD)) {
-                    Object itemUuidObj = item.getFields().getAdditionalData().get(SQL_UUID_FIELD);
-                    if (itemUuidObj != null && uuid.equals(itemUuidObj.toString())) {
-                        return item;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    // Este método ya no es necesario aquí, pero lo mantenemos por si se usa en algún otro sitio.
-    public static void deleteAllItems(Connection conn, String targetSiteId, String listName) {
-        try {
-             String listId = SharepointUtil.getListId(targetSiteId, listName);
-             if (listId == null) {
-                 throw new Exception("List not found");
-             }
-            LogUtil.logOperation(conn, "REPLICATE_DELETE_ALL", "SYSTEM", "Iniciando borrado masivo en: " + listName);
-            SharepointUtil.deleteAllListItems(targetSiteId, listId);
-            LogUtil.logOperation(conn, "REPLICATE_DELETE_ALL", "SYSTEM", "Borrado masivo completado para: " + listName);
-        } catch (Exception e) {
-            logReplicationError(conn, listName, "N/A (Operación Masiva)", "Fallo en deleteAllItems: " + e.getMessage());
-        }
     }
 
     // --- MÉTODOS DE LOGGING --- 

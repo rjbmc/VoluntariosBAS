@@ -6,7 +6,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -19,10 +21,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
+import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
+import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/admin-tiendas")
 public class AdminTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 3L; // Versión actualizada
     private final Gson gson = new Gson();
 
     // Clase interna para representar una tienda
@@ -112,7 +116,9 @@ public class AdminTiendasServlet extends HttpServlet {
         String action = request.getParameter("action");
 
         if ("save".equals(action)) {
-            try {
+            try (Connection conn = DatabaseUtil.getConnection()) {
+                conn.setAutoCommit(false);
+
                 boolean isUpdate = Boolean.parseBoolean(request.getParameter("isUpdate"));
                 int codigo = Integer.parseInt(request.getParameter("codigo"));
                 String denominacion = request.getParameter("denominacion");
@@ -129,50 +135,76 @@ public class AdminTiendasServlet extends HttpServlet {
                 int h3 = Integer.parseInt(request.getParameter("huecosTurno3"));
                 int h4 = Integer.parseInt(request.getParameter("huecosTurno4"));
 
-                try (Connection conn = DatabaseUtil.getConnection()) {
-                    if (isUpdate) {
-                        String sqlUpdate = "UPDATE tiendas SET denominacion = ?, Direccion = ?, Lat = ?, Lon = ?, cp = ?, Poblacion = ?, Cadena = ?, disponible = ?, HuecosTurno1 = ?, HuecosTurno2 = ?, HuecosTurno3 = ?, HuecosTurno4 = ?, prioridad = ?, notificar = 'S' WHERE codigo = ?";
-                        try (PreparedStatement stmt = conn.prepareStatement(sqlUpdate)) {
-                            stmt.setString(1, denominacion);
-                            stmt.setString(2, direccion);
-                            stmt.setString(3, lat);
-                            stmt.setString(4, lon);
-                            stmt.setString(5, cp);
-                            stmt.setString(6, poblacion);
-                            stmt.setString(7, cadena);
-                            stmt.setString(8, disponible);
-                            stmt.setInt(9, h1);
-                            stmt.setInt(10, h2);
-                            stmt.setInt(11, h3);
-                            stmt.setInt(12, h4);
-                            stmt.setInt(13, prioridad);
-                            stmt.setInt(14, codigo);
-                            stmt.executeUpdate();
-                            LogUtil.logOperation(conn, "ADMIN_UPDATE_T", adminUser, "Actualizada tienda: " + codigo);
-                        }
-                    } else {
-                        String sqlInsert = "INSERT INTO tiendas (codigo, denominacion, Direccion, Lat, Lon, cp, Poblacion, Cadena, disponible, HuecosTurno1, HuecosTurno2, HuecosTurno3, HuecosTurno4, prioridad, notificar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'S')";
-                        try (PreparedStatement stmt = conn.prepareStatement(sqlInsert)) {
-                            stmt.setInt(1, codigo);
-                            stmt.setString(2, denominacion);
-                            stmt.setString(3, direccion);
-                            stmt.setString(4, lat);
-                            stmt.setString(5, lon);
-                            stmt.setString(6, cp);
-                            stmt.setString(7, poblacion);
-                            stmt.setString(8, cadena);
-                            stmt.setString(9, disponible);
-                            stmt.setInt(10, h1);
-                            stmt.setInt(11, h2);
-                            stmt.setInt(12, h3);
-                            stmt.setInt(13, h4);
-                            stmt.setInt(14, prioridad);
-                            stmt.executeUpdate();
-                            LogUtil.logOperation(conn, "ADMIN_CREATE_T", adminUser, "Creada tienda: " + codigo);
-                        }
+                if (isUpdate) {
+                    String sqlUpdate = "UPDATE tiendas SET denominacion = ?, Direccion = ?, Lat = ?, Lon = ?, cp = ?, Poblacion = ?, Cadena = ?, disponible = ?, HuecosTurno1 = ?, HuecosTurno2 = ?, HuecosTurno3 = ?, HuecosTurno4 = ?, prioridad = ?, notificar = 'S' WHERE codigo = ?";
+                    try (PreparedStatement stmt = conn.prepareStatement(sqlUpdate)) {
+                        stmt.setString(1, denominacion);
+                        stmt.setString(2, direccion);
+                        stmt.setString(3, lat);
+                        stmt.setString(4, lon);
+                        stmt.setString(5, cp);
+                        stmt.setString(6, poblacion);
+                        stmt.setString(7, cadena);
+                        stmt.setString(8, disponible);
+                        stmt.setInt(9, h1);
+                        stmt.setInt(10, h2);
+                        stmt.setInt(11, h3);
+                        stmt.setInt(12, h4);
+                        stmt.setInt(13, prioridad);
+                        stmt.setInt(14, codigo);
+                        stmt.executeUpdate();
+                        LogUtil.logOperation(conn, "ADMIN_UPDATE_T", adminUser, "Actualizada tienda: " + codigo);
                     }
-                    jsonResponse.addProperty("success", true);
+                } else {
+                    String sqlInsert = "INSERT INTO tiendas (codigo, denominacion, Direccion, Lat, Lon, cp, Poblacion, Cadena, disponible, HuecosTurno1, HuecosTurno2, HuecosTurno3, HuecosTurno4, prioridad, notificar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'S')";
+                    try (PreparedStatement stmt = conn.prepareStatement(sqlInsert)) {
+                        stmt.setInt(1, codigo);
+                        stmt.setString(2, denominacion);
+                        stmt.setString(3, direccion);
+                        stmt.setString(4, lat);
+                        stmt.setString(5, lon);
+                        stmt.setString(6, cp);
+                        stmt.setString(7, poblacion);
+                        stmt.setString(8, cadena);
+                        stmt.setString(9, disponible);
+                        stmt.setInt(10, h1);
+                        stmt.setInt(11, h2);
+                        stmt.setInt(12, h3);
+                        stmt.setInt(13, h4);
+                        stmt.setInt(14, prioridad);
+                        stmt.executeUpdate();
+                        LogUtil.logOperation(conn, "ADMIN_CREATE_T", adminUser, "Creada tienda: " + codigo);
+                    }
                 }
+
+                Map<String, Object> spData = new HashMap<>();
+                spData.put("Title", denominacion);
+                spData.put("Direccion", direccion);
+                spData.put("Latitud", lat);
+                spData.put("Longitud", lon);
+                spData.put("CP", cp);
+                spData.put("Poblacion", poblacion);
+                spData.put("Cadena", cadena);
+                spData.put("Disponible", disponible);
+                spData.put("Prioridad", prioridad);
+                spData.put("HuecosTurno1", h1);
+                spData.put("HuecosTurno2", h2);
+                spData.put("HuecosTurno3", h3);
+                spData.put("HuecosTurno4", h4);
+
+                String rowUuid = String.valueOf(codigo);
+                SharepointReplicationUtil.Operation operation = isUpdate ? SharepointReplicationUtil.Operation.UPDATE : SharepointReplicationUtil.Operation.INSERT;
+                String listName = "Tiendas";
+
+                // ** INICIO DE LA CORRECCIÓN **
+                SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, listName, spData, operation, rowUuid);
+                // ** FIN DE LA CORRECCIÓN **
+
+                LogUtil.logOperation(conn, "REPLICATE_TIENDA", adminUser, "Tienda " + codigo + " replicada a SharePoint con operación " + operation.name());
+                
+                conn.commit();
+                jsonResponse.addProperty("success", true);
+
             } catch (Exception e) {
                 e.printStackTrace();
                 jsonResponse.addProperty("success", false);
