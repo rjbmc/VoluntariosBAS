@@ -9,6 +9,8 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.microsoft.graph.models.FieldValueSet;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -23,7 +25,7 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/guardar-turnos")
 public class GuardarTurnosServlet extends HttpServlet {
-    private static final long serialVersionUID = 5L; // Versión actualizada
+    private static final long serialVersionUID = 8L; // Versión actualizada
 
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
@@ -66,7 +68,7 @@ public class GuardarTurnosServlet extends HttpServlet {
         } catch (Exception e) {
             e.printStackTrace();
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            jsonResponse = "{\"success\": false, \"message\": \"Error en los datos enviados.\"}";
+            jsonResponse = "{\"success\": false, \"message\": \"Error en los datos enviados: " + e.getMessage() + "\"}";
         }
 
         out.print(jsonResponse);
@@ -111,85 +113,110 @@ public class GuardarTurnosServlet extends HttpServlet {
             stmt.setString(10, comentarios[3]);
             stmt.setString(11, "S");
 
-            int filasAfectadas = stmt.executeUpdate();
-            if (filasAfectadas > 0) {
-                String logComment = isAdmin ? "Admin " + usuarioEnSesion + " modificó los turnos de " + usuarioFinal : "Guardado/Modificación de turnos para la campaña " + campanaId;
-                LogUtil.logOperation(conn, "ASIGNACION", usuarioEnSesion, logComment);
-            }
+            stmt.executeUpdate();
+            String logComment = isAdmin ? "Admin " + usuarioEnSesion + " modificó los turnos de " + usuarioFinal : "Guardado/Modificación de turnos para la campaña " + campanaId;
+            LogUtil.logOperation(conn, "ASIGNACION", usuarioEnSesion, logComment);
         }
     }
 
     private void replicarAsignacionASharePoint(Connection conn, String campanaId, String usuario) throws Exception {
-        String listName = "Asignaciones" + campanaId;
+        String listNameAsignaciones = "Asignaciones";
+        String listNameVoluntarios = "Voluntarios";
+        String listNameTiendas = "Tiendas";
+
+        String listIdAsignaciones = SharepointUtil.getListId(SharepointUtil.SITE_ID, listNameAsignaciones);
+        String listIdVoluntarios = SharepointUtil.getListId(SharepointUtil.SITE_ID, listNameVoluntarios);
+        String listIdTiendas = SharepointUtil.getListId(SharepointUtil.SITE_ID, listNameTiendas);
+
+        if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) {
+            throw new Exception("Una o más listas de SharePoint no se encontraron (Asignaciones, Voluntarios, Tiendas).");
+        }
+
         String voluntarioUuid = getSqlRowUuid(conn, usuario);
         if (voluntarioUuid == null) {
              System.err.println("ADVERTENCIA: No se pudo encontrar el SqlRowUUID para el usuario '" + usuario + "'. No se puede replicar la asignación.");
             return;
         }
         
-        String assignmentUuid = "AS-" + voluntarioUuid;
-        Map<String, Object> data = new HashMap<>();
-        data.put("Title", assignmentUuid);
-        data.put("VoluntarioLookup", voluntarioUuid);
+        String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+        if (spVoluntarioId == null) {
+            throw new Exception("El voluntario con UUID '" + voluntarioUuid + "' no fue encontrado en SharePoint.");
+        }
+
+        String assignmentUuid = "AS-" + voluntarioUuid; // Usamos el UUID del voluntario para el título
+        
+        FieldValueSet fields = new FieldValueSet();
+        fields.getAdditionalData().put("Title", assignmentUuid);
+        fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
+        fields.getAdditionalData().put("Campana", campanaId);
         
         String sqlSelect = "SELECT Turno1, Comentario1, Turno2, Comentario2, Turno3, Comentario3, Turno4, Comentario4 FROM voluntarios_en_campana WHERE Usuario = ? AND Campana = ?";
+        boolean tieneTurnos = false;
         try (PreparedStatement stmt = conn.prepareStatement(sqlSelect)) {
             stmt.setString(1, usuario);
             stmt.setString(2, campanaId);
-            var rs = stmt.executeQuery();
+            ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
-                data.put("Turno1", rs.getObject("Turno1"));
-                data.put("Comentario1", rs.getString("Comentario1"));
-                data.put("Turno2", rs.getObject("Turno2"));
-                data.put("Comentario2", rs.getString("Comentario2"));
-                data.put("Turno3", rs.getObject("Turno3"));
-                data.put("Comentario3", rs.getString("Comentario3"));
-                data.put("Turno4", rs.getObject("Turno4"));
-                data.put("Comentario4", rs.getString("Comentario4"));
+                for (int i = 1; i <= 4; i++) {
+                    int idTiendaDb = rs.getInt("Turno" + i);
+                    String comentario = rs.getString("Comentario" + i);
+
+                    fields.getAdditionalData().put("Turno" + i + "LookupId", null); // Limpiar por defecto
+                    fields.getAdditionalData().put("Comentario" + i, comentario);
+
+                    if (idTiendaDb > 0) {
+                        tieneTurnos = true;
+                        String tiendaUuid = getSqlRowUuidForTienda(conn, idTiendaDb);
+                        if (tiendaUuid != null) {
+                            String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                            if (spTiendaId != null) {
+                                fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        boolean tieneTurnos = data.get("Turno1") != null || data.get("Turno2") != null || data.get("Turno3") != null || data.get("Turno4") != null;
+        String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
 
-        SharepointReplicationUtil.Operation operation;
-        String uuidForOperation;
-        String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listName, "Title", assignmentUuid);
-
-        if (itemId != null) { 
+        if (itemId != null) { // El item existe
             if (tieneTurnos) {
-                operation = SharepointReplicationUtil.Operation.UPDATE;
-                uuidForOperation = itemId;
+                SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
             } else {
-                operation = SharepointReplicationUtil.Operation.DELETE;
-                uuidForOperation = itemId;
+                SharepointUtil.deleteListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId);
             }
-        } else { 
+        } else { // El item no existe
             if (tieneTurnos) {
-                operation = SharepointReplicationUtil.Operation.INSERT;
-                uuidForOperation = assignmentUuid;
-            } else {
-                return; 
+                SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
             }
         }
-        
-        SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, listName, data, operation, uuidForOperation);
-        LogUtil.logOperation(conn, "REPLICATE_ASIGNACION", usuario, "Asignación replicada a SharePoint para campaña " + campanaId + " con operación " + operation.name());
+        LogUtil.logOperation(conn, "REPLICATE_ASIGNACION", usuario, "Asignación replicada a SharePoint para campaña " + campanaId);
     }
 
-    private String getSqlRowUuid(Connection conn, String usuario) throws SQLException, ServletException {
-        String uuid = null;
+    private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
         String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, usuario);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
-                    uuid = rs.getString("SqlRowUUID");
+                    return rs.getString("SqlRowUUID");
                 }
             }
         }
-        if (uuid == null) {
-            LogUtil.logOperation(conn, "REPLICATE_ERROR", "SYSTEM", "No se encontró SqlRowUUID para el usuario: " + usuario);
+        return null;
+    }
+
+    private String getSqlRowUuidForTienda(Connection conn, int codigoTienda) throws SQLException {
+        String sql = "SELECT SqlRowUUID FROM tiendas WHERE codigo = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, codigoTienda);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("SqlRowUUID");
+                }
+            }
         }
-        return uuid;
+        return null;
     }
 }
