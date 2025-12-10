@@ -24,7 +24,7 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * Servlet que devuelve la lista detallada de voluntarios asignados
- * a una tienda y turno espec�ficos para una campa�a.
+ * a una tienda y turno específicos para una campaña.
  */
 @WebServlet("/admin-detalle-turno")
 public class AdminDetalleTurnoServlet extends HttpServlet {
@@ -51,14 +51,14 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
         String turnoNum = request.getParameter("turno");
 
         if (campanaId == null || tiendaId == null || turnoNum == null || !turnoNum.matches("[1-4]")) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Par�metros 'campana', 'tienda' y 'turno' son requeridos.");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parámetros 'campana', 'tienda' y 'turno' son requeridos.");
             return;
         }
 
         PrintWriter out = response.getWriter();
         StringBuilder jsonBuilder = new StringBuilder("[");
 
-        // Columnas din�micas basadas en el par�metro 'turno'
+        // Columnas dinámicas basadas en el Parámetro 'turno'
         String turnoCol = "Turno" + turnoNum;
         String comentarioCol = "Comentario" + turnoNum;
 
@@ -78,7 +78,7 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
                 while (rs.next()) {
                     if (!first) jsonBuilder.append(",");
                     
-                    // Extraer n�mero de acompa�antes del comentario
+                    // Extraer número de acompañantes del comentario
                     int acompanantes = 0;
                     String comentario = rs.getString("Comentario");
                     if (comentario != null && comentario.startsWith("Voluntarios: ")) {

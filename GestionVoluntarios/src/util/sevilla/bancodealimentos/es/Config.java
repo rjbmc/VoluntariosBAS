@@ -2,7 +2,7 @@
 package util.sevilla.bancodealimentos.es;
 
 /**
- * Clase centralizada para almacenar las variables de configuraci�n de la aplicaci�n.
+ * Clase centralizada para almacenar las variables de configuración de la aplicación.
  */
 public final class Config {
     // --- CONFIGURACIÓN DEL SERVIDOR DE CORREO (SMTP) ---

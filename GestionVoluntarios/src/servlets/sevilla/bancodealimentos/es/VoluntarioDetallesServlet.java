@@ -1,4 +1,3 @@
-// Paquete: servlets.sevilla.bancodealimentos.es
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
@@ -8,6 +7,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.SimpleDateFormat;
+
+import com.google.gson.JsonObject;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -44,48 +45,37 @@ public class VoluntarioDetallesServlet extends HttpServlet {
             return;
         }
  
-        String usuarioAConsultar = request.getParameter("usuario");
         String usuarioEnSesion = (String) session.getAttribute("usuario");
-        String usuarioFinal;
-
-        if (isAdmin(session) && usuarioAConsultar != null && !usuarioAConsultar.trim().isEmpty()) {
-            usuarioFinal = usuarioAConsultar;
-        } else {
-            usuarioFinal = usuarioEnSesion;
-        } 
-
-        // SQL corregido con los nombres de columna correctos
         String sql = "SELECT Nombre, Apellidos, `DNI NIF`, Email, telefono, fechaNacimiento, cp, tiendaReferencia FROM voluntarios WHERE Usuario = ?";
 
         try (Connection conn = DatabaseUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, usuarioFinal);
+            stmt.setString(1, usuarioEnSesion);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
+                    JsonObject jsonResponse = new JsonObject();
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
-                    StringBuilder jsonBuilder = new StringBuilder("{");
-                    jsonBuilder.append("\"nombre\":\"").append(escapeJson(rs.getString("Nombre"))).append("\",");
-                    jsonBuilder.append("\"apellidos\":\"").append(escapeJson(rs.getString("Apellidos"))).append("\",");
-                    jsonBuilder.append("\"dni\":\"").append(escapeJson(rs.getString("DNI NIF"))).append("\",");
-                    jsonBuilder.append("\"email\":\"").append(escapeJson(rs.getString("Email"))).append("\",");
-                    jsonBuilder.append("\"telefono\":\"").append(escapeJson(rs.getString("telefono"))).append("\",");
+                    // *** SOLUCIÓN DEFINITIVA Y CORRECTA: Usar JsonObject ***
+                    jsonResponse.addProperty("nombre", rs.getString("Nombre"));
+                    jsonResponse.addProperty("apellidos", rs.getString("Apellidos"));
+                    jsonResponse.addProperty("dni", rs.getString("DNI NIF"));
+                    jsonResponse.addProperty("email", rs.getString("Email"));
+                    jsonResponse.addProperty("telefono", rs.getString("telefono"));
                     
                     java.sql.Date fechaNac = rs.getDate("fechaNacimiento");
-                    String fechaNacStr = (fechaNac != null) ? sdf.format(fechaNac) : "";
-                    jsonBuilder.append("\"fechaNacimiento\":\"").append(fechaNacStr).append("\",");
+                    jsonResponse.addProperty("fechaNacimiento", (fechaNac != null) ? sdf.format(fechaNac) : "");
                     
-                    jsonBuilder.append("\"cp\":\"").append(escapeJson(rs.getString("cp"))).append("\"");
+                    jsonResponse.addProperty("cp", rs.getString("cp"));
 
                     int tiendaId = rs.getInt("tiendaReferencia");
                     if (!rs.wasNull()) {
-                        jsonBuilder.append(",\"tiendaReferencia\":").append(tiendaId);
+                        jsonResponse.addProperty("tiendaReferencia", tiendaId);
                     }
                     
-                    jsonBuilder.append("}");
-                    out.print(jsonBuilder.toString());
+                    out.print(jsonResponse.toString());
 
                 } else {
                     response.sendError(HttpServletResponse.SC_NOT_FOUND, "Usuario no encontrado.");

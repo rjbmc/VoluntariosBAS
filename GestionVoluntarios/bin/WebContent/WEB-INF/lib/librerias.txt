@@ -1,5 +1,5 @@
  El volumen de la unidad C es Windows
- El n£mero de serie del volumen es: E643-A0AC
+ El n√∫mero de serie del volumen es: E643-A0AC
 
  Directorio de C:\Users\Roberto\git\VoluntariosBAS\GestionVoluntarios\WebContent\WEB-INF\lib
 

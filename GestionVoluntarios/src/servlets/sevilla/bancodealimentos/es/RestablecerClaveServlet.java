@@ -25,8 +25,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Servlet que finaliza el proceso de restablecimiento de contrase�a.
- * Verifica el token y actualiza la contrase�a del usuario.
+ * Servlet que finaliza el proceso de restablecimiento de contraseña.
+ * Verifica el token y actualiza la contraseña del usuario.
  */
 @WebServlet("/restablecer-clave")
 public class RestablecerClaveServlet extends HttpServlet {
@@ -44,7 +44,7 @@ public class RestablecerClaveServlet extends HttpServlet {
         String nuevaClave = request.getParameter("nuevaClave");
 
         if (token == null || token.trim().isEmpty() || nuevaClave == null || nuevaClave.trim().isEmpty()) {
-            sendError(response, "Token o contrase�a no proporcionados.");
+            sendError(response, "Token o contraseña no proporcionados.");
             return;
         }
 
@@ -67,11 +67,11 @@ public class RestablecerClaveServlet extends HttpServlet {
 
             // 2. Validar el token y su caducidad
             if (usuario == null || expiryTime == null || expiryTime.before(new Timestamp(System.currentTimeMillis()))) {
-                sendError(response, "El enlace de recuperaci�n no es v�lido o ha caducado. Por favor, solicita uno nuevo.");
+                sendError(response, "El enlace de recuperación no es válido o ha caducado. Por favor, solicita uno nuevo.");
                 return;
             }
 
-            // 3. Si todo es correcto, actualizar la contrase�a
+            // 3. Si todo es correcto, actualizar la contraseña
             String nuevaClaveHasheada = PasswordUtils.hashPassword(nuevaClave);
             String sqlUpdate = "UPDATE voluntarios SET Clave = ?, reset_token = NULL, reset_token_expiry = NULL, notificar = 'S' WHERE Usuario = ?";
 
@@ -80,9 +80,9 @@ public class RestablecerClaveServlet extends HttpServlet {
                 stmtUpdate.setString(2, usuario);
                 stmtUpdate.executeUpdate();
                 
-                // --- CAMBIO: Se elimina el �ltimo par�metro de la llamada al log ---
-                LogUtil.logOperation(conn, "RECUPERACION_OK", usuario, "Contrase�a restablecida correctamente para " + usuario);
-                jsonResponse = "{\"success\": true, \"message\": \"�Contrase�a actualizada con �xito! Ya puedes iniciar sesi�n.\"}";
+                // --- CAMBIO: Se elimina el último Parámetro de la llamada al log ---
+                LogUtil.logOperation(conn, "RECUPERACION_OK", usuario, "contraseña restablecida correctamente para " + usuario);
+                jsonResponse = "{\"success\": true, \"message\": \"contraseña actualizada con éxito! Ya puedes iniciar sesión.\"}";
             }
 
         } catch (SQLException e) {

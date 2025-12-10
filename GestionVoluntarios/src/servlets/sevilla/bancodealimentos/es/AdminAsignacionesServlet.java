@@ -22,6 +22,10 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+/**
+ * Servlet para que los administradores consulten las asignaciones de turnos
+ * de los voluntarios para la campaña activa.
+ */
 @WebServlet("/admin-asignaciones")
 public class AdminAsignacionesServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;

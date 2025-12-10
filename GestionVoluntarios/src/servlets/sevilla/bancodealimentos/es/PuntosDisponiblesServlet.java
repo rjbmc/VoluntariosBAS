@@ -24,7 +24,7 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * Servlet que devuelve una lista de puntos de recogida (tiendas)
- * que tienen huecos disponibles para un turno espec�fico, incluyendo su prioridad.
+ * que tienen huecos disponibles para un turno específico, incluyendo su prioridad.
  */
 @WebServlet("/puntos-disponibles")
 public class PuntosDisponiblesServlet extends HttpServlet {
@@ -43,13 +43,13 @@ public class PuntosDisponiblesServlet extends HttpServlet {
         
         String turnoParam = request.getParameter("turno");
         if (turnoParam == null || !turnoParam.matches("[1-4]")) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Par�metro 'turno' (1-4) es requerido.");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parámetro 'turno' (1-4) es requerido.");
             return;
         }
         
         String campanaId = request.getParameter("campana");
          if (campanaId == null || campanaId.trim().isEmpty()) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Par�metro 'campana' es requerido.");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Parámetro 'campana' es requerido.");
             return;
         }
 
@@ -59,7 +59,7 @@ public class PuntosDisponiblesServlet extends HttpServlet {
         PrintWriter out = response.getWriter();
         StringBuilder jsonBuilder = new StringBuilder("[");
 
-        // --- CAMBIO: La consulta ahora tambi�n selecciona la columna 'prioridad' ---
+        // --- CAMBIO: La consulta ahora también selecciona la columna 'prioridad' ---
         String sql = "SELECT t.codigo AS id, t.denominacion AS nombre, t.Direccion AS direccion, t.Lat AS lat, t.Lon AS lon, t.prioridad " +
                      "FROM tiendas t " +
                      "LEFT JOIN ( " +
@@ -85,7 +85,7 @@ public class PuntosDisponiblesServlet extends HttpServlet {
                     jsonBuilder.append("\"direccion\":\"").append(escapeJson(rs.getString("direccion"))).append("\",");
                     jsonBuilder.append("\"lat\":").append(rs.getBigDecimal("lat")).append(",");
                     jsonBuilder.append("\"lon\":").append(rs.getBigDecimal("lon")).append(",");
-                    // --- CAMBIO: Se a�ade la prioridad al JSON de respuesta ---
+                    // --- CAMBIO: Se añade la prioridad al JSON de respuesta ---
                     jsonBuilder.append("\"prioridad\":").append(rs.getInt("prioridad"));
                     jsonBuilder.append("}");
                     first = false;

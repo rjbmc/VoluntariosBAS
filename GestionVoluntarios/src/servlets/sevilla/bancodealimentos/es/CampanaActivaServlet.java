@@ -15,7 +15,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-// --- CAMBIO: Importar la clase de configuraci�n ---
+// --- CAMBIO: Importar la clase de configuración ---
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
@@ -23,7 +23,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 /**
- * Servlet que busca la campa�a activa (estado = 'S') y devuelve
+ * Servlet que busca la campaña activa (estado = 'S') y devuelve
  * sus datos en formato JSON.
  */
 @WebServlet("/campana-activa")
@@ -31,7 +31,7 @@ public class CampanaActivaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     private static final Logger logger = LogManager.getLogger(CampanaActivaServlet.class);
 
-    // --- CAMBIO: Se eliminan las variables de conexi�n locales ---
+    // --- CAMBIO: Se eliminan las variables de conexión locales ---
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -57,7 +57,7 @@ public class CampanaActivaServlet extends HttpServlet {
                 out.print(jsonBuilder.toString());
 
             } else {
-                response.sendError(HttpServletResponse.SC_NOT_FOUND, "No se encontr� ninguna campa�a activa.");
+                response.sendError(HttpServletResponse.SC_NOT_FOUND, "No se encontró ninguna campaña activa.");
             }
 
         } catch (SQLException e) {

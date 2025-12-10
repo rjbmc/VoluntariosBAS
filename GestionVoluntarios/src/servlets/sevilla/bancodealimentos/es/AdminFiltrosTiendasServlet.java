@@ -22,7 +22,7 @@ import org.apache.logging.log4j.Logger;
 
 /**
  * Servlet que devuelve las listas de supervisores y zonas para los filtros
- * de la pantalla de gesti�n de tiendas.
+ * de la pantalla de gestión de tiendas.
  */
 @WebServlet("/admin-filtros-tiendas")
 public class AdminFiltrosTiendasServlet extends HttpServlet {

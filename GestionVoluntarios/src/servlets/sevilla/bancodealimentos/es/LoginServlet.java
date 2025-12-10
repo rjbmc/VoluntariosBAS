@@ -2,7 +2,6 @@ package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -17,7 +16,6 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
@@ -39,7 +37,7 @@ public class LoginServlet extends HttpServlet {
         JsonObject jsonResponse = new JsonObject();
 
         try (Connection conn = DatabaseUtil.getConnection()) {
-            String sql = "SELECT Clave, administrador, verificado, fecha_baja FROM voluntarios WHERE Usuario = ?";
+            String sql = "SELECT Email, Clave, administrador, verificado, fecha_baja FROM voluntarios WHERE Usuario = ?";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, usuario);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -59,10 +57,12 @@ public class LoginServlet extends HttpServlet {
                             // 3. Comprobar si la cuenta está verificada
                             if ("S".equals(verificado)) {
                                 String esAdmin = rs.getString("administrador");
+                                String email = rs.getString("Email");
                                 
                                 // Crear sesión
                                 HttpSession session = request.getSession(true);
                                 session.setAttribute("usuario", usuario);
+                                session.setAttribute("email", email); // Guardamos el email en la sesión
                                 session.setAttribute("isAdmin", "S".equals(esAdmin));
                                 session.setMaxInactiveInterval(10 * 60); // 10 minutos de inactividad
 

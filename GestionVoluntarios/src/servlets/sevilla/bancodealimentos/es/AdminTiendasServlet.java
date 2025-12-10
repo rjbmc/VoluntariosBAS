@@ -12,6 +12,7 @@ import java.util.Map;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -21,7 +22,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 import org.apache.logging.log4j.LogManager;
@@ -29,9 +29,11 @@ import org.apache.logging.log4j.Logger;
 
 @WebServlet("/admin-tiendas")
 public class AdminTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 3L; // Versión actualizada
+    private static final long serialVersionUID = 4L; // Versión actualizada
     private final Gson gson = new Gson();
     private static final Logger logger = LogManager.getLogger(AdminTiendasServlet.class);
+    private static final String SP_LIST_NAME = "Tiendas";
+    private static final String SP_UUID_FIELD = "SqlRowUUID"; // Usaremos un campo para el ID de la BD
 
     // Clase interna para representar una tienda
     private static class Tienda {
@@ -181,30 +183,54 @@ public class AdminTiendasServlet extends HttpServlet {
                     }
                 }
 
-                Map<String, Object> spData = new HashMap<>();
-                spData.put("Title", denominacion);
-                spData.put("Direccion", direccion);
-                spData.put("Latitud", lat);
-                spData.put("Longitud", lon);
-                spData.put("CP", cp);
-                spData.put("Poblacion", poblacion);
-                spData.put("Cadena", cadena);
-                spData.put("Disponible", disponible);
-                spData.put("Prioridad", prioridad);
-                spData.put("HuecosTurno1", h1);
-                spData.put("HuecosTurno2", h2);
-                spData.put("HuecosTurno3", h3);
-                spData.put("HuecosTurno4", h4);
+                try {
+                    Map<String, Object> spData = new HashMap<>();
+                    spData.put("Title", denominacion);
+                    spData.put("Direccion", direccion);
+                    spData.put("Latitud", lat);
+                    spData.put("Longitud", lon);
+                    spData.put("CP", cp);
+                    spData.put("Poblacion", poblacion);
+                    spData.put("Cadena", cadena);
+                    spData.put("Disponible", disponible);
+                    spData.put("Prioridad", prioridad);
+                    spData.put("HuecosTurno1", h1);
+                    spData.put("HuecosTurno2", h2);
+                    spData.put("HuecosTurno3", h3);
+                    spData.put("HuecosTurno4", h4);
 
-                String rowUuid = String.valueOf(codigo);
-                SharepointReplicationUtil.Operation operation = isUpdate ? SharepointReplicationUtil.Operation.UPDATE : SharepointReplicationUtil.Operation.INSERT;
-                String listName = "Tiendas";
+                    String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
+                     if (listId == null) {
+                        throw new Exception("Lista '" + SP_LIST_NAME + "' no encontrada.");
+                    }
 
-                // ** INICIO DE LA CORRECCIÓN **
-                SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, listName, spData, operation, rowUuid);
-                // ** FIN DE LA CORRECCIÓN **
+                    String rowUuid = String.valueOf(codigo);
 
-                LogUtil.logOperation(conn, "REPLICATE_TIENDA", adminUser, "Tienda " + codigo + " replicada a SharePoint con operación " + operation.name());
+                    if (isUpdate) {
+                        String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, rowUuid);
+                        if (itemId != null) {
+                            FieldValueSet fieldsToUpdate = new FieldValueSet();
+                            fieldsToUpdate.setAdditionalData(spData);
+                            SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listId, itemId, fieldsToUpdate);
+                            LogUtil.logOperation(conn, "SP_UPDATE_T", adminUser, "SP actualizado para tienda: " + codigo);
+                        } else {
+                            spData.put(SP_UUID_FIELD, rowUuid);
+                            FieldValueSet fieldsToCreate = new FieldValueSet();
+                            fieldsToCreate.setAdditionalData(spData);
+                            SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fieldsToCreate);
+                            LogUtil.logOperation(conn, "SP_CREATE_T_CONT", adminUser, "Se creó tienda en SP por contingencia: " + codigo);
+                        }
+                    } else {
+                        spData.put(SP_UUID_FIELD, rowUuid);
+                        FieldValueSet fieldsToCreate = new FieldValueSet();
+                        fieldsToCreate.setAdditionalData(spData);
+                        SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fieldsToCreate);
+                        LogUtil.logOperation(conn, "SP_CREATE_T", adminUser, "SP creado para nueva tienda: " + codigo);
+                    }
+                } catch (Exception e) {
+                    LogUtil.logOperation(conn, "SP_REPLICATION_ERROR", adminUser, "Fallo en replicación de tienda " + codigo + ". Causa: " + e.getMessage());
+                    e.printStackTrace();
+                }
                 
                 conn.commit();
                 jsonResponse.addProperty("success", true);
