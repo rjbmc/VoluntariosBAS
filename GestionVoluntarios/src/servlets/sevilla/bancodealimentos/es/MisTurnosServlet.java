@@ -19,6 +19,9 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que devuelve los turnos ya asignados de un voluntario.
  * Si es llamado por un admin con un par�metro 'usuario', devuelve los datos de ese usuario.
@@ -27,6 +30,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/mis-turnos")
 public class MisTurnosServlet extends HttpServlet {
     private static final long serialVersionUID = 2L; // Versi�n actualizada
+    private static final Logger logger = LogManager.getLogger(MisTurnosServlet.class);
 
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
@@ -91,7 +95,7 @@ public class MisTurnosServlet extends HttpServlet {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al consultar los turnos para usuario=" + usuarioFinal + " campana=" + campanaId, e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar la base de datos.");
         }
         

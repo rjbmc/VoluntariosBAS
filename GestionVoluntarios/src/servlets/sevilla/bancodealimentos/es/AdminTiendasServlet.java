@@ -24,10 +24,14 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/admin-tiendas")
 public class AdminTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 3L; // Versión actualizada
     private final Gson gson = new Gson();
+    private static final Logger logger = LogManager.getLogger(AdminTiendasServlet.class);
 
     // Clase interna para representar una tienda
     private static class Tienda {
@@ -206,7 +210,7 @@ public class AdminTiendasServlet extends HttpServlet {
                 jsonResponse.addProperty("success", true);
 
             } catch (Exception e) {
-                e.printStackTrace();
+                logger.error("Error guardando tienda en admin-tiendas", e);
                 jsonResponse.addProperty("success", false);
                 jsonResponse.addProperty("message", "Error al guardar la tienda: " + e.getMessage());
                 response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);

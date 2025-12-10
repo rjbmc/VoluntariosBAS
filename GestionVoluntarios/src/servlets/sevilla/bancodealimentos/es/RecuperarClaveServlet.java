@@ -28,12 +28,16 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que gestiona la solicitud de recuperaci�n de contrase�a.
  */
 @WebServlet("/recuperar-clave")
 public class RecuperarClaveServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(RecuperarClaveServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -76,7 +80,7 @@ public class RecuperarClaveServlet extends HttpServlet {
 
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error de BD en recuperar-clave", e);
             response.setStatus(HttpServletResponse.SC_OK);
             response.getWriter().print("{\"success\": true}");
         }
@@ -118,7 +122,7 @@ public class RecuperarClaveServlet extends HttpServlet {
             message.setContent(emailBody, "text/html; charset=utf-8");
             Transport.send(message);
         } catch (MessagingException e) {
-            e.printStackTrace();
+            logger.error("Error enviando email de recuperación de clave a {}", emailDestino, e);
         }
     }
 }

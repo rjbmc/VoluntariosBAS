@@ -25,9 +25,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/lista-sharepoint")
 public class SharepointListServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(SharepointListServlet.class);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -109,8 +113,7 @@ public class SharepointListServlet extends HttpServlet {
             }
 
         } catch (Exception e) {
-            System.err.println("Error al obtener datos de SharePoint: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error al obtener datos de SharePoint (siteId={}, lista={})", siteId, listIdOrName, e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             out.print(gson.toJson(Map.of("error", "Error al procesar la solicitud de SharePoint: " + e.getMessage())));
         } finally {

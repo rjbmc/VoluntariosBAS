@@ -4,7 +4,6 @@ package servlets.sevilla.bancodealimentos.es;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -18,6 +17,9 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que devuelve las listas de supervisores y zonas para los filtros
  * de la pantalla de gesti�n de tiendas.
@@ -25,6 +27,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/admin-filtros-tiendas")
 public class AdminFiltrosTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(AdminFiltrosTiendasServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -73,8 +76,8 @@ public class AdminFiltrosTiendasServlet extends HttpServlet {
             jsonBuilder.append("]");
 
         } catch (SQLException e) {
-            e.printStackTrace();
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar los filtros.");
+            logger.error("Error al obtener filtros de tiendas", e);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al obtener filtros.");
             return;
         }
 
@@ -88,4 +91,3 @@ public class AdminFiltrosTiendasServlet extends HttpServlet {
         return str.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
-

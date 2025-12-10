@@ -8,11 +8,16 @@ import java.util.Date;
 
 import jakarta.servlet.ServletException;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Clase de utilidad para gestionar la escritura de registros en la tabla `logs`.
  * Centraliza toda la lógica de logging de la aplicación.
  */
 public class LogUtil {
+
+    private static final Logger logger = LogManager.getLogger(LogUtil.class);
 
     /**
      * Registra una operación en el log usando una conexión a la BD existente.
@@ -51,8 +56,7 @@ public class LogUtil {
             // Reutiliza el método anterior
             logOperation(conn, operation, operator, comment);
         } catch (SQLException e) {
-            System.err.println("Error CRÍTICO al registrar la operación en el log (conexión propia): " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error CRÍTICO al registrar la operación en el log (conexión propia): {}", e.getMessage(), e);
             // Envuelve el error en una ServletException para notificar al contenedor que algo ha ido mal.
             throw new ServletException("Fallo al registrar la operación en el log.", e);
         }

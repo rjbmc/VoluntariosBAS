@@ -7,7 +7,11 @@ import javax.naming.InitialContext;
 import javax.naming.NamingException;
 import javax.sql.DataSource;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class DatabaseUtil {
+    private static final Logger logger = LogManager.getLogger(DatabaseUtil.class);
     private static DataSource dataSource;
 
     static {
@@ -17,8 +21,7 @@ public class DatabaseUtil {
             Context envContext = (Context) initContext.lookup("java:/comp/env");
             dataSource = (DataSource) envContext.lookup("jdbc/VoluntariosDB");
         } catch (NamingException e) {
-            System.err.println("ERROR CRÍTICO: No se pudo encontrar el Data Source JNDI 'jdbc/VoluntariosDB'.");
-            e.printStackTrace();
+            logger.error("ERROR CRÍTICO: No se pudo encontrar el Data Source JNDI 'jdbc/VoluntariosDB'.", e);
         }
     }
     public static Connection getConnection() throws SQLException {

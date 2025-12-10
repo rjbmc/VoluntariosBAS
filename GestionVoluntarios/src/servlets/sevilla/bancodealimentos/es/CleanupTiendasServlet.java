@@ -16,11 +16,15 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/cleanup-tiendas")
 public class CleanupTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     private static final String SHAREPOINT_LIST_NAME = "Tiendas";
     private static final int PAUSA_CORTA_MS = 75;
+    private static final Logger logger = LogManager.getLogger(CleanupTiendasServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -108,10 +112,10 @@ public class CleanupTiendasServlet extends HttpServlet {
             out.flush();
 
         } catch (Exception e) {
+            logger.error("Error crítico durante la limpieza profunda de tiendas", e);
             out.println("\n\n--- ¡ERROR CRÍTICO DURANTE LA LIMPIEZA! ---");
             out.println("Mensaje del error: " + e.getMessage());
-            out.println("\nTraza del error completa:");
-            e.printStackTrace(out);
+            out.println("Consulta los logs del servidor para más detalles.");
             out.flush();
         }
     }

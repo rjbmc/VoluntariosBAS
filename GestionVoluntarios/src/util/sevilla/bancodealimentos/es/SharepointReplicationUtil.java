@@ -7,8 +7,13 @@ import java.util.UUID;
 
 import com.microsoft.graph.models.FieldValueSet;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 // UTILIDAD PARA REPLICAR CAMBIOS DE UN ÚNICO ELEMENTO (CRUD)
 public final class SharepointReplicationUtil {
+
+    private static final Logger logger = LogManager.getLogger(SharepointReplicationUtil.class);
 
     public enum Operation {
         INSERT,
@@ -50,7 +55,7 @@ public final class SharepointReplicationUtil {
             }
         } catch (Exception e) {
             logReplicationError(conn, listName, rowUuid, "Fallo genérico en la replicación: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Fallo en replicación (lista={}, rowUuid={})", listName, rowUuid, e);
         }
     }
 
@@ -106,7 +111,7 @@ public final class SharepointReplicationUtil {
             LogUtil.logOperation(conn, "REPLICATE_SUCCESS", "SYSTEM",
                 "Operación " + operation + " replicada a SP en lista: " + listName + " para UUID: " + rowUuid);
         } catch (SQLException e) {
-            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_SUCCESS: " + e.getMessage());
+            logger.error("CRITICAL: Fallo al registrar LOG de REPLICATE_SUCCESS (lista={}, uuid={})", listName, rowUuid, e);
         }
     }
     
@@ -115,7 +120,7 @@ public final class SharepointReplicationUtil {
             LogUtil.logOperation(conn, "REPLICATE_ERROR", "SYSTEM",
                 "Error de replicación en lista '" + listName + "' para UUID '" + rowUuid + "': " + details);
         } catch (SQLException e) {
-            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_ERROR: " + e.getMessage());
+            logger.error("CRITICAL: Fallo al registrar LOG de REPLICATE_ERROR (lista={}, uuid={})", listName, rowUuid, e);
         }
     }
 
@@ -124,7 +129,7 @@ public final class SharepointReplicationUtil {
             LogUtil.logOperation(conn, "REPLICATE_WARNING", "SYSTEM",
                 "Warning de replicación en lista '" + listName + "' para UUID '" + rowUuid + "': " + details);
         } catch (SQLException e) {
-            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_WARNING: " + e.getMessage());
+            logger.error("CRITICAL: Fallo al registrar LOG de REPLICATE_WARNING (lista={}, uuid={})", listName, rowUuid, e);
         }
     }
 }

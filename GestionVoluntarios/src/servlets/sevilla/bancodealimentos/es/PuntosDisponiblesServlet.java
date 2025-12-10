@@ -19,6 +19,9 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que devuelve una lista de puntos de recogida (tiendas)
  * que tienen huecos disponibles para un turno espec�fico, incluyendo su prioridad.
@@ -26,6 +29,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/puntos-disponibles")
 public class PuntosDisponiblesServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(PuntosDisponiblesServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -88,7 +92,7 @@ public class PuntosDisponiblesServlet extends HttpServlet {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al consultar puntos disponibles para campana=" + campanaId + " turno=" + turnoParam, e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar la base de datos.");
             return;
         }

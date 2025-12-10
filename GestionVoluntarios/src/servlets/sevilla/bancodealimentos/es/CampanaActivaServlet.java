@@ -19,6 +19,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que busca la campa�a activa (estado = 'S') y devuelve
  * sus datos en formato JSON.
@@ -26,6 +29,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/campana-activa")
 public class CampanaActivaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(CampanaActivaServlet.class);
 
     // --- CAMBIO: Se eliminan las variables de conexi�n locales ---
 
@@ -57,7 +61,7 @@ public class CampanaActivaServlet extends HttpServlet {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al consultar la base de datos para campana activa", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar la base de datos.");
         }
         

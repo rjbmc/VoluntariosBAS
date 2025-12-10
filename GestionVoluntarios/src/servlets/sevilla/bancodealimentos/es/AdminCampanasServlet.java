@@ -21,10 +21,14 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/admin-campanas")
 public class AdminCampanasServlet extends HttpServlet {
     private static final long serialVersionUID = 2L; // Versión actualizada
     private static final String LIST_NAME = "Campanas";
+    private static final Logger logger = LogManager.getLogger(AdminCampanasServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -130,7 +134,7 @@ public class AdminCampanasServlet extends HttpServlet {
             sendSuccess(response, "Campaña guardada correctamente.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error al guardar la campaña", e);
             sendError(response, "Error al guardar la campaña: " + e.getMessage());
         }
     }
@@ -157,7 +161,7 @@ public class AdminCampanasServlet extends HttpServlet {
             sendSuccess(response, "Campaña eliminada correctamente.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error al eliminar la campaña", e);
             sendError(response, "Error al eliminar la campaña. Asegúrate de que no tenga voluntarios asignados.");
         }
     }
@@ -196,7 +200,7 @@ public class AdminCampanasServlet extends HttpServlet {
             sendSuccess(response, "Campaña activada correctamente.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error al activar la campaña", e);
             sendError(response, "Error al activar la campaña.");
         }
     }
@@ -224,7 +228,7 @@ public class AdminCampanasServlet extends HttpServlet {
             sendSuccess(response, "Campaña desactivada correctamente.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error al desactivar la campaña", e);
             sendError(response, "Error al desactivar la campaña.");
         }
     }

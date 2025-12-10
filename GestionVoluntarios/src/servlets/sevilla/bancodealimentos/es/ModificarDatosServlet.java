@@ -34,9 +34,13 @@ import util.sevilla.bancodealimentos.es.PasswordUtils;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/modificar-datos")
 public class ModificarDatosServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(ModificarDatosServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -111,18 +115,19 @@ public class ModificarDatosServlet extends HttpServlet {
                     SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
 
                 } catch (Exception e) {
-                    System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
+                    logger.warn("Fallo al iniciar la replicación a SharePoint para uuid={}: {}", sqlRowUuid, e.getMessage());
+                    logger.debug("Traza completa replicación modificar-datos", e);
                 }
             }
 
         } catch (SQLException e) {
             if (conn != null) try { conn.rollback(); } catch (SQLException ex) {}
-            e.printStackTrace();
+            logger.error("Error de base de datos al actualizar datos personales", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error de base de datos al actualizar.");
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) {}
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.error("Error cerrando conexión en modificar-datos", e); }
         }
 
         response.getWriter().write(jsonResponse.toString());
@@ -236,7 +241,7 @@ public class ModificarDatosServlet extends HttpServlet {
 			 try {
 				LogUtil.logOperation("CHANGE_EMAIL_CONF", usuario, "Error en envio de la confirmación del cambio de email a " + emailDestino);
 			 } catch (ServletException e1) { }
-			e.printStackTrace();
+			 logger.error("Error enviando email confirmacion cambio de email para {}", emailDestino, e);
 		}
     }
 }

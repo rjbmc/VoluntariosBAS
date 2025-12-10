@@ -16,10 +16,14 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/crud-sharepoint")
 public class SharepointCrudServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     private final Gson gson = new Gson();
+    private static final Logger logger = LogManager.getLogger(SharepointCrudServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -129,8 +133,7 @@ public class SharepointCrudServlet extends HttpServlet {
     }
 
     private void handleException(Exception e, HttpServletResponse res, PrintWriter out) {
-        System.err.println("Error en SharepointCrudServlet: " + e.getMessage());
-        e.printStackTrace();
+        logger.error("Error en SharepointCrudServlet: {}", e.getMessage(), e);
         if (!res.isCommitted()) {
             res.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             out.print(gson.toJson(Map.of("error", "Error interno en el servidor: " + e.getMessage())));

@@ -19,12 +19,16 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que procesa la verificaci�n de email a trav�s de un token.
  */
 @WebServlet("/verificar-email")
 public class VerificarEmailServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(VerificarEmailServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -73,7 +77,7 @@ public class VerificarEmailServlet extends HttpServlet {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error de BD al verificar email", e);
             jsonResponse = "{\"success\": false, \"message\": \"Error de base de datos al verificar la cuenta.\"}";
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }

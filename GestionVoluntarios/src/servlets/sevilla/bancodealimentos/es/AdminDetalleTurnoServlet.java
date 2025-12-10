@@ -19,6 +19,9 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que devuelve la lista detallada de voluntarios asignados
  * a una tienda y turno espec�ficos para una campa�a.
@@ -26,6 +29,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/admin-detalle-turno")
 public class AdminDetalleTurnoServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(AdminDetalleTurnoServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -94,7 +98,7 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al consultar detalles del turno", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar los detalles del turno.");
             return;
         }
@@ -110,4 +114,3 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
                   .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 }
-

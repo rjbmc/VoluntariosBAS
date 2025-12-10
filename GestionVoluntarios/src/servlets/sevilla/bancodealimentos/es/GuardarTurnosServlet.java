@@ -23,9 +23,13 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/guardar-turnos")
 public class GuardarTurnosServlet extends HttpServlet {
     private static final long serialVersionUID = 8L; // Versión actualizada
+    private static final Logger logger = LogManager.getLogger(GuardarTurnosServlet.class);
 
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
@@ -62,11 +66,11 @@ public class GuardarTurnosServlet extends HttpServlet {
             jsonResponse = "{\"success\": true, \"message\": \"¡Turnos guardados y sincronizados con éxito!\"}";
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error de base de datos al guardar turnos", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse = "{\"success\": false, \"message\": \"Error de base de datos. Los cambios no se guardaron.\"}";
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error procesando petición guardar-turnos", e);
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             jsonResponse = "{\"success\": false, \"message\": \"Error en los datos enviados: " + e.getMessage() + "\"}";
         }
@@ -134,7 +138,7 @@ public class GuardarTurnosServlet extends HttpServlet {
 
         String voluntarioUuid = getSqlRowUuid(conn, usuario);
         if (voluntarioUuid == null) {
-             System.err.println("ADVERTENCIA: No se pudo encontrar el SqlRowUUID para el usuario '" + usuario + "'. No se puede replicar la asignación.");
+             logger.warn("No se pudo encontrar el SqlRowUUID para el usuario '{}' - no se replicará la asignación", usuario);
             return;
         }
         

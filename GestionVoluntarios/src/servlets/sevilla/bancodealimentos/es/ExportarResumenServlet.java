@@ -21,6 +21,9 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet para exportar el resumen de una campa�a a un fichero CSV.
  * Solo accesible para administradores.
@@ -28,6 +31,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/exportar-resumen")
 public class ExportarResumenServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(ExportarResumenServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -50,7 +54,7 @@ public class ExportarResumenServlet extends HttpServlet {
                     return;
                 }
             } catch (SQLException e) {
-                e.printStackTrace();
+                logger.error("Error al buscar la campaña activa para exportar resumen", e);
                 response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campa�a activa.");
                 return;
             }
@@ -99,8 +103,7 @@ public class ExportarResumenServlet extends HttpServlet {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-            System.err.println("Error de SQL al generar el CSV de resumen.");
+            logger.error("Error de SQL al generar CSV de resumen", e);
         }
     }
 

@@ -33,9 +33,13 @@ import util.sevilla.bancodealimentos.es.PasswordUtils;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/nuevo-voluntario")
 public class NuevoVoluntarioServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(NuevoVoluntarioServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -186,7 +190,7 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                 spData.put("field_7", telefono);
                 spData.put("field_8", fechaNacimientoStr);
                 spData.put("field_9", cp);
-                spData.put("field_10", "No");
+                spData.put("Verificado", "No");
 
                 if (isReactivation) {
                     // --- REPLICACIÓN DE REACTIVACIÓN (UPDATE) ---
@@ -194,7 +198,7 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                         spData.put("field_21", null);
                         SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                     } else {
-                        System.err.println("ADVERTENCIA: No se encontró SqlRowUUID para reactivar al usuario '" + usuario + "'. No se puede replicar la reactivación a SharePoint.");
+                        logger.warn("No se encontró SqlRowUUID para reactivar al usuario '{}' - no se replicará la reactivación", usuario);
                     }
                 } else {
                     // --- REPLICACIÓN DE NUEVO USUARIO (INSERT) ---
@@ -203,7 +207,7 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                     }
                 }
             } catch (Exception e) {
-                System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
+                logger.warn("Fallo al iniciar el proceso de replicación a SharePoint para el UUID {}: {}", sqlRowUuid, e.getMessage());
             }
 
             sendVerificationEmail(request, email, usuario, verificationToken);
@@ -213,7 +217,7 @@ public class NuevoVoluntarioServlet extends HttpServlet {
             jsonResponse.addProperty("email", email); 
             
         } catch (SQLException e) {
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.error("Error al hacer rollback en nuevo-voluntario", ex); }
             
             if (e.getErrorCode() == 1062) {
                  jsonResponse.addProperty("success", false);
@@ -223,9 +227,9 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                 jsonResponse.addProperty("success", false);
                 jsonResponse.addProperty("message", "Error de base de datos. Inténtalo más tarde.");
             }
-            e.printStackTrace();
+            logger.error("Error de BD en nuevo-voluntario", e);
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.error("Error cerrando conexión en nuevo-voluntario", e); }
         }
 
         response.getWriter().write(jsonResponse.toString());

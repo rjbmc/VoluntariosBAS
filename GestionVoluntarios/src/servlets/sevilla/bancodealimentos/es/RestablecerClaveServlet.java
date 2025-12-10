@@ -21,6 +21,9 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.PasswordUtils;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que finaliza el proceso de restablecimiento de contrase�a.
  * Verifica el token y actualiza la contrase�a del usuario.
@@ -28,6 +31,7 @@ import util.sevilla.bancodealimentos.es.PasswordUtils;
 @WebServlet("/restablecer-clave")
 public class RestablecerClaveServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(RestablecerClaveServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -82,7 +86,7 @@ public class RestablecerClaveServlet extends HttpServlet {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error de base de datos al actualizar la contraseña para token={}", token, e);
             jsonResponse = "{\"success\": false, \"message\": \"Error de base de datos al actualizar la contrase�a.\"}";
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
@@ -96,4 +100,3 @@ public class RestablecerClaveServlet extends HttpServlet {
         response.getWriter().print("{\"success\": false, \"message\": \"" + message + "\"}");
     }
 }
-

@@ -51,9 +51,13 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/refrescar-powerapp")
 public class RefrescarPowerAppServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(RefrescarPowerAppServlet.class);
 
     // Clase interna para guardar los datos de una asignación y facilitar la comparación
     private static class Asignacion {
@@ -121,13 +125,13 @@ public class RefrescarPowerAppServlet extends HttpServlet {
             jsonResponse.addProperty("message", "Correo enviado correctamente y registros actualizados.");
 
         } catch (Exception e) {
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
-            e.printStackTrace();
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.error("Error during rollback in refrescar-powerapp", ex); }
+            logger.error("Error al procesar refrescar-powerapp", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error al procesar la solicitud: " + e.getMessage());
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.error("Error closing DB connection in refrescar-powerapp", e); }
         }
 
         response.getWriter().write(jsonResponse.toString());
@@ -417,4 +421,3 @@ public class RefrescarPowerAppServlet extends HttpServlet {
         styleInfo.setShowColumnStripes(false);
     }
 }
-

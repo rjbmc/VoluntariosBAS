@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <!-- 1. Salida por Consola (útil para desarrollo en Eclipse) -->
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} [%t] %-5level %logger{36} - %msg%n"/>
+        </Console>
+
+        <!-- 2. Salida a Fichero con Rotación (RollingFile) -->
+        <!-- fileName: El fichero actual -->
+        <!-- filePattern: Cómo se llamarán los ficheros antiguos cuando se roten -->
+        <RollingFile name="SharepointFile" 
+                     fileName="${sys:catalina.base}/logs/sharepoint_integration.log"
+                     filePattern="${sys:catalina.base}/logs/sharepoint-%d{yyyy-MM-dd}-%i.log.gz">
+            
+            <PatternLayout>
+                <Pattern>%d{yyyy-MM-dd HH:mm:ss} [%t] %-5level %c{1} - %msg%n</Pattern>
+            </PatternLayout>
+            
+            <Policies>
+                <!-- Rotar cada día -->
+                <TimeBasedTriggeringPolicy />
+                <!-- O rotar si ocupa más de 10 MB -->
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            
+            <!-- Guardar máximo 30 ficheros antiguos -->
+            <DefaultRolloverStrategy max="30"/>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <!-- Configuración específica para SharepointUtil -->
+        <!-- additivity="false" evita que el log salga duplicado en otros sitios -->
+        <Logger name="util.sevilla.bancodealimentos.es.SharepointUtil" level="info" additivity="false">
+            <AppenderRef ref="SharepointFile"/>
+            <AppenderRef ref="Console"/>
+        </Logger>
+
+        <!-- Configuración raíz para el resto de la aplicación -->
+        <Root level="error">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

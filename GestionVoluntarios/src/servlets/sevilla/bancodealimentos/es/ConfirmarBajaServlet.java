@@ -24,9 +24,13 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/confirmar-baja")
 public class ConfirmarBajaServlet extends HttpServlet {
     private static final long serialVersionUID = 3L; // Versión actualizada
+    private static final Logger logger = LogManager.getLogger(ConfirmarBajaServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -87,7 +91,8 @@ public class ConfirmarBajaServlet extends HttpServlet {
 
                         LogUtil.logOperation(conn, "REPLICATE_SUCCESS", usuario, "Baja replicada a SharePoint (marcado como inactivo).");
                     } catch (Exception e) {
-                        System.err.println("ADVERTENCIA: Fallo al replicar la baja a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
+                        logger.warn("Fallo al replicar baja a SharePoint para uuid={}: {}", sqlRowUuid, e.getMessage());
+                        logger.debug("Traza completa replicación baja", e);
                         LogUtil.logOperation(conn, "REPLICATE_ERROR", usuario, "Fallo al replicar la baja a SharePoint: " + e.getMessage());
                     }
                 } else {
@@ -106,7 +111,7 @@ public class ConfirmarBajaServlet extends HttpServlet {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error de BD al confirmar baja", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error de base de datos. Inténtalo más tarde.");

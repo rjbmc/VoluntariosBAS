@@ -27,11 +27,15 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/sync-tiendas")
 public class SyncTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     private static final String SHAREPOINT_LIST_NAME = "Tiendas";
     private static final int PAUSA_ENTRE_PETICIONES_MS = 400; 
+    private static final Logger logger = LogManager.getLogger(SyncTiendasServlet.class);
 
     private static class TiendaData {
         int codigo; String denominacion; String sqlRowUUID;
@@ -85,6 +89,7 @@ public class SyncTiendasServlet extends HttpServlet {
                 }
             }
         } catch (Exception e) {
+            logger.error("Error al leer tiendas desde la BD", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error crítico al leer desde la base de datos: " + e.getMessage());
@@ -120,10 +125,10 @@ public class SyncTiendasServlet extends HttpServlet {
                 SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
                 
                 Thread.sleep(PAUSA_ENTRE_PETICIONES_MS);
-                System.out.println("Creando tienda " + (i + 1) + "/" + tiendasEnMemoria.size());
+                logger.info("Creando tienda {}/{}: {}", i+1, tiendasEnMemoria.size(), tienda.codigo);
             }
 
-            System.out.println("VERIFICACIÓN FINAL: Pausando 10 segundos antes de comprobar...");
+            logger.info("VERIFICACIÓN FINAL: Pausando 10 segundos antes de comprobar...");
             Thread.sleep(10000);
 
             Set<String> uuidsReales = new HashSet<>();
@@ -151,7 +156,7 @@ public class SyncTiendasServlet extends HttpServlet {
             response.getWriter().write(jsonResponse.toString());
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error durante el ciclo de reconstrucción de tiendas", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error durante el ciclo de reconstrucción: " + e.getMessage());

@@ -19,12 +19,16 @@ import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet para que los usuarios enven una peticin de ayuda al administrador.
  */
 @WebServlet("/ayuda-admin")
 public class AyudaAdminServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(AyudaAdminServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -48,7 +52,7 @@ public class AyudaAdminServlet extends HttpServlet {
             response.getWriter().print("{\"success\": true, \"message\": \"Tu solicitud de ayuda ha sido enviada al administrador.\"}");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error enviando solicitud de ayuda", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             response.getWriter().print("{\"success\": false, \"message\": \"No se pudo enviar la solicitud de ayuda. Por favor, intntalo ms tarde.\"}");
         }
@@ -84,12 +88,6 @@ public class AyudaAdminServlet extends HttpServlet {
         				 + "<strong>La direccin de correo desde donde se enva este mensaje es de slo envo. Por favor, no la uses para responder.</strong><br>";
         message.setContent(emailBody, "text/html; charset=utf-8");
         Transport.send(message);
-//        System.out.println("--- SIMULACIN DE ENVO DE CORREO DE AYUDA ---");
-//        System.out.println("De: " + username);
-//        System.out.println("Para: " + adminEmail);
-//        System.out.println("Asunto: Solicitud de Ayuda - App VoluntariosBAS");
-//        System.out.println("Cuerpo: " + emailBody.replace("<br>", "\n").replace("<strong>", "").replace("</strong>", ""));
-//        System.out.println("---------------------------------------------");
     }
     
     private String escapeHtml(String text) {

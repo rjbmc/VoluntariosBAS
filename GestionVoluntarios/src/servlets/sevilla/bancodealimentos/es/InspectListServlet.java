@@ -19,6 +19,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet de diagnóstico para inspeccionar las columnas de una lista de SharePoint.
  * Su única responsabilidad es obtener y devolver los nombres internos y a mostrar de las columnas.
@@ -26,6 +29,7 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 @WebServlet("/inspeccionar-lista")
 public class InspectListServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(InspectListServlet.class);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -70,7 +74,7 @@ public class InspectListServlet extends HttpServlet {
             out.print(gson.toJson(Map.of("columns", columnDetails)));
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error inspeccionando lista SharePoint", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             out.print(gson.toJson(Map.of("error", "Error interno al inspeccionar la lista: " + e.getMessage())));
         } finally {

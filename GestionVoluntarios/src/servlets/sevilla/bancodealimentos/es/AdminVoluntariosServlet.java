@@ -23,9 +23,13 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/admin-voluntarios")
 public class AdminVoluntariosServlet extends HttpServlet {
     private static final long serialVersionUID = 2L;
+    private static final Logger logger = LogManager.getLogger(AdminVoluntariosServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -76,7 +80,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
                 first = false;
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al consultar voluntarios", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar los voluntarios.");
             return;
         }
@@ -189,17 +193,17 @@ public class AdminVoluntariosServlet extends HttpServlet {
                     
                     SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
-                    System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint la modificación de datos para " + usuarioToUpdate + ". Causa: " + e.getMessage());
+                    logger.warn("ADVERTENCIA: Fallo al replicar a SharePoint la modificación de datos para " + usuarioToUpdate + ". Causa: " + e.getMessage());
                 }
             }
 
             sendSuccess(response, "Datos del voluntario actualizados correctamente.");
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al actualizar los datos del voluntario", e);
             sendError(response, "Error al actualizar los datos. El DNI o el email podrían estar ya en uso.");
         } catch (Exception e) { // Captura genérica para cualquier otro error inesperado
-            e.printStackTrace();
+            logger.error("Error inesperado al actualizar datos del voluntario", e);
             sendError(response, "Error en los datos enviados. Revisa que todos los campos sean correctos.");
         }
     }
@@ -238,14 +242,14 @@ public class AdminVoluntariosServlet extends HttpServlet {
                     
                     SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
-                    System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de rol para " + usuarioToUpdate + ". Causa: " + e.getMessage());
+                    logger.warn("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de rol para " + usuarioToUpdate + ". Causa: " + e.getMessage());
                 }
             }
 
             sendSuccess(response, "Rol de administrador actualizado correctamente.");
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al actualizar el rol del voluntario", e);
             sendError(response, "Error al actualizar el rol del voluntario.");
         }
     }

@@ -1,5 +1,4 @@
 package util.sevilla.bancodealimentos.es;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -10,7 +9,12 @@ import com.azure.identity.ClientSecretCredentialBuilder;
 import com.microsoft.graph.models.*;
 import com.microsoft.graph.serviceclient.GraphServiceClient;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class SharepointUtil {
+
+    private static final Logger logger = LogManager.getLogger(SharepointUtil.class);
 
     public static final String SITE_ID = "bancodealimentosdsevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db";
     public static final String SP_SITE_ID_VOLUNTARIOS = "bancodealimentosdsevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db";
@@ -122,7 +126,7 @@ public class SharepointUtil {
                 writer.write(String.format("[%s] Error de replicación en lista '%s' para UUID '%s': %s\n", timestamp, listName, uuid, message));
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("No se pudo escribir en el fichero de errores sharepoint: {}", e.getMessage(), e);
         }
     }
 }

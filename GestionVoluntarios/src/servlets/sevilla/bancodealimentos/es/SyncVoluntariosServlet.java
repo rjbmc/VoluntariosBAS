@@ -20,9 +20,13 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/sync-voluntarios")
 public class SyncVoluntariosServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(SyncVoluntariosServlet.class);
     private static final String SHAREPOINT_LIST_NAME = "Voluntarios";
 
     @Override
@@ -108,12 +112,12 @@ public class SyncVoluntariosServlet extends HttpServlet {
             LogUtil.logOperation(conn, "SYNC_VOLUNTARIOS", (String) session.getAttribute("usuario"), "Sincronización masiva de Voluntarios completada.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error en la sincronización de Voluntarios", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error en la sincronización de Voluntarios: " + e.getMessage());
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Fallo al cerrar conexión en SyncVoluntariosServlet", e); }
             response.getWriter().write(jsonResponse.toString());
         }
     }

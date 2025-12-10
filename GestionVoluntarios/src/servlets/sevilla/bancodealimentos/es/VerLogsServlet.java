@@ -20,9 +20,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/ver-logs-error")
 public class VerLogsServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(VerLogsServlet.class);
 
     // Clase interna para estructurar los datos del log
     private static class LogEntry {
@@ -69,7 +73,7 @@ public class VerLogsServlet extends HttpServlet {
             response.getWriter().write(gson.toJson(logEntries));
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error al leer los logs de replicación", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error al leer los logs: " + e.getMessage());
@@ -77,4 +81,3 @@ public class VerLogsServlet extends HttpServlet {
         }
     }
 }
-

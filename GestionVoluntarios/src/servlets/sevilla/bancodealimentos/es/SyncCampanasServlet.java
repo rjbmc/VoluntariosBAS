@@ -20,9 +20,13 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/sync-campanas")
 public class SyncCampanasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(SyncCampanasServlet.class);
     private static final String SHAREPOINT_LIST_NAME = "Campanas";
 
     @Override
@@ -92,12 +96,12 @@ public class SyncCampanasServlet extends HttpServlet {
             LogUtil.logOperation(conn, "SYNC_CAMPANAS_FINAL", (String) session.getAttribute("usuario"), "Sincronización de Campañas (final) completada con éxito.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error en la sincronización de Campañas", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error en la sincronización de Campañas: " + e.getMessage());
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Fallo al cerrar la conexión en SyncCampanasServlet", e); }
             response.getWriter().write(jsonResponse.toString());
         }
     }

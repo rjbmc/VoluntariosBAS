@@ -18,6 +18,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que devuelve los puntos de recogida (tiendas, almacenes)
  * en formato JSON.
@@ -26,6 +29,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/puntos-recogida")
 public class PuntosRecogidaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(PuntosRecogidaServlet.class);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -55,7 +59,7 @@ public class PuntosRecogidaServlet extends HttpServlet {
                 first = false;
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al consultar puntos de recogida", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar los puntos de recogida.");
             return;
         }

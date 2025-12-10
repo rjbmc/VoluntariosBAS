@@ -23,6 +23,9 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet para que los administradores vean un resumen de la ocupaci�n
  * de las tiendas para una campa�a espec�fica.
@@ -30,6 +33,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/admin-resumen")
 public class AdminResumenServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(AdminResumenServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -57,7 +61,7 @@ public class AdminResumenServlet extends HttpServlet {
                     return;
                 }
             } catch (SQLException e) {
-                e.printStackTrace();
+                logger.error("Error al buscar la campaña activa para admin-resumen", e);
                 response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campa�a activa.");
                 return;
             }
@@ -72,7 +76,7 @@ public class AdminResumenServlet extends HttpServlet {
             out.print(jsonResult);
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al generar el resumen", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al generar el resumen.");
         }
         
@@ -167,4 +171,3 @@ public class AdminResumenServlet extends HttpServlet {
                   .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 }
-

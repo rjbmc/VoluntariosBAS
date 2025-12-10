@@ -33,10 +33,14 @@ import jakarta.mail.Transport;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 
 @WebServlet("/darse-de-baja")
 public class DarseDeBajaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(DarseDeBajaServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -94,11 +98,11 @@ public class DarseDeBajaServlet extends HttpServlet {
             response.getWriter().write(jsonResponse.toString());
 
         } catch (Exception e) {
+            logger.error("Error interno al procesar solicitud de darse de baja", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error interno del servidor. Inténtalo más tarde.");
             response.getWriter().write(jsonResponse.toString());
-            e.printStackTrace();
         }
     }
     
@@ -155,7 +159,7 @@ public class DarseDeBajaServlet extends HttpServlet {
 //            System.out.println("Correo de confirmación de baja enviado (simulado).");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error al enviar el correo de confirmación de baja", e);
             throw new ServletException("Error al enviar el correo de confirmación de baja.", e);
         }
     }

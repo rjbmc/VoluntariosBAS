@@ -22,11 +22,15 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/rebuild-tiendas")
 public class RebuildTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     private static final String SHAREPOINT_LIST_NAME = "Tiendas";
     private static final int PAUSA_ENTRE_PETICIONES_MS = 400;
+    private static final Logger logger = LogManager.getLogger(RebuildTiendasServlet.class);
 
     private static class TiendaData {
         int codigo; String denominacion; String sqlRowUUID; String direccion; BigDecimal lat; BigDecimal lon;
@@ -127,9 +131,10 @@ public class RebuildTiendasServlet extends HttpServlet {
             out.flush();
 
         } catch (Exception e) {
+            logger.error("Error crítico durante la reconstrucción de tiendas", e);
             out.println("\n\n--- ¡ERROR CRÍTICO DURANTE LA RECONSTRUCCIÓN! ---");
             out.println("Mensaje del error: " + e.getMessage());
-            e.printStackTrace(out);
+            out.println("Consulta los logs del servidor para más detalles.");
             out.flush();
         }
     }

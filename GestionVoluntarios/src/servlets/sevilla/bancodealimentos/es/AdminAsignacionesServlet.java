@@ -19,9 +19,13 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.AsignacionRow; // Importamos el POJO desde su nuevo paquete
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/admin-asignaciones")
 public class AdminAsignacionesServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(AdminAsignacionesServlet.class);
     
     // Instancia de Jackson para convertir objetos a JSON (es thread-safe y reutilizable)
     private final ObjectMapper mapper = new ObjectMapper();
@@ -103,7 +107,7 @@ public class AdminAsignacionesServlet extends HttpServlet {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al obtener asignaciones", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             return;
         }

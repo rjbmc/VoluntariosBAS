@@ -28,10 +28,14 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/solicitar-baja")
 public class SolicitarBajaServlet extends HttpServlet {
     private static final long serialVersionUID = 4L; // Versión actualizada
     private final Gson gson = new Gson();
+    private static final Logger logger = LogManager.getLogger(SolicitarBajaServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -109,16 +113,17 @@ public class SolicitarBajaServlet extends HttpServlet {
             response.getWriter().write(jsonResponse.toString());
 
         } catch (JsonSyntaxException | NullPointerException e) {
+            logger.warn("Solicitud con formato incorrecto para usuario={}", session != null ? session.getAttribute("usuario") : "<desconocido>", e);
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             jsonResponse.addProperty("message", "La solicitud no tiene el formato esperado.");
             response.getWriter().write(jsonResponse.toString());
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error de base de datos al procesar solicitud de baja para usuario={}", usuario, e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("message", "Error de base de datos al procesar la solicitud.");
             response.getWriter().write(jsonResponse.toString());
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error inesperado al procesar solicitud de baja para usuario={}", usuario, e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.addProperty("message", "Ha ocurrido un error inesperado: " + e.getMessage());
             response.getWriter().write(jsonResponse.toString());

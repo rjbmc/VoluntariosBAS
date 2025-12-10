@@ -16,9 +16,13 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/sync-asignaciones")
 public class SyncAsignacionesServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(SyncAsignacionesServlet.class);
     private static final String SP_LIST_ASIGNACIONES = "Asignaciones";
     private static final String SP_LIST_VOLUNTARIOS = "Voluntarios";
     private static final String SP_LIST_TIENDAS = "Tiendas";
@@ -107,6 +111,8 @@ public class SyncAsignacionesServlet extends HttpServlet {
                 } catch (Exception e) {
                     fallidos++;
                     errorLog.append("[FALLO] Fila de voluntario "+ idVoluntarioDb +" (UUID: " + voluntarioRowUuid + "). Causa: ").append(e.getMessage()).append("\n");
+                    logger.warn("Fallo procesando fila voluntario {} (uuid={}): {}", idVoluntarioDb, voluntarioRowUuid, e.getMessage());
+                    logger.debug("Traza completa", e);
                 }
             }
             
@@ -117,7 +123,7 @@ public class SyncAsignacionesServlet extends HttpServlet {
             jsonResponse.addProperty("message", "Sincronización de Asignaciones completada. Total: " + totalProcesados + ". Fallidos: " + fallidos + ". Errores: " + (errorLog.length() > 0 ? errorLog.toString() : "Ninguno"));
             
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error CRÍTICO en SyncAsignacionesServlet", e);
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Error CRÍTICO en SyncAsignacionesServlet: " + e.getMessage());
         } finally {

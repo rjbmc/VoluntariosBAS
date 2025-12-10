@@ -18,9 +18,13 @@ import jakarta.servlet.http.HttpSession;
 
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/voluntario-detalles")
 public class VoluntarioDetallesServlet extends HttpServlet {
     private static final long serialVersionUID = 4L; // Versión actualizada
+    private static final Logger logger = LogManager.getLogger(VoluntarioDetallesServlet.class);
 
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
@@ -88,7 +92,7 @@ public class VoluntarioDetallesServlet extends HttpServlet {
                 }
             }
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error al consultar detalles de voluntario", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar la base de datos.");
         }
         

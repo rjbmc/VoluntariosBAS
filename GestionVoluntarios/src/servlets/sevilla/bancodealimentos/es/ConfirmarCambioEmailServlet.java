@@ -20,9 +20,13 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/confirmar-cambio-email")
 public class ConfirmarCambioEmailServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(ConfirmarCambioEmailServlet.class);
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -75,7 +79,8 @@ public class ConfirmarCambioEmailServlet extends HttpServlet {
                         SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                         LogUtil.logOperation(conn, "REPLICATE_SUCCESS", usuario, "Email actualizado en SharePoint a: " + nuevoEmail);
                     } catch (Exception e) {
-                        System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de email para " + usuario + ". Causa: " + e.getMessage());
+                        logger.warn("Fallo al replicar a SharePoint el cambio de email para {}: {}", usuario, e.getMessage());
+                        logger.debug("Traza completa al replicar cambio de email", e);
                         LogUtil.logOperation(conn, "REPLICATE_ERROR", usuario, "Fallo al replicar cambio de email a SharePoint: " + e.getMessage());
                     }
                 } else {
@@ -92,7 +97,7 @@ public class ConfirmarCambioEmailServlet extends HttpServlet {
             }
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error de BD al confirmar cambio de email", e);
             if (e.getErrorCode() == 1062) {
                  jsonResponse = "{\"success\": false, \"message\": \"La nueva dirección de correo ya está en uso por otro voluntario.\"}";
             } else {

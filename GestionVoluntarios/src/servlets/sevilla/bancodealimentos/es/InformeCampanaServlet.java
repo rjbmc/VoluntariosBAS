@@ -19,6 +19,9 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Servlet que recopila todos los datos necesarios para generar el informe
  * en PDF de una campa�a y los devuelve en formato JSON.
@@ -26,6 +29,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/informe-campana")
 public class InformeCampanaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(InformeCampanaServlet.class);
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -52,7 +56,7 @@ public class InformeCampanaServlet extends HttpServlet {
                     return;
                 }
             } catch (SQLException e) {
-                e.printStackTrace();
+                logger.error("Error al buscar la campaña activa", e);
                 response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campa�a activa.");
                 return;
             }
@@ -140,7 +144,7 @@ public class InformeCampanaServlet extends HttpServlet {
 
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error al generar los datos del informe", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al generar los datos del informe.");
         }
     }
@@ -252,4 +256,3 @@ public class InformeCampanaServlet extends HttpServlet {
                   .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 }
-

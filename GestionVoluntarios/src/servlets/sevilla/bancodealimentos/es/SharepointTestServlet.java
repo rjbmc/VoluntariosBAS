@@ -14,9 +14,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 @WebServlet("/test-sharepoint-insert")
 public class SharepointTestServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private static final Logger logger = LogManager.getLogger(SharepointTestServlet.class);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -51,12 +55,11 @@ public class SharepointTestServlet extends HttpServlet {
             out.println("Se ha creado un nuevo elemento en la lista 'campanas'.");
 
         } catch (Exception e) {
+            logger.error("Error durante prueba de inserción en SharePoint", e);
             out.println("\n--- ¡ERROR! --- ");
-            out.println("Ocurrió una excepción durante la prueba:");
-            e.printStackTrace(out); // Imprime la traza completa del error en la respuesta
+            out.println("Ocurrió una excepción durante la prueba. Consulta los logs del servidor para más detalles.");
         }
 
         out.println("\n--- PRUEBA FINALIZADA ---");
     }
 }
-

@@ -113,15 +113,7 @@
         <artifactId>jakarta.mail</artifactId>
         <version>2.0.3</version>
     </dependency>
-
-    <!-- SOLUCIÓN DE LOGGING -->
-    <dependency>
-        <groupId>org.slf4j</groupId>
-        <artifactId>slf4j-simple</artifactId>
-        <version>2.0.7</version>
-        <scope>runtime</scope>
-    </dependency>
-
+ 
     <!-- Password Hashing -->
     <dependency>
       <groupId>org.mindrot</groupId>
@@ -142,6 +134,43 @@
 	    <groupId>com.fasterxml.jackson.core</groupId>
 	    <artifactId>jackson-databind</artifactId>
 	    <version>2.15.2</version>
+	</dependency>
+	
+	<!-- INICIO BLOQUE LOGGING -->
+	
+	<!-- 1. SLF4J API (La fachada que usarás en tu código Java) -->
+	<dependency>
+	    <groupId>org.slf4j</groupId>
+	    <artifactId>slf4j-api</artifactId>
+	    <version>2.0.9</version>
+	</dependency>
+	
+	<!-- 2. Log4j SLF4J Bridge (Conecta SLF4J con Log4j 2) -->
+	<dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-slf4j2-impl</artifactId>
+	    <version>2.20.0</version>
+	</dependency>
+	
+	<!-- 3. Log4j Core y API (El motor real de logging) -->
+	<!-- Es posible que ya tengas estas si añadiste Apache POI, pero asegúrate -->
+	<dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-api</artifactId>
+	    <version>2.20.0</version>
+	</dependency>
+	<dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-core</artifactId>
+	    <version>2.20.0</version>
+	</dependency>
+	
+	<!-- Añadimos log4j-web para integración con el ciclo de vida del contenedor web (opcional pero recomendado) -->
+	<dependency>
+	    <groupId>org.apache.logging.log4j</groupId>
+	    <artifactId>log4j-web</artifactId>
+	    <version>2.20.0</version>
+	    <scope>runtime</scope>
 	</dependency>
   </dependencies>
   
