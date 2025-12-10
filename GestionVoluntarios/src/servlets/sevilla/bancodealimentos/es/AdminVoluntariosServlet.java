@@ -234,7 +234,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
             if (sqlRowUuid != null) {
                 try {
                     Map<String, Object> spData = new HashMap<>();
-                    spData.put("field_10", "S".equals(newAdminStatus) ? "Si" : "No");
+                    spData.put("administrador", "S".equals(newAdminStatus) ? "Si" : "No");
                     
                     SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {

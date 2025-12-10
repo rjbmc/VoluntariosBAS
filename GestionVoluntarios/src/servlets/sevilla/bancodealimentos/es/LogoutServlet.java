@@ -12,7 +12,7 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
 /**
- * Servlet para gestionar el cierre de sesi�n de los usuarios.
+ * Servlet para gestionar el cierre de sesión de los usuarios.
  */
 @WebServlet("/logout")
 public class LogoutServlet extends HttpServlet {
@@ -29,14 +29,14 @@ public class LogoutServlet extends HttpServlet {
             String usuario = (String) session.getAttribute("usuario");
             
             if (usuario != null) {
-                // --- CAMBIO: Se elimina el �ltimo par�metro de la llamada al log ---
-                LogUtil.logOperation("LOGOUT", usuario, "Cierre de sesi�n exitoso.");
+                // --- CAMBIO: Se elimina el último Parámetro de la llamada al log ---
+                LogUtil.logOperation("LOGOUT", usuario, "Cierre de sesión exitoso.");
             }
             
             session.invalidate();
         }
         
         response.setStatus(HttpServletResponse.SC_OK);
-        response.getWriter().print("{\"success\": true, \"message\": \"Sesi�n cerrada correctamente.\"}");
+        response.getWriter().print("{\"success\": true, \"message\": \"sesión cerrada correctamente.\"}");
     }
 }

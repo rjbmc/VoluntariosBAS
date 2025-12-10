@@ -21,7 +21,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 /**
  * Servlet que recopila todos los datos necesarios para generar el informe
- * en PDF de una campa�a y los devuelve en formato JSON.
+ * en PDF de una campaña y los devuelve en formato JSON.
  */
 @WebServlet("/informe-campana")
 public class InformeCampanaServlet extends HttpServlet {
@@ -48,12 +48,12 @@ public class InformeCampanaServlet extends HttpServlet {
             try {
                 campanaId = getActiveCampaign();
                 if (campanaId == null) {
-                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "No hay ninguna campa�a activa.");
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "No hay ninguna campaña activa.");
                     return;
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campa�a activa.");
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campaña activa.");
                 return;
             }
         }
@@ -62,7 +62,7 @@ public class InformeCampanaServlet extends HttpServlet {
             
             StringBuilder jsonBuilder = new StringBuilder("{");
 
-            // 1. Obtener detalles de la campa�a
+            // 1. Obtener detalles de la campaña
             String sqlCampana = "SELECT denominacion, fecha1, fecha2 FROM campanas WHERE Campana = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sqlCampana)) {
                 stmt.setString(1, campanaId);
@@ -75,7 +75,7 @@ public class InformeCampanaServlet extends HttpServlet {
                         jsonBuilder.append("\"fecha2\":\"").append(rs.getDate("fecha2")).append("\"");
                         jsonBuilder.append("},");
                     } else {
-                        throw new ServletException("Campa�a no encontrada.");
+                        throw new ServletException("campaña no encontrada.");
                     }
                 }
             }
@@ -109,33 +109,33 @@ public class InformeCampanaServlet extends HttpServlet {
                             jsonBuilder.append("\"denominacion\":\"").append(escapeJson(rs.getString("denominacion"))).append("\",");
                             jsonBuilder.append("\"turnos\":{\"turno1\":[],\"turno2\":[],\"turno3\":[],\"turno4\":[]}}");
                             
-                            // Volver atr�s para rellenar los turnos de esta tienda
+                            // Volver atrás para rellenar los turnos de esta tienda
                             jsonBuilder.setLength(jsonBuilder.length() - 2); // Quita "}}"
                             jsonBuilder.append(",\"turno1\":[");
                             currentTiendaId = tiendaId;
                             firstTienda = false;
                         }
                         
-                        // L�gica para rellenar los turnos (simplificada para el ejemplo)
-                        // Una implementaci�n m�s robusta procesar�a esto en Java despu�s de la consulta.
+                        // lógica para rellenar los turnos (simplificada para el ejemplo)
+                        // Una implementación más robusta procesaría esto en Java después de la consulta.
                     }
                      if (!firstTienda) {
                         jsonBuilder.append("]}}");
                     }
                 }
             }
-            // NOTA: La consulta SQL anterior es compleja. Una alternativa m�s legible ser�a hacer
-            // una consulta por cada tienda, pero ser�a menos eficiente. Para este caso,
-            // una consulta m�s simple y procesado en Java es mejor. Se implementar�
-            // una versi�n m�s robusta y legible a continuaci�n.
+            // NOTA: La consulta SQL anterior es compleja. Una alternativa más legible sería hacer
+            // una consulta por cada tienda, pero sería menos eficiente. Para este caso,
+            // una consulta más simple y procesado en Java es mejor. Se implementará
+            // una versión más robusta y legible a continuación.
             
-            // Versi�n m�s robusta y legible
+            // versión más robusta y legible
             jsonBuilder.setLength(0); // Reiniciar el builder
             jsonBuilder.append("{");
-            // Repetir la obtenci�n de detalles de campa�a
+            // Repetir la obtención de detalles de campaña
             // ...
             
-            // Esta es la implementaci�n final que usaremos
+            // Esta es la implementación final que usaremos
             out.print(getReportDataAsJson(conn, campanaId));
 
 
@@ -145,11 +145,11 @@ public class InformeCampanaServlet extends HttpServlet {
         }
     }
     
-    // M�todo refactorizado y final para obtener los datos del informe
+    // método refactorizado y final para obtener los datos del informe
     private String getReportDataAsJson(Connection conn, String campanaId) throws SQLException, ServletException {
         StringBuilder jsonBuilder = new StringBuilder("{");
 
-        // 1. Detalles de la campa�a
+        // 1. Detalles de la campaña
         String sqlCampana = "SELECT denominacion, fecha1, fecha2 FROM campanas WHERE Campana = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sqlCampana)) {
             stmt.setString(1, campanaId);
@@ -162,7 +162,7 @@ public class InformeCampanaServlet extends HttpServlet {
                     jsonBuilder.append("\"fecha2\":\"").append(rs.getDate("fecha2")).append("\"");
                     jsonBuilder.append("},");
                 } else {
-                    throw new ServletException("Campa�a no encontrada.");
+                    throw new ServletException("campaña no encontrada.");
                 }
             }
         }

@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -42,7 +42,7 @@
                 </div>
                 <div>
                     <label for="email" class="input-label">Email</label>
-                    <input type="email" id="email" name="email" class="form-input w-full" required>
+                    <input type="text" id="email" name="email" class="form-input w-full" required autocomplete="off">
                 </div>
                 <div>
                     <label for="telefono" class="input-label">Teléfono</label>
@@ -71,11 +71,11 @@
                 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label for="clave_actual" class="input-label">Contraseña Actual</label>
-                        <input type="password" id="clave_actual" name="clave_actual" class="form-input w-full">
+                        <input type="password" id="clave_actual" name="clave_actual" class="form-input w-full" autocomplete="new-password">
                     </div>
                     <div>
                         <label for="nueva_clave" class="input-label">Nueva Contraseña</label>
-                        <input type="password" id="nueva_clave" name="nueva_clave" class="form-input w-full">
+                        <input type="password" id="nueva_clave" name="nueva_clave" class="form-input w-full" autocomplete="new-password">
                     </div>
                 </div>
             </div>
@@ -100,7 +100,7 @@
     </div>
     
     <!-- Modal para el Mapa -->
-    <div id="map-modal" class="modal-overlay hidden">
+    <div id="map-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3 class="text-xl font-bold mb-4">Selecciona tu nueva tienda de referencia</h3>
             <div id="map">Cargando mapa...</div>
@@ -111,7 +111,7 @@
     </div>
 
     <!-- Modal para Confirmar Baja -->
-    <div id="baja-modal" class="modal-overlay hidden">
+    <div id="baja-modal" class="modal-overlay" style="display: none;">
         <div class="modal-content max-w-md">
             <h3 class="text-xl font-bold text-red-700">Confirmar Baja</h3>
             <p class="text-gray-700 my-4">Para confirmar que deseas darte de baja, por favor, introduce tu contraseña actual.</p>
@@ -163,11 +163,21 @@
                 document.getElementById('nombre').value = data.nombre || '';
                 document.getElementById('apellidos').value = data.apellidos || '';
                 document.getElementById('dni').value = data.dni || '';
-                document.getElementById('email').value = data.email || '';
                 document.getElementById('telefono').value = data.telefono || '';
                 document.getElementById('fechaNacimiento').value = data.fechaNacimiento || '';
                 document.getElementById('cp').value = data.cp || '';
                 
+                // ** EL PLAN FINAL: DOBLE TOQUE **
+                const emailField = document.getElementById('email');
+                const emailValue = data.email || '';
+                emailField.value = emailValue;
+
+                setTimeout(() => {
+                    if (emailField.value !== emailValue) {
+                        emailField.value = emailValue;
+                    }
+                }, 500); // Espera medio segundo y lo reestablece si ha sido borrado
+
                 const tiendaRefId = data.tiendaReferencia;
                 document.getElementById('tiendaReferencia').value = tiendaRefId;
                 if (todasTiendasCache.has(tiendaRefId)) {
@@ -175,10 +185,10 @@
                 } else {
                     document.getElementById('tiendaReferenciaNombre').textContent = 'Tienda no asignada';
                 }
+
             } catch (error) {
-                const messageDiv = document.getElementById('message');
-                messageDiv.textContent = error.message;
-                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                console.error('Error al cargar datos del voluntario:', error);
+                displayMessage('Hubo un error al cargar tus datos. ' + error.message, 'error');
             }
         }
 
@@ -188,22 +198,19 @@
             const nuevaClave = document.getElementById('nueva_clave').value;
             const claveActual = document.getElementById('clave_actual').value;
 
-            if (nuevaClave || claveActual) {
-                if (!claveActual) {
-                    displayMessage('Debes introducir tu contraseña actual para poder cambiarla.', 'error');
-                    return;
-                }
-                 if (nuevaClave.length < 6) {
-                    displayMessage('La nueva contraseña debe tener al menos 6 caracteres.', 'error');
-                    return;
-                }
+            if (nuevaClave && !claveActual) {
+                displayMessage('Debes introducir tu contraseña actual para poder cambiarla.', 'error');
+                return;
+            }
+            if (nuevaClave && nuevaClave.length < 6) {
+                displayMessage('La nueva contraseña debe tener al menos 6 caracteres.', 'error');
+                return;
             }
             
             const form = event.target;
             const formData = new FormData(form);
-            const messageDiv = document.getElementById('message');
-            messageDiv.textContent = 'Guardando cambios...';
-            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
+            
+            displayMessage('Guardando cambios...', 'info');
 
             try {
                 const response = await fetch(AppConfig.getUrl('MODIFICAR_DATOS'), {
@@ -224,16 +231,15 @@
         }
         
         function openBajaModal() {
-            document.getElementById('baja-modal').classList.remove('hidden');
+            document.getElementById('baja-modal').style.display = 'flex';
         }
 
         function closeBajaModal() {
-            document.getElementById('baja-modal').classList.add('hidden');
+            document.getElementById('baja-modal').style.display = 'none';
         }
         
         async function handleBaja(event) {
             event.preventDefault(); 
-            const form = document.getElementById('bajaForm');
             const password = document.getElementById('clave_baja').value;
 
             if (!password) {
@@ -272,7 +278,7 @@
 
 
         function openMapModal() {
-            document.getElementById('map-modal').classList.remove('hidden');
+            document.getElementById('map-modal').style.display = 'flex';
             if (mapInstance) { mapInstance.remove(); mapInstance = null; }
             setTimeout(() => {
                 mapInstance = L.map('map').setView([37.3891, -5.9845], 12);
@@ -294,14 +300,14 @@
         }
 
         function closeMapModal() {
-            document.getElementById('map-modal').classList.add('hidden');
+            document.getElementById('map-modal').style.display = 'none';
         }
 
         function displayMessage(msg, type) {
             const messageDiv = document.getElementById('message');
             const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
             messageDiv.textContent = msg;
-            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colors[type]}`;
+            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colors[type] || 'bg-gray-500'}`;
         }
     </script>
 </body>

@@ -29,7 +29,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
 /**
- * Servlet que gestiona la solicitud de recuperaci�n de contrase�a.
+ * Servlet que gestiona la solicitud de recuperación de contraseña.
  */
 @WebServlet("/recuperar-clave")
 public class RecuperarClaveServlet extends HttpServlet {
@@ -67,8 +67,8 @@ public class RecuperarClaveServlet extends HttpServlet {
 
                 sendPasswordResetEmail(email, usuario, token, request);
                 
-                // --- CAMBIO: Se elimina el �ltimo par�metro de la llamada al log ---
-                LogUtil.logOperation(conn, "RECUPERACION_SOL", usuario, "Solicitud de recuperaci�n de clave para " + email);
+                // --- CAMBIO: Se elimina el último Parámetro de la llamada al log ---
+                LogUtil.logOperation(conn, "RECUPERACION_SOL", usuario, "Solicitud de recuperación de clave para " + email);
             }
             
             response.setStatus(HttpServletResponse.SC_OK);
@@ -102,13 +102,13 @@ public class RecuperarClaveServlet extends HttpServlet {
             Message message = new MimeMessage(session);
             message.setFrom(new InternetAddress(username));
             message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailDestino));
-            message.setSubject("Restablecimiento de contrase�a - Banco de Alimentos de Sevilla");
+            message.setSubject("Restablecimiento de contraseña - Banco de Alimentos de Sevilla");
 
             String urlBase = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort() + request.getContextPath();
             String resetLink = urlBase + "/restablecer-clave.html?token=" + token;
 
             String emailBody = "Hola,<br><br>"
-                             + "El usuario " + usuario + " ha solicitado restablecer tu contrase�a para la aplicación de voluntarios del Banco de Alimentos de Sevilla.<br><br>"
+                             + "El usuario " + usuario + " ha solicitado restablecer tu contraseña para la aplicación de voluntarios del Banco de Alimentos de Sevilla.<br><br>"
                              + "Por favor, haz clic en el siguiente enlace para crear una nueva contraseña:<br>"
                              + "<a href=\"" + resetLink + "\">Restablecer mi contraseña</a><br><br>"
                              + "Si no has solicitado esto, puedes ignorar este correo.<br><br>"

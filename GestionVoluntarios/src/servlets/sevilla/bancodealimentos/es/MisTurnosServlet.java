@@ -21,12 +21,12 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 /**
  * Servlet que devuelve los turnos ya asignados de un voluntario.
- * Si es llamado por un admin con un par�metro 'usuario', devuelve los datos de ese usuario.
- * Si no, devuelve los datos del usuario en sesi�n.
+ * Si es llamado por un admin con un Parámetro 'usuario', devuelve los datos de ese usuario.
+ * Si no, devuelve los datos del usuario en sesión.
  */
 @WebServlet("/mis-turnos")
 public class MisTurnosServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versi�n actualizada
+    private static final long serialVersionUID = 2L; // versión actualizada
 
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
@@ -42,7 +42,7 @@ public class MisTurnosServlet extends HttpServlet {
 
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("usuario") == null) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No hay una sesi�n de usuario activa.");
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No hay una sesión de usuario activa.");
             return;
         }
 
@@ -51,7 +51,7 @@ public class MisTurnosServlet extends HttpServlet {
         String usuarioFinal;
 
         if (isAdmin(session) && usuarioAConsultar != null && !usuarioAConsultar.trim().isEmpty()) {
-            // Un administrador est� pidiendo los datos de un voluntario espec�fico.
+            // Un administrador está pidiendo los datos de un voluntario específico.
             usuarioFinal = usuarioAConsultar;
         } else {
             // Un voluntario normal pide sus propios datos.
@@ -60,7 +60,7 @@ public class MisTurnosServlet extends HttpServlet {
 
         String campanaId = request.getParameter("campana");
         if (campanaId == null || campanaId.trim().isEmpty()) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "El par�metro 'campana' es requerido.");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "El Parámetro 'campana' es requerido.");
             return;
         }
 
@@ -87,7 +87,7 @@ public class MisTurnosServlet extends HttpServlet {
                     out.print(jsonBuilder.toString());
                 } else {
                     response.setStatus(HttpServletResponse.SC_OK);
-                    out.print("{}"); // Devolver un objeto vac�o si no hay turnos
+                    out.print("{}"); // Devolver un objeto vacío si no hay turnos
                 }
             }
         } catch (SQLException e) {

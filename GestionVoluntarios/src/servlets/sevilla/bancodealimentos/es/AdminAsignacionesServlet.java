@@ -21,7 +21,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 /**
  * Servlet para que los administradores consulten las asignaciones de turnos
- * de los voluntarios para la campa�a activa.
+ * de los voluntarios para la campaña activa.
  */
 @WebServlet("/admin-asignaciones")
 public class AdminAsignacionesServlet extends HttpServlet {

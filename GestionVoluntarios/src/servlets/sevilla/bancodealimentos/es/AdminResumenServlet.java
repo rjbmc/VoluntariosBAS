@@ -24,8 +24,8 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 /**
- * Servlet para que los administradores vean un resumen de la ocupaci�n
- * de las tiendas para una campa�a espec�fica.
+ * Servlet para que los administradores vean un resumen de la ocupación
+ * de las tiendas para una campaña específica.
  */
 @WebServlet("/admin-resumen")
 public class AdminResumenServlet extends HttpServlet {
@@ -49,22 +49,22 @@ public class AdminResumenServlet extends HttpServlet {
 
         String campanaId = request.getParameter("campana");
         if (campanaId == null || campanaId.trim().isEmpty()) {
-            // Si no se especifica una campa�a, se busca la activa por defecto.
+            // Si no se especifica una campaña, se busca la activa por defecto.
             try {
                 campanaId = getActiveCampaign();
                 if (campanaId == null) {
-                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "No hay ninguna campa�a activa.");
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "No hay ninguna campaña activa.");
                     return;
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campa�a activa.");
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campaña activa.");
                 return;
             }
         }
 
         try (Connection conn = DatabaseUtil.getConnection()) {
-            // Paso 1: Obtener las asignaciones y procesarlas en un mapa para un acceso r�pido.
+            // Paso 1: Obtener las asignaciones y procesarlas en un mapa para un acceso rápido.
             Map<Integer, TurnoStats[]> statsPorTienda = getStatsPorTienda(conn, campanaId);
 
             // Paso 2: Obtener todas las tiendas y construir el JSON final.
@@ -155,7 +155,7 @@ public class AdminResumenServlet extends HttpServlet {
         return campanaId;
     }
     
-    // Clase interna para ayudar a almacenar las estad�sticas de cada turno
+    // Clase interna para ayudar a almacenar las estadísticas de cada turno
     private static class TurnoStats {
         int voluntarios = 0;
         int acompanantes = 0;

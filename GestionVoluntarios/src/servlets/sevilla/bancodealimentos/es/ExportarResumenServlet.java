@@ -22,7 +22,7 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 /**
- * Servlet para exportar el resumen de una campa�a a un fichero CSV.
+ * Servlet para exportar el resumen de una campaña a un fichero CSV.
  * Solo accesible para administradores.
  */
 @WebServlet("/exportar-resumen")
@@ -46,12 +46,12 @@ public class ExportarResumenServlet extends HttpServlet {
             try {
                 campanaId = getActiveCampaign();
                 if (campanaId == null) {
-                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "No hay ninguna campa�a activa para exportar.");
+                    response.sendError(HttpServletResponse.SC_NOT_FOUND, "No hay ninguna campaña activa para exportar.");
                     return;
                 }
             } catch (SQLException e) {
                 e.printStackTrace();
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campa�a activa.");
+                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campaña activa.");
                 return;
             }
         }
@@ -64,7 +64,7 @@ public class ExportarResumenServlet extends HttpServlet {
         try (Connection conn = DatabaseUtil.getConnection();
              PrintWriter out = response.getWriter()) {
 
-            // --- CAMBIO: Cabecera del CSV actualizada con m�s detalles ---
+            // --- CAMBIO: Cabecera del CSV actualizada con más detalles ---
             out.println("Codigo Tienda;Denominacion;Huecos T1;Voluntarios T1;Acompanantes T1;Total Ocup. T1;% Ocup. T1;Huecos T2;Voluntarios T2;Acompanantes T2;Total Ocup. T2;% Ocup. T2;Huecos T3;Voluntarios T3;Acompanantes T3;Total Ocup. T3;% Ocup. T3;Huecos T4;Voluntarios T4;Acompanantes T4;Total Ocup. T4;% Ocup. T4");
 
             Map<Integer, TurnoStats[]> statsPorTienda = getStatsPorTienda(conn, campanaId);
@@ -81,7 +81,7 @@ public class ExportarResumenServlet extends HttpServlet {
                     line.append(tiendaId).append(";");
                     line.append(escapeCsv(rs.getString("denominacion"))).append(";");
 
-                    // --- CAMBIO: Calcular y a�adir los nuevos campos para cada turno ---
+                    // --- CAMBIO: Calcular y añadir los nuevos campos para cada turno ---
                     for (int i = 1; i <= 4; i++) {
                         int huecos = rs.getInt("HuecosTurno" + i);
                         int voluntarios = stats[i-1].voluntarios;

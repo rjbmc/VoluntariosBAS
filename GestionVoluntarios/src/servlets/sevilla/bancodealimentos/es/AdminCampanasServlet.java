@@ -6,8 +6,14 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -18,13 +24,19 @@ import jakarta.servlet.http.HttpSession;
 
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/admin-campanas")
 public class AdminCampanasServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
-    private static final String LIST_NAME = "Campanas";
+    private static final long serialVersionUID = 5L; // Versión actualizada
+    private static final String SP_LIST_NAME = "Campanas";
+    private static final String SP_UUID_FIELD = "Title";
+    private final Gson gson = new Gson();
+
+    private static class Campana {
+        String Campana, denominacion, fecha1, fecha2, Comentarios, estado;
+        int turnospordia;
+    }
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
@@ -41,8 +53,37 @@ public class AdminCampanasServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        // El método doGet no realiza cambios, no necesita modificación.
-        // ... (código original)
+        if (!isAdmin(request)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
+            return;
+        }
+
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        
+        List<Campana> campanas = new ArrayList<>();
+        String sql = "SELECT Campana, denominacion, fecha1, fecha2, turnospordia, Comentarios, estado FROM campanas ORDER BY fecha1 DESC";
+
+        try (Connection conn = DatabaseUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            while (rs.next()) {
+                Campana c = new Campana();
+                c.Campana = rs.getString("Campana");
+                c.denominacion = rs.getString("denominacion");
+                c.fecha1 = rs.getString("fecha1");
+                c.fecha2 = rs.getString("fecha2");
+                c.turnospordia = rs.getInt("turnospordia");
+                c.Comentarios = rs.getString("Comentarios");
+                c.estado = rs.getString("estado");
+                campanas.add(c);
+            }
+        } catch (SQLException e) {
+            throw new ServletException("Error de base de datos al obtener campañas", e);
+        }
+
+        response.getWriter().write(gson.toJson(campanas));
     }
 
     @Override
@@ -108,30 +149,49 @@ public class AdminCampanasServlet extends HttpServlet {
                 stmt.executeUpdate();
             }
 
-            // --- INICIO REPLICACIÓN SHAREPOINT ---
-            Map<String, Object> spData = new HashMap<>();
-            spData.put("Title", campanaId); // Clave principal
-            spData.put("denominacion", denominacion);
-            spData.put("fecha1", fecha1);
-            spData.put("fecha2", fecha2);
-            spData.put("turnospordia", turnospordia);
-            spData.put("Comentarios", comentarios);
-            if (!isUpdate) {
-                spData.put("estado", "N"); // Estado inicial al crear
-            }
-            
-            SharepointReplicationUtil.Operation operation = isUpdate ? SharepointReplicationUtil.Operation.UPDATE : SharepointReplicationUtil.Operation.INSERT;
-            SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, LIST_NAME, spData, operation, campanaId);
-            // --- FIN REPLICACIÓN SHAREPOINT ---
+            try {
+                Map<String, Object> spData = new HashMap<>();
+                spData.put(SP_UUID_FIELD, campanaId);
+                spData.put("denominacion", denominacion);
+                spData.put("fecha1", fecha1);
+                spData.put("fecha2", fecha2);
+                spData.put("turnospordia", turnospordia);
+                spData.put("Comentarios", comentarios);
+                
+                String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
+                if (listId == null) throw new Exception("Lista '" + SP_LIST_NAME + "' no encontrada.");
 
-            String logComment = isUpdate ? "Modificada campaña: " : "Creada campaña: " + campanaId;
-            LogUtil.logOperation(conn, "ADMIN_SAVE_CAMP", adminUser, logComment);
+                if (isUpdate) {
+                    String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
+                    if (itemId != null) {
+                        FieldValueSet fieldsToUpdate = new FieldValueSet();
+                        fieldsToUpdate.setAdditionalData(spData);
+                        SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listId, itemId, fieldsToUpdate);
+                    } else {
+                        spData.put("estado", "N");
+                        FieldValueSet fieldsToCreate = new FieldValueSet();
+                        fieldsToCreate.setAdditionalData(spData);
+                        SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fieldsToCreate);
+                    }
+                } else {
+                    spData.put("estado", "N");
+                    FieldValueSet fieldsToCreate = new FieldValueSet();
+                    fieldsToCreate.setAdditionalData(spData);
+                    SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fieldsToCreate);
+                }
+            } catch (Exception e) {
+                LogUtil.logOperation(conn, "SP_CAMP_SAVE_ERROR", adminUser, "Error replicando guardado de campaña " + campanaId + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+
+            String logComment = isUpdate ? "Modificada campaña: " : "Creada campaña: ";
+            LogUtil.logOperation(conn, "ADMIN_SAVE_CAMP", adminUser, logComment + campanaId);
             conn.commit();
-            sendSuccess(response, "Campaña guardada correctamente.");
+            sendJsonResponse(response, true, "Campaña guardada correctamente.");
 
         } catch (Exception e) {
             e.printStackTrace();
-            sendError(response, "Error al guardar la campaña: " + e.getMessage());
+            sendJsonResponse(response, false, "Error al guardar la campaña: " + e.getMessage());
         }
     }
 
@@ -148,17 +208,28 @@ public class AdminCampanasServlet extends HttpServlet {
                 stmt.executeUpdate();
             }
             
-            // --- INICIO REPLICACIÓN SHAREPOINT ---
-            SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, LIST_NAME, null, SharepointReplicationUtil.Operation.DELETE, campanaId);
-            // --- FIN REPLICACIÓN SHAREPOINT ---
+            try {
+                String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
+                if (listId == null) throw new Exception("Lista '" + SP_LIST_NAME + "' no encontrada.");
+
+                String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
+                if (itemId != null) {
+                    SharepointUtil.deleteListItem(SharepointUtil.SITE_ID, listId, itemId);
+                } else {
+                     LogUtil.logOperation(conn, "SP_CAMP_DEL_WARN", adminUser, "No se encontró item en SP para borrar campaña " + campanaId);
+                }
+            } catch (Exception e) {
+                LogUtil.logOperation(conn, "SP_CAMP_DEL_ERROR", adminUser, "Error replicando borrado de campaña " + campanaId + ": " + e.getMessage());
+                e.printStackTrace();
+            }
             
             LogUtil.logOperation(conn, "ADMIN_DELETE_CAMP", adminUser, "Eliminada campaña: " + campanaId);
             conn.commit();
-            sendSuccess(response, "Campaña eliminada correctamente.");
+            sendJsonResponse(response, true, "Campaña eliminada correctamente.");
 
         } catch (Exception e) {
             e.printStackTrace();
-            sendError(response, "Error al eliminar la campaña. Asegúrate de que no tenga voluntarios asignados.");
+            sendJsonResponse(response, false, "Error al eliminar la campaña. Asegúrate de que no tenga voluntarios asignados.");
         }
     }
 
@@ -169,35 +240,43 @@ public class AdminCampanasServlet extends HttpServlet {
         try (Connection conn = DatabaseUtil.getConnection()) {
             conn.setAutoCommit(false);
 
-            // 1. Desactivar todas las demás
             String sqlDeactivate = "UPDATE campanas SET estado = 'N', notificar = 'S' WHERE estado = 'S'";
             try (PreparedStatement stmt = conn.prepareStatement(sqlDeactivate)) {
                 stmt.executeUpdate();
             }
 
-            // 2. Activar la nueva
             String sqlActivate = "UPDATE campanas SET estado = 'S', notificar = 'S' WHERE Campana = ?";
             try (PreparedStatement stmt = conn.prepareStatement(sqlActivate)) {
                 stmt.setString(1, campanaId);
                 stmt.executeUpdate();
             }
             
-            // --- INICIO REPLICACIÓN SHAREPOINT ---
-            // Es complejo replicar la desactivación masiva. Por ahora, aseguramos la activación de la correcta.
-            // Una tarea de fondo podría sincronizar los estados si fuera necesario.
-            Map<String, Object> spData = new HashMap<>();
-            spData.put("estado", "S");
-            SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, LIST_NAME, spData, SharepointReplicationUtil.Operation.UPDATE, campanaId);
-            // (Idealmente, también replicaríamos la desactivación de la que estuviera activa antes)
-            // --- FIN REPLICACIÓN SHAREPOINT ---
+            try {
+                String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
+                if (listId == null) throw new Exception("Lista '" + SP_LIST_NAME + "' no encontrada.");
+                
+                String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
+                if (itemId != null) {
+                    Map<String, Object> spData = new HashMap<>();
+                    spData.put("estado", "S");
+                    FieldValueSet fields = new FieldValueSet();
+                    fields.setAdditionalData(spData);
+                    SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listId, itemId, fields);
+                } else {
+                    LogUtil.logOperation(conn, "SP_CAMP_ACT_WARN", adminUser, "No se encontró item en SP para activar campaña " + campanaId);
+                }
+            } catch (Exception e) {
+                LogUtil.logOperation(conn, "SP_CAMP_ACT_ERROR", adminUser, "Error replicando activación de campaña " + campanaId + ": " + e.getMessage());
+                e.printStackTrace();
+            }
 
             LogUtil.logOperation(conn, "ADMIN_ACTIVATE_CAMP", adminUser, "Activada campaña: " + campanaId);
             conn.commit();
-            sendSuccess(response, "Campaña activada correctamente.");
+            sendJsonResponse(response, true, "Campaña activada correctamente.");
 
         } catch (Exception e) {
             e.printStackTrace();
-            sendError(response, "Error al activar la campaña.");
+            sendJsonResponse(response, false, "Error al activar la campaña.");
         }
     }
 
@@ -213,34 +292,44 @@ public class AdminCampanasServlet extends HttpServlet {
                 stmt.executeUpdate();
             }
             
-            // --- INICIO REPLICACIÓN SHAREPOINT ---
-            Map<String, Object> spData = new HashMap<>();
-            spData.put("estado", "N");
-            SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, LIST_NAME, spData, SharepointReplicationUtil.Operation.UPDATE, campanaId);
-            // --- FIN REPLICACIÓN SHAREPOINT ---
+            try {
+                String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
+                if (listId == null) throw new Exception("Lista '" + SP_LIST_NAME + "' no encontrada.");
 
+                String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
+                if (itemId != null) {
+                    Map<String, Object> spData = new HashMap<>();
+                    spData.put("estado", "N");
+                    FieldValueSet fields = new FieldValueSet();
+                    fields.setAdditionalData(spData);
+                    SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listId, itemId, fields);
+                } else {
+                    LogUtil.logOperation(conn, "SP_CAMP_DEACT_WARN", adminUser, "No se encontró item en SP para desactivar campaña " + campanaId);
+                }
+            } catch (Exception e) {
+                LogUtil.logOperation(conn, "SP_CAMP_DEACT_ERROR", adminUser, "Error replicando desactivación de campaña " + campanaId + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+            
             LogUtil.logOperation(conn, "ADMIN_DEACTIVATE_CAMP", adminUser, "Desactivada campaña: " + campanaId);
             conn.commit();
-            sendSuccess(response, "Campaña desactivada correctamente.");
+            sendJsonResponse(response, true, "Campaña desactivada correctamente.");
 
         } catch (Exception e) {
             e.printStackTrace();
-            sendError(response, "Error al desactivar la campaña.");
+            sendJsonResponse(response, false, "Error al desactivar la campaña.");
         }
     }
     
-    private void sendSuccess(HttpServletResponse response, String message) throws IOException {
-        response.getWriter().print("{\"success\": true, \"message\": \"" + message + "\"}");
-    }
-
-    private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        response.getWriter().print("{\"success\": false, \"message\": \"" + message + "\"}");
-    }
-    
-    private String escapeJson(String str) {
-        if (str == null) return "";
-        return str.replace("\\", "\\\\").replace("\"", "\\\"").replace("\b", "\\b").replace("\f", "\\f")
-                  .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+    private void sendJsonResponse(HttpServletResponse response, boolean success, String message) throws IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        if (!success) {
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        }
+        JsonObject jsonResponse = new JsonObject();
+        jsonResponse.addProperty("success", success);
+        jsonResponse.addProperty("message", message);
+        response.getWriter().write(jsonResponse.toString());
     }
 }

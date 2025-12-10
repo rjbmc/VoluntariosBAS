@@ -9,6 +9,9 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.google.gson.JsonObject;
+import com.microsoft.graph.models.FieldValueSet;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -17,24 +20,24 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/confirmar-cambio-email")
 public class ConfirmarCambioEmailServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final String SP_LIST_NAME = "Voluntarios";
+    private static final String SP_UUID_FIELD = "SqlRowUUID";
+    private static final String SP_EMAIL_FIELD = "Email";
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        PrintWriter out = response.getWriter();
-        String jsonResponse;
 
         String token = request.getParameter("token");
 
         if (token == null || token.trim().isEmpty()) {
-            sendError(response, "Token no proporcionado.");
+            sendJsonResponse(response, false, "Token no proporcionado.", HttpServletResponse.SC_BAD_REQUEST);
             return;
         }
 
@@ -66,47 +69,60 @@ public class ConfirmarCambioEmailServlet extends HttpServlet {
                 
                 LogUtil.logOperation(conn, "CAMBIO_EMAIL_OK", usuario, "Email actualizado en BBDD a: " + nuevoEmail);
 
-                // --- INICIO DE LA CORRECCIÓN ---
                 if (sqlRowUuid != null) {
                     try {
-                        Map<String, Object> spData = new HashMap<>();
-                        spData.put("field_6", nuevoEmail); // field_6 es el email en SharePoint
+                        String listId = SharepointUtil.getListId(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
+                        if (listId == null) {
+                            throw new Exception("Lista '" + SP_LIST_NAME + "' no encontrada en SharePoint.");
+                        }
 
-                        SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
-                        LogUtil.logOperation(conn, "REPLICATE_SUCCESS", usuario, "Email actualizado en SharePoint a: " + nuevoEmail);
+                        String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
+                        if (itemId != null) {
+                            Map<String, Object> spData = new HashMap<>();
+                            spData.put(SP_EMAIL_FIELD, nuevoEmail);
+                            
+                            FieldValueSet fieldsToUpdate = new FieldValueSet();
+                            fieldsToUpdate.setAdditionalData(spData);
+
+                            SharepointUtil.updateListItem(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fieldsToUpdate);
+                            LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_OK", usuario, "Email replicado a SharePoint: " + nuevoEmail);
+                        } else {
+                            LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_WARN", usuario, "No se encontró item en SP para UUID: " + sqlRowUuid);
+                        }
                     } catch (Exception e) {
-                        System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de email para " + usuario + ". Causa: " + e.getMessage());
-                        LogUtil.logOperation(conn, "REPLICATE_ERROR", usuario, "Fallo al replicar cambio de email a SharePoint: " + e.getMessage());
+                        LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_ERROR", usuario, "Fallo al replicar cambio de email a SharePoint: " + e.getMessage());
+                        e.printStackTrace();
                     }
                 } else {
-                    LogUtil.logOperation(conn, "REPLICATE_WARNING", usuario, "No se encontró SqlRowUUID para replicar el cambio de email a SharePoint.");
+                    LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_WARN", usuario, "No se encontró SqlRowUUID para replicar el cambio de email a SharePoint.");
                 }
-                // --- FIN DE LA CORRECCIÓN ---
 
                 conn.commit();
-                jsonResponse = "{\"success\": true, \"message\": \"Tu dirección de correo ha sido actualizada con éxito.\"}";
+                sendJsonResponse(response, true, "Tu dirección de correo ha sido actualizada con éxito.", HttpServletResponse.SC_OK);
             } else {
                 conn.rollback();
-                jsonResponse = "{\"success\": false, \"message\": \"El enlace de confirmación no es válido o ya ha sido utilizado.\"}";
-                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                sendJsonResponse(response, false, "El enlace de confirmación no es válido o ya ha sido utilizado.", HttpServletResponse.SC_BAD_REQUEST);
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
-            if (e.getErrorCode() == 1062) {
-                 jsonResponse = "{\"success\": false, \"message\": \"La nueva dirección de correo ya está en uso por otro voluntario.\"}";
+            String message;
+            if (e.getErrorCode() == 1062) { // Error de clave duplicada
+                 message = "La nueva dirección de correo ya está en uso por otro voluntario.";
             } else {
-                 jsonResponse = "{\"success\": false, \"message\": \"Error de base de datos al actualizar el email.\"}";
+                 message = "Error de base de datos al actualizar el email.";
             }
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            sendJsonResponse(response, false, message, HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         } 
-
-        out.print(jsonResponse);
-        out.flush();
     }
 
-    private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        response.getWriter().print("{\"success\": false, \"message\": \"" + message + "\"}");
+    private void sendJsonResponse(HttpServletResponse response, boolean success, String message, int statusCode) throws IOException {
+        response.setStatus(statusCode);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        JsonObject jsonResponse = new JsonObject();
+        jsonResponse.addProperty("success", success);
+        jsonResponse.addProperty("message", message);
+        response.getWriter().write(jsonResponse.toString());
     }
 }
