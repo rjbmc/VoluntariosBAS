@@ -1,7 +1,6 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.rmi.AccessException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -11,14 +10,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.PasswordAuthentication;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
-import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.servlet.ServletException;
@@ -36,17 +35,15 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/modificar-datos")
 public class ModificarDatosServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
         HttpSession session = request.getSession(false);
 
         if (session == null || session.getAttribute("usuario") == null) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            sendJsonResponse(response, HttpServletResponse.SC_UNAUTHORIZED, false, "Acceso no autorizado.");
             return;
         }
 
@@ -62,111 +59,107 @@ public class ModificarDatosServlet extends HttpServlet {
         String claveActual = request.getParameter("clave_actual");
         String nuevaClave = request.getParameter("nueva_clave");
 
-        Connection conn = null;
-        String sqlRowUuid = null;
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            try {
+                conn.setAutoCommit(false);
 
-        try {
-            conn = DatabaseUtil.getConnection();
-            conn.setAutoCommit(false);
-
-            sqlRowUuid = getSqlRowUuid(conn, usuario);
-
-            String emailActual = getEmailActual(conn, usuario);
-            boolean emailHaCambiado = !nuevoEmail.equalsIgnoreCase(emailActual);
-            
-            if (nuevaClave != null && !nuevaClave.isEmpty()) {
-                if (!verificarYCambiarClave(conn, usuario, claveActual, nuevaClave)) {
-                    jsonResponse.addProperty("success", false);
-                    jsonResponse.addProperty("message", "La contraseña actual no es correcta.");
-                    response.getWriter().write(jsonResponse.toString());
-                    conn.rollback();
-                    return;
+                String sqlRowUuid = getSqlRowUuid(conn, usuario);
+                String emailActual = getEmailActual(conn, usuario);
+                boolean emailHaCambiado = nuevoEmail != null && !nuevoEmail.equalsIgnoreCase(emailActual);
+                
+                if (nuevaClave != null && !nuevaClave.isEmpty()) {
+                    if (!verificarYCambiarClave(conn, usuario, claveActual, nuevaClave)) {
+                        conn.rollback();
+                        sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "La contraseña actual no es correcta.");
+                        return;
+                    }
                 }
-            }
 
-            actualizarDatosPersonales(conn, usuario, nombre, apellidos, telefono, fechaNacimiento, cp, tiendaReferenciaStr);
+                actualizarDatosPersonales(conn, usuario, nombre, apellidos, telefono, fechaNacimiento, cp, tiendaReferenciaStr);
 
-            if (emailHaCambiado) {
-                iniciarCambioDeEmail(conn, usuario, nuevoEmail);
-                jsonResponse.addProperty("success", true);
-                jsonResponse.addProperty("message", "¡Datos guardados! Se ha enviado un correo a tu nueva dirección para verificar el cambio.");
-            } else {
-                jsonResponse.addProperty("success", true);
-                jsonResponse.addProperty("message", "¡Datos actualizados correctamente!");
-            }
-            
-            conn.commit();
-
-            if (sqlRowUuid != null) {
-                try {
-                    Map<String, Object> spData = new HashMap<>();
-                    spData.put("field_1", nombre);
-                    spData.put("field_2", apellidos);
-                    spData.put("field_5", Integer.parseInt(tiendaReferenciaStr));
-                    spData.put("field_7", telefono);
-                    spData.put("field_8", fechaNacimiento);
-                    spData.put("field_9", cp);
-                    
-                    // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
-                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
-
-                } catch (Exception e) {
-                    System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
+                if (emailHaCambiado) {
+                    iniciarCambioDeEmail(conn, usuario, nuevoEmail);
+                    sendJsonResponse(response, HttpServletResponse.SC_OK, true, "¡Datos guardados! Se ha enviado un correo a tu nueva dirección para verificar el cambio.");
+                } else {
+                    sendJsonResponse(response, HttpServletResponse.SC_OK, true, "¡Datos actualizados correctamente!");
                 }
-            }
+                
+                conn.commit();
 
+                if (sqlRowUuid != null) {
+                    try {
+                        Map<String, Object> spData = new HashMap<>();
+                        spData.put("field_1", nombre);
+                        spData.put("field_2", apellidos);
+                        if (tiendaReferenciaStr != null) { spData.put("field_5", Integer.parseInt(tiendaReferenciaStr)); }
+                        spData.put("field_7", telefono);
+                        spData.put("field_8", fechaNacimiento);
+                        spData.put("field_9", cp);
+                        
+                        SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+
+                    } catch (Exception e) {
+                        System.err.println("ADVERTENCIA: Fallo al iniciar el proceso de replicación a SharePoint para el UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
+                    }
+                }
+
+            } catch (SQLException e) {
+                if (conn != null) try { conn.rollback(); } catch (SQLException ex) { e.printStackTrace(); }
+                e.printStackTrace();
+                sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos al actualizar.");
+            }
         } catch (SQLException e) {
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) {}
             e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error de base de datos al actualizar.");
-        } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) {}
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error al conectar con la base de datos.");
         }
+    }
 
-        response.getWriter().write(jsonResponse.toString());
+    private void sendJsonResponse(HttpServletResponse response, int statusCode, boolean success, String message) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(statusCode);
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            ObjectNode jsonResponse = objectMapper.createObjectNode();
+            jsonResponse.put("success", success);
+            jsonResponse.put("message", message);
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
+        }
     }
 
     private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
-        String uuid = null;
         String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, usuario);
             try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    uuid = rs.getString("SqlRowUUID");
-                }
+                return rs.next() ? rs.getString("SqlRowUUID") : null;
             }
         }
-        return uuid;
     }
 
     private String getEmailActual(Connection conn, String usuario) throws SQLException {
-        String emailActual = "";
         String sql = "SELECT Email FROM voluntarios WHERE Usuario = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, usuario);
             try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    emailActual = rs.getString("Email");
-                }
+                return rs.next() ? rs.getString("Email") : "";
             }
         }
-        return emailActual;
     }
 
     private boolean verificarYCambiarClave(Connection conn, String usuario, String claveActual, String nuevaClave) throws SQLException {
         String claveGuardada = "";
-        try (PreparedStatement stmt = conn.prepareStatement("SELECT Clave FROM voluntarios WHERE Usuario = ?")) {
+        String sqlSelect = "SELECT Clave FROM voluntarios WHERE Usuario = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sqlSelect)) {
             stmt.setString(1, usuario);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) claveGuardada = rs.getString("Clave");
+            try(ResultSet rs = stmt.executeQuery()){
+                 if (rs.next()) claveGuardada = rs.getString("Clave");
+            }
         }
 
-        if (PasswordUtils.checkPassword(claveActual, claveGuardada)) {
+        if (claveGuardada != null && !claveGuardada.isEmpty() && PasswordUtils.checkPassword(claveActual, claveGuardada)) {
             String nuevaClaveHasheada = PasswordUtils.hashPassword(nuevaClave);
-            try (PreparedStatement stmt = conn.prepareStatement("UPDATE voluntarios SET Clave = ? WHERE Usuario = ?")) {
+            String sqlUpdate = "UPDATE voluntarios SET Clave = ? WHERE Usuario = ?";
+            try (PreparedStatement stmt = conn.prepareStatement(sqlUpdate)) {
                 stmt.setString(1, nuevaClaveHasheada);
                 stmt.setString(2, usuario);
                 stmt.executeUpdate();
@@ -185,7 +178,11 @@ public class ModificarDatosServlet extends HttpServlet {
             stmt.setString(3, telefono);
             stmt.setString(4, fechaNacimiento);
             stmt.setString(5, cp);
-            stmt.setInt(6, Integer.parseInt(tiendaReferenciaStr));
+            if (tiendaReferenciaStr != null && !tiendaReferenciaStr.isEmpty()) {
+                stmt.setInt(6, Integer.parseInt(tiendaReferenciaStr));
+            } else {
+                stmt.setNull(6, java.sql.Types.INTEGER);
+            }
             stmt.setString(7, usuario);
             stmt.executeUpdate();
             LogUtil.logOperation(conn, "MODIF", usuario, "Datos personales actualizados.");
@@ -208,7 +205,6 @@ public class ModificarDatosServlet extends HttpServlet {
     private void sendEmailConfirmacionCambio(String emailDestino, String token, String usuario) {
         final String username = Config.SMTP_USER;
         final String password = Config.SMTP_PASSWORD;
-        final String adminEmail = Config.SISTEMAS_EMAIL;
         
     	String link = "http://localhost:8080/VoluntariosBAS/confirmar-cambio-email.html?token=" + token;
         String htmlContent = "Por favor, haz clic en el siguiente enlace para confirmar tu nueva dirección de correo: " + link;
@@ -225,18 +221,16 @@ public class ModificarDatosServlet extends HttpServlet {
             }
         });
         
-        Message message = new MimeMessage(mailSession);
         try {
+            Message message = new MimeMessage(mailSession);
 			message.setFrom(new InternetAddress(Config.SMTP_USER));
 			message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailDestino));
 			message.setSubject("Confirma tu nueva dirección de correo - Voluntarios Banco de Alimentos de Sevilla");
 			message.setContent(htmlContent, "text/html; charset=utf-8");
 			Transport.send(message);
 		} catch (MessagingException e) {
-			 try {
-				LogUtil.logOperation("CHANGE_EMAIL_CONF", usuario, "Error en envio de la confirmación del cambio de email a " + emailDestino);
-			 } catch (ServletException e1) { }
-			e.printStackTrace();
+			 System.err.println("Error al enviar email de confirmación de cambio de correo: " + e.getMessage());
+             // Consider logging this error to the database as well for auditing
 		}
     }
 }

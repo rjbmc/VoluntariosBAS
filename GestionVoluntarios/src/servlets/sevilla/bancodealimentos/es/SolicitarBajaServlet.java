@@ -1,20 +1,20 @@
-// Paquete: servlets.sevilla.bancodealimentos.es
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
 import java.sql.Connection;
+import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Date;
 import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.mindrot.jbcrypt.BCrypt;
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -30,32 +30,31 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/solicitar-baja")
 public class SolicitarBajaServlet extends HttpServlet {
-    private static final long serialVersionUID = 4L; // Versión actualizada
-    private final Gson gson = new Gson();
+    private static final long serialVersionUID = 5L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
-
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("usuario") == null) {
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            jsonResponse.addProperty("message", "No hay una sesión de usuario activa. Por favor, inicia sesión de nuevo.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_UNAUTHORIZED,
+                    Map.of("message", "No hay una sesión de usuario activa. Por favor, inicia sesión de nuevo."));
             return;
         }
         String usuario = (String) session.getAttribute("usuario");
 
         try (Connection conn = DatabaseUtil.getConnection()) {
-            conn.setAutoCommit(false); 
+            conn.setAutoCommit(false);
 
-            JsonObject body = gson.fromJson(request.getReader(), JsonObject.class);
-            String plainPassword = body.get("password").getAsString();
+            JsonNode body = objectMapper.readTree(request.getReader());
+            if (body == null || !body.has("password") || body.get("password").asText().isEmpty()) {
+                 sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, Map.of("message", "El campo 'password' es requerido."));
+                 return;
+            }
+            String plainPassword = body.get("password").asText();
             
             String hashedPassword = null;
-            String sqlRowUuid = null; 
+            String sqlRowUuid = null;
 
             String sqlSelect = "SELECT Clave, SqlRowUUID FROM voluntarios WHERE Usuario = ?";
             try (PreparedStatement ps = conn.prepareStatement(sqlSelect)) {
@@ -69,11 +68,9 @@ public class SolicitarBajaServlet extends HttpServlet {
             }
             
             if (hashedPassword == null || !BCrypt.checkpw(plainPassword, hashedPassword)) {
-                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                jsonResponse.addProperty("message", "La contraseña es incorrecta.");
-                response.getWriter().write(jsonResponse.toString());
                 LogUtil.logOperation(conn, "SOLICITUD_BAJA_FAIL", usuario, "Intento de baja con contraseña incorrecta.");
-                conn.rollback();
+                conn.rollback(); 
+                sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, Map.of("message", "La contraseña es incorrecta."));
                 return;
             }
 
@@ -89,39 +86,37 @@ public class SolicitarBajaServlet extends HttpServlet {
                 Map<String, Object> spData = new HashMap<>();
                 String fechaBajaString = new SimpleDateFormat("yyyy-MM-dd").format(fechaBajaSql);
                 spData.put("field_21", fechaBajaString); 
-                // ** CORRECCIÓN: Añadido el Site ID como segundo parámetro **
                 SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
             }
             
             LogUtil.logOperation(conn, "BAJA_OK", usuario, "El usuario se ha dado de baja.");
             conn.commit(); 
 
-            // --- INICIO DE LA NUEVA LÓGICA ---
-            // 1. Invalidar la sesión actual para cerrar sesión
             session.invalidate();
 
-            // 2. Preparar la respuesta JSON con la instrucción de redirección
-            jsonResponse.addProperty("success", true);
-            jsonResponse.addProperty("message", "Tu solicitud de baja ha sido procesada correctamente. Serás redirigido a la página de inicio.");
-            jsonResponse.addProperty("redirectUrl", "login.html");
-            // --- FIN DE LA NUEVA LÓGICA ---
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("success", true);
+            responseData.put("message", "Tu solicitud de baja ha sido procesada correctamente. Serás redirigido a la página de inicio.");
+            responseData.put("redirectUrl", "login.html");
+            sendJsonResponse(response, HttpServletResponse.SC_OK, responseData);
 
-            response.getWriter().write(jsonResponse.toString());
-
-        } catch (JsonSyntaxException | NullPointerException e) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            jsonResponse.addProperty("message", "La solicitud no tiene el formato esperado.");
-            response.getWriter().write(jsonResponse.toString());
+        } catch (JsonProcessingException e) {
+            sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, Map.of("message", "La solicitud no tiene el formato esperado (JSON inválido)."));
         } catch (SQLException e) {
             e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("message", "Error de base de datos al procesar la solicitud.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, Map.of("message", "Error de base de datos al procesar la solicitud."));
         } catch (Exception e) {
             e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("message", "Ha ocurrido un error inesperado: " + e.getMessage());
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, Map.of("message", "Ha ocurrido un error inesperado: " + e.getMessage()));
+        }
+    }
+
+    private void sendJsonResponse(HttpServletResponse response, int statusCode, Map<String, Object> data) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(statusCode);
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            objectMapper.writeValue(response.getWriter(), data);
         }
     }
 }

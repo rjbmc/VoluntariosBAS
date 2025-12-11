@@ -1,7 +1,6 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -11,8 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -28,14 +27,14 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/admin-campanas")
 public class AdminCampanasServlet extends HttpServlet {
-    private static final long serialVersionUID = 5L; // Versión actualizada
+    private static final long serialVersionUID = 6L; // Versión actualizada
     private static final String SP_LIST_NAME = "Campanas";
     private static final String SP_UUID_FIELD = "Title";
-    private final Gson gson = new Gson();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static class Campana {
-        String Campana, denominacion, fecha1, fecha2, Comentarios, estado;
-        int turnospordia;
+        public String Campana, denominacion, fecha1, fecha2, Comentarios, estado;
+        public int turnospordia;
     }
 
     private boolean isAdmin(HttpServletRequest request) {
@@ -83,7 +82,7 @@ public class AdminCampanasServlet extends HttpServlet {
             throw new ServletException("Error de base de datos al obtener campañas", e);
         }
 
-        response.getWriter().write(gson.toJson(campanas));
+        objectMapper.writeValue(response.getWriter(), campanas);
     }
 
     @Override
@@ -327,9 +326,9 @@ public class AdminCampanasServlet extends HttpServlet {
         if (!success) {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
-        JsonObject jsonResponse = new JsonObject();
-        jsonResponse.addProperty("success", success);
-        jsonResponse.addProperty("message", message);
-        response.getWriter().write(jsonResponse.toString());
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

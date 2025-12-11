@@ -1,7 +1,6 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -9,7 +8,8 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -24,16 +24,14 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/confirmar-cambio-email")
 public class ConfirmarCambioEmailServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final long serialVersionUID = 3L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private static final String SP_LIST_NAME = "Voluntarios";
     private static final String SP_UUID_FIELD = "SqlRowUUID";
     private static final String SP_EMAIL_FIELD = "Email";
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-
         String token = request.getParameter("token");
 
         if (token == null || token.trim().isEmpty()) {
@@ -120,9 +118,9 @@ public class ConfirmarCambioEmailServlet extends HttpServlet {
         response.setStatus(statusCode);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
-        jsonResponse.addProperty("success", success);
-        jsonResponse.addProperty("message", message);
-        response.getWriter().write(jsonResponse.toString());
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

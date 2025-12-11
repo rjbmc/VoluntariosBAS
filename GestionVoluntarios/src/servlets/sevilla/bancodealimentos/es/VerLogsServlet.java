@@ -9,8 +9,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -22,14 +22,15 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 @WebServlet("/ver-logs-error")
 public class VerLogsServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // Clase interna para estructurar los datos del log
-    private static class LogEntry {
-        String hora;
-        String comentario;
+    // Clase interna para estructurar los datos del log. Los campos públicos son serializados por Jackson.
+    public static class LogEntry {
+        public String hora;
+        public String comentario;
 
-        LogEntry(String hora, String comentario) {
+        public LogEntry(String hora, String comentario) {
             this.hora = hora;
             this.comentario = comentario;
         }
@@ -39,14 +40,11 @@ public class VerLogsServlet extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
+        
         HttpSession session = request.getSession(false);
 
-        if (session == null || session.getAttribute("usuario") == null || !session.getAttribute("isAdmin").equals(true)) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Acceso denegado.");
-            response.getWriter().write(jsonResponse.toString());
+        if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+            sendErrorResponse(response, HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;
         }
 
@@ -65,16 +63,22 @@ public class VerLogsServlet extends HttpServlet {
                 logEntries.add(new LogEntry(sdf.format(timestamp), comentario));
             }
             
-            Gson gson = new Gson();
-            response.getWriter().write(gson.toJson(logEntries));
+            // Serializar la lista directamente a un array JSON
+            objectMapper.writeValue(response.getWriter(), logEntries);
 
         } catch (Exception e) {
             e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error al leer los logs: " + e.getMessage());
-            response.getWriter().write(jsonResponse.toString());
+            sendErrorResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al leer los logs: " + e.getMessage());
+        }
+    }
+    
+    private void sendErrorResponse(HttpServletResponse response, int statusCode, String message) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(statusCode);
+            ObjectNode jsonResponse = objectMapper.createObjectNode();
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", message);
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }
 }
-

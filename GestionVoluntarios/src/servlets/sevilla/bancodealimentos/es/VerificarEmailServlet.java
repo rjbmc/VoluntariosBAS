@@ -9,7 +9,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -23,16 +24,14 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/verificar-email")
 public class VerificarEmailServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final long serialVersionUID = 3L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private static final String SP_LIST_NAME = "Voluntarios";
     private static final String SP_UUID_FIELD = "SqlRowUUID";
     private static final String SP_VERIFIED_FIELD = "EmailVerificado";
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-
         String token = request.getParameter("token");
 
         if (token == null || token.isEmpty()) {
@@ -56,7 +55,6 @@ public class VerificarEmailServlet extends HttpServlet {
             }
 
             if (usuario != null) {
-                // Si no tiene UUID de SharePoint, se genera uno nuevo.
                 if (sqlRowUuid == null) {
                     sqlRowUuid = UUID.randomUUID().toString();
                 }
@@ -85,13 +83,11 @@ public class VerificarEmailServlet extends HttpServlet {
                         SharepointUtil.updateListItem(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
                         LogUtil.logOperation(conn, "SP_VERIFY_UPDATE", usuario, "Verificación de email actualizada en SharePoint.");
                     } else {
-                        // Si el item no existe, puede que sea un registro antiguo que nunca se subió. 
-                        // No lo creamos aquí para no introducir datos incompletos. Se creará en el próximo login/actualización completa.
                         LogUtil.logOperation(conn, "SP_VERIFY_WARN", usuario, "No se encontró item en SP para UUID " + sqlRowUuid + ". No se pudo actualizar la verificación.");
                     }
                 } catch (Exception e) {
                     LogUtil.logOperation(conn, "SP_VERIFY_ERROR", usuario, "Error al replicar verificación de email: " + e.getMessage());
-                    e.printStackTrace(); // Continuamos aunque falle la replicación
+                    e.printStackTrace();
                 }
 
                 conn.commit();
@@ -111,9 +107,9 @@ public class VerificarEmailServlet extends HttpServlet {
         response.setStatus(statusCode);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
-        jsonResponse.addProperty("success", success);
-        jsonResponse.addProperty("message", message);
-        response.getWriter().write(jsonResponse.toString());
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

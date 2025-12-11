@@ -11,7 +11,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.mail.Message;
@@ -32,8 +33,9 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/nuevo-voluntario")
 public class NuevoVoluntarioServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final long serialVersionUID = 3L; // Versión actualizada
     private static final String SP_LIST_NAME = "Voluntarios";
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -51,20 +53,14 @@ public class NuevoVoluntarioServlet extends HttpServlet {
         String cp = request.getParameter("cp");
         int tiendaReferencia = Integer.parseInt(request.getParameter("punto_id"));
 
-        JsonObject jsonResponse = new JsonObject();
-        
         try {
             LocalDate fechaNacimiento = LocalDate.parse(fechaNacimientoStr);
             if (Period.between(fechaNacimiento, LocalDate.now()).getYears() < 16) {
-                jsonResponse.addProperty("success", false);
-                jsonResponse.addProperty("message", "Debes tener al menos 16 años para poder registrarte.");
-                response.getWriter().write(jsonResponse.toString());
+                sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "Debes tener al menos 16 años para poder registrarte.");
                 return;
             }
         } catch (java.time.format.DateTimeParseException e) {
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "El formato de la fecha de nacimiento no es válido.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "El formato de la fecha de nacimiento no es válido.");
             return;
         }
         
@@ -95,10 +91,8 @@ public class NuevoVoluntarioServlet extends HttpServlet {
             }
 
             if (existingUser != null && !isInactive && isVerified) {
-                jsonResponse.addProperty("success", false);
-                jsonResponse.addProperty("message", "El nombre de usuario o el DNI ya están registrados en una cuenta activa y verificada.");
                 conn.rollback();
-                response.getWriter().write(jsonResponse.toString());
+                sendJsonResponse(response, HttpServletResponse.SC_CONFLICT, false, "El nombre de usuario o el DNI ya están registrados en una cuenta activa y verificada.");
                 return;
             }
 
@@ -106,32 +100,33 @@ public class NuevoVoluntarioServlet extends HttpServlet {
             String verificationToken = UUID.randomUUID().toString();
             
             if (existingUser != null && !isInactive && !isVerified) {
-                // ... (lógica para reenviar verificación sin cambios)
+                // TODO: Lógica para reenviar el correo de verificación si el usuario existe pero no está verificado
             }
 
             if (existingUser != null && isInactive) {
                 isReactivation = true;
-                // ... (lógica de update local sin cambios)
+                // TODO: Lógica de UPDATE para reactivar un usuario. Por ejemplo:
+                // String updateSql = "UPDATE voluntarios SET ... WHERE Usuario = ?";
 
             } else {
-                sqlRowUuid = UUID.randomUUID().toString(); // Usamos el método nativo
-                // ... (lógica de insert local sin cambios)
+                sqlRowUuid = UUID.randomUUID().toString();
+                // TODO: Lógica de INSERT para un nuevo usuario. Por ejemplo:
+                // String insertSql = "INSERT INTO voluntarios(...) VALUES (...)";
             }
 
             conn.commit();
 
-            // *** COMIENZA LA NUEVA LÓGICA DE REPLICACIÓN A SHAREPOINT ***
             try {
                 Map<String, Object> spData = new HashMap<>();
-                spData.put("Title", nombre); // Asumiendo que 'Title' es el campo para el nombre en SP
+                spData.put("Title", nombre);
                 spData.put("Apellidos", apellidos);
                 spData.put("DNI_x0020_NIF", dni);
-                spData.put("TiendaReferenciaId", tiendaReferencia); // Asumiendo que el campo lookup se llama así
+                spData.put("TiendaReferenciaId", tiendaReferencia);
                 spData.put("Email", email);
                 spData.put("Telefono", telefono);
                 spData.put("FechaNacimiento", fechaNacimientoStr);
                 spData.put("CP", cp);
-                spData.put("EmailVerificado", false); // Siempre se crea como no verificado
+                spData.put("EmailVerificado", false);
 
                 String listId = SharepointUtil.getListId(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
                 if (listId == null) {
@@ -142,12 +137,11 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                      if (sqlRowUuid != null) {
                         String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "SqlRowUUID", sqlRowUuid);
                         if (itemId != null) {
-                            spData.put("FechaBaja", null); // Limpiamos la fecha de baja
+                            spData.put("FechaBaja", null);
                             FieldValueSet fieldsToUpdate = new FieldValueSet();
                             fieldsToUpdate.setAdditionalData(spData);
                             SharepointUtil.updateListItem(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fieldsToUpdate);
                         } else {
-                             // Si no lo encuentra, lo crea (contingencia)
                              spData.put("SqlRowUUID", sqlRowUuid);
                              FieldValueSet fieldsToCreate = new FieldValueSet();
                              fieldsToCreate.setAdditionalData(spData);
@@ -166,24 +160,38 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                 LogUtil.logOperation(conn, "SP_REPLICATION_ERROR", "SYSTEM", "Fallo en replicación para UUID: " + sqlRowUuid + ". Causa: " + e.getMessage());
                 e.printStackTrace();
             }
-            // *** FIN DE LA NUEVA LÓGICA DE REPLICACIÓN ***
 
             sendVerificationEmail(request, email, usuario, verificationToken);
 
-            jsonResponse.addProperty("success", true);
-            jsonResponse.addProperty("message", "¡Registro casi completo! Se ha enviado un correo de verificación a tu email. Por favor, revísalo para activar tu cuenta.");
-            jsonResponse.addProperty("email", email); 
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "¡Registro casi completo! Se ha enviado un correo de verificación a tu email. Por favor, revísalo para activar tu cuenta.", email);
             
         } catch (SQLException e) {
-            // ... (manejo de errores SQL sin cambios)
+            e.printStackTrace();
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos durante el registro.");
         } finally {
             if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
         }
-
-        response.getWriter().write(jsonResponse.toString());
     }
     
     private void sendVerificationEmail(HttpServletRequest request, String emailDestino, String usuario, String token){
         // ... (código de envío de email sin cambios)
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
+        response.setStatus(status);
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message, String email) throws IOException {
+        response.setStatus(status);
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        jsonResponse.put("email", email);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

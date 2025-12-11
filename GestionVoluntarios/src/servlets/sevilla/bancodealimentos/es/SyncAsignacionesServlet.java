@@ -5,8 +5,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import com.google.gson.JsonObject;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
+
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -18,28 +21,23 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/sync-asignaciones")
 public class SyncAsignacionesServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
     private static final String SP_LIST_ASIGNACIONES = "Asignaciones";
     private static final String SP_LIST_VOLUNTARIOS = "Voluntarios";
     private static final String SP_LIST_TIENDAS = "Tiendas";
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
         HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado. La sesión ha expirado. Por favor, cierra sesión y vuelve a entrar.", "");
+            return;
+        }
+
         StringBuilder errorLog = new StringBuilder();
         int fallidos = 0;
         int totalProcesados = 0;
-
-        if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Acceso denegado. La sesión ha expirado. Por favor, cierra sesión y vuelve a entrar.");
-            response.getWriter().write(jsonResponse.toString());
-            return;
-        }
 
         try (Connection conn = DatabaseUtil.getConnection()) {
             String listIdAsignaciones = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_ASIGNACIONES);
@@ -53,75 +51,70 @@ public class SyncAsignacionesServlet extends HttpServlet {
             SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listIdAsignaciones);
             Thread.sleep(1000); // Pausa prudencial
 
-            PreparedStatement psVoluntariosCampana = conn.prepareStatement("SELECT * FROM voluntarios_en_campana");
-            ResultSet rs = psVoluntariosCampana.executeQuery();
+            String sql = "SELECT * FROM voluntarios_en_campana";
+            try (PreparedStatement psVoluntariosCampana = conn.prepareStatement(sql);
+                 ResultSet rs = psVoluntariosCampana.executeQuery()) {
 
-            while (rs.next()) {
-                totalProcesados++;
-                String voluntarioRowUuid = rs.getString("SqlRowUUID");
-                String idVoluntarioDb = rs.getString("Usuario");
+                while (rs.next()) {
+                    totalProcesados++;
+                    String voluntarioRowUuid = rs.getString("SqlRowUUID");
+                    String idVoluntarioDb = rs.getString("Usuario");
 
-                try {
-                    FieldValueSet fields = new FieldValueSet();
-                    fields.getAdditionalData().put("SqlRowUUID", voluntarioRowUuid);
-                    fields.getAdditionalData().put("Title", voluntarioRowUuid); // Title es obligatorio
+                    try {
+                        FieldValueSet fields = new FieldValueSet();
+                        fields.getAdditionalData().put("SqlRowUUID", voluntarioRowUuid);
+                        fields.getAdditionalData().put("Title", voluntarioRowUuid); // Title es obligatorio
 
-                    // --- VOLUNTARIO ---
-                    String voluntarioUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM voluntarios WHERE usuario = ?", idVoluntarioDb);
-                    if (voluntarioUuid != null) {
-                        String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
-                        if (spVoluntarioId != null) {
-                            fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
-                        } else {
-                            throw new Exception("Voluntario con UUID " + voluntarioUuid + " no encontrado en SharePoint.");
-                        }
-                    } else {
-                        throw new Exception("Voluntario con ID " + idVoluntarioDb + " no encontrado en la BD local.");
-                    }
-                    
-                    fields.getAdditionalData().put("Campana", rs.getString("Campana"));
-
-                    // --- TURNOS ---
-                    for (int i = 1; i <= 4; i++) {
-                        int idTiendaDb = rs.getInt("Turno" + i);
-                        String comentario = rs.getString("Comentario" + i);
-
-                        if (idTiendaDb > 0) {
-                            String tiendaUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM tiendas WHERE codigo = ?", idTiendaDb);
-                            if (tiendaUuid != null) {
-                                String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
-                                if (spTiendaId != null) {
-                                    fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
-                                    fields.getAdditionalData().put("Comentario" + i, comentario);
-                                } else {
-                                    throw new Exception("Tienda para Turno"+i+" con UUID " + tiendaUuid + " no encontrada en SharePoint.");
-                                }
+                        // --- VOLUNTARIO ---
+                        String voluntarioUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM voluntarios WHERE usuario = ?", idVoluntarioDb);
+                        if (voluntarioUuid != null) {
+                            String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+                            if (spVoluntarioId != null) {
+                                fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
                             } else {
-                                throw new Exception("Tienda para Turno"+i+" con ID " + idTiendaDb + " no encontrada en la BD.");
+                                throw new Exception("Voluntario con UUID " + voluntarioUuid + " no encontrado en SharePoint.");
+                            }
+                        } else {
+                            throw new Exception("Voluntario con ID " + idVoluntarioDb + " no encontrado en la BD local.");
+                        }
+                        
+                        fields.getAdditionalData().put("Campana", rs.getString("Campana"));
+
+                        // --- TURNOS ---
+                        for (int i = 1; i <= 4; i++) {
+                            int idTiendaDb = rs.getInt("Turno" + i);
+                            String comentario = rs.getString("Comentario" + i);
+
+                            if (idTiendaDb > 0 && !rs.wasNull()) {
+                                String tiendaUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM tiendas WHERE codigo = ?", idTiendaDb);
+                                if (tiendaUuid != null) {
+                                    String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                                    if (spTiendaId != null) {
+                                        fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
+                                        fields.getAdditionalData().put("Comentario" + i, comentario);
+                                    } else {
+                                        throw new Exception("Tienda para Turno"+i+" con UUID " + tiendaUuid + " no encontrada en SharePoint.");
+                                    }
+                                } else {
+                                    throw new Exception("Tienda para Turno"+i+" con ID " + idTiendaDb + " no encontrada en la BD.");
+                                }
                             }
                         }
-                    }
-                    
-                    SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
+                        
+                        SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
 
-                } catch (Exception e) {
-                    fallidos++;
-                    errorLog.append("[FALLO] Fila de voluntario "+ idVoluntarioDb +" (UUID: " + voluntarioRowUuid + "). Causa: ").append(e.getMessage()).append("\n");
+                    } catch (Exception e) {
+                        fallidos++;
+                        errorLog.append("[FALLO] Fila de voluntario "+ idVoluntarioDb +" (UUID: " + voluntarioRowUuid + "). Causa: ").append(e.getMessage()).append("\n");
+                    }
                 }
             }
-            
-            rs.close();
-            psVoluntariosCampana.close();
-
-            jsonResponse.addProperty("success", fallidos == 0);
-            jsonResponse.addProperty("message", "Sincronización de Asignaciones completada. Total: " + totalProcesados + ". Fallidos: " + fallidos + ". Errores: " + (errorLog.length() > 0 ? errorLog.toString() : "Ninguno"));
+            String message = String.format("Sincronización de Asignaciones completada. Total: %d. Fallidos: %d.", totalProcesados, fallidos);
+            sendJsonResponse(response, HttpServletResponse.SC_OK, fallidos == 0, message, errorLog.toString());
             
         } catch (Exception e) {
             e.printStackTrace();
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error CRÍTICO en SyncAsignacionesServlet: " + e.getMessage());
-        } finally {
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error CRÍTICO en SyncAsignacionesServlet: " + e.getMessage(), "");
         }
     }
 
@@ -135,6 +128,21 @@ public class SyncAsignacionesServlet extends HttpServlet {
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getString(1) : null;
             }
+        }
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, int statusCode, boolean success, String message, String errorLog) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(statusCode);
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            ObjectNode jsonResponse = objectMapper.createObjectNode();
+            jsonResponse.put("success", success);
+            jsonResponse.put("message", message);
+            if (errorLog != null && !errorLog.isEmpty()) {
+                jsonResponse.put("errors", errorLog);
+            }
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }
 }

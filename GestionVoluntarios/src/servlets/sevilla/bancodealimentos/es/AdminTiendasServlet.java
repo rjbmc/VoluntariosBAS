@@ -10,8 +10,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -26,27 +26,26 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/admin-tiendas")
 public class AdminTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 4L; // Versión actualizada
-    private final Gson gson = new Gson();
+    private static final long serialVersionUID = 5L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
     private static final String SP_LIST_NAME = "Tiendas";
-    private static final String SP_UUID_FIELD = "SqlRowUUID"; // Usaremos un campo para el ID de la BD
+    private static final String SP_UUID_FIELD = "SqlRowUUID";
 
-    // Clase interna para representar una tienda
-    private static class Tienda {
-        int codigo, prioridad, huecosTurno1, huecosTurno2, huecosTurno3, huecosTurno4;
-        String denominacion, direccion, lat, lon, cp, poblacion, supervisor, disponible;
+    public static class Tienda {
+        public int codigo, prioridad, huecosTurno1, huecosTurno2, huecosTurno3, huecosTurno4;
+        public String denominacion, direccion, lat, lon, cp, poblacion, supervisor, disponible;
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
         HttpSession session = request.getSession(false);
-
         if (session == null || session.getAttribute("usuario") == null || !((boolean)session.getAttribute("isAdmin"))) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;
         }
+
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
 
         String supervisor = request.getParameter("supervisor");
         String zona = request.getParameter("zona");
@@ -96,21 +95,15 @@ public class AdminTiendasServlet extends HttpServlet {
             throw new ServletException("Error de base de datos al obtener tiendas", e);
         }
 
-        response.getWriter().write(gson.toJson(tiendas));
+        objectMapper.writeValue(response.getWriter(), tiendas);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
         HttpSession session = request.getSession(false);
 
         if (session == null || session.getAttribute("usuario") == null || !((boolean)session.getAttribute("isAdmin"))) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Acceso denegado.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, false, "Acceso denegado.", HttpServletResponse.SC_FORBIDDEN);
             return;
         }
         
@@ -229,15 +222,22 @@ public class AdminTiendasServlet extends HttpServlet {
                 }
                 
                 conn.commit();
-                jsonResponse.addProperty("success", true);
+                sendJsonResponse(response, true, "Tienda guardada correctamente.", HttpServletResponse.SC_OK);
 
             } catch (Exception e) {
                 e.printStackTrace();
-                jsonResponse.addProperty("success", false);
-                jsonResponse.addProperty("message", "Error al guardar la tienda: " + e.getMessage());
-                response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                sendJsonResponse(response, false, "Error al guardar la tienda: " + e.getMessage(), HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
-            response.getWriter().write(jsonResponse.toString());
         }
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, boolean success, String message, int statusCode) throws IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        response.setStatus(statusCode);
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

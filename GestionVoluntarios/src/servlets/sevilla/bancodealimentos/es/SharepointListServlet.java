@@ -9,14 +9,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.microsoft.graph.models.ColumnDefinition;
 import com.microsoft.graph.models.ColumnDefinitionCollectionResponse;
 import com.microsoft.graph.models.ListCollectionResponse;
 import com.microsoft.graph.models.ListItem;
 import com.microsoft.graph.models.ListItemCollectionResponse;
-import com.microsoft.graph.models.Site;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -27,7 +26,8 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/lista-sharepoint")
 public class SharepointListServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final ObjectMapper objectMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -41,7 +41,6 @@ public class SharepointListServlet extends HttpServlet {
 
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
         PrintWriter out = response.getWriter();
 
         String siteId = SharepointUtil.SITE_ID; // Por defecto
@@ -90,7 +89,7 @@ public class SharepointListServlet extends HttpServlet {
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("columns", columnDetails);
                 result.put("items", itemDetails);
-                out.print(gson.toJson(result));
+                objectMapper.writeValue(out, result);
 
             } else {
                 // --- OBTENER TODAS LAS LISTAS DEL SITIO ---
@@ -105,14 +104,16 @@ public class SharepointListServlet extends HttpServlet {
                         listDetails.add(map);
                     }
                 }
-                out.print(gson.toJson(listDetails));
+                objectMapper.writeValue(out, listDetails);
             }
 
         } catch (Exception e) {
             System.err.println("Error al obtener datos de SharePoint: " + e.getMessage());
             e.printStackTrace();
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            out.print(gson.toJson(Map.of("error", "Error al procesar la solicitud de SharePoint: " + e.getMessage())));
+            Map<String, String> errorPayload = new HashMap<>();
+            errorPayload.put("error", "Error al procesar la solicitud de SharePoint: " + e.getMessage());
+            objectMapper.writeValue(out, errorPayload);
         } finally {
             out.flush();
         }

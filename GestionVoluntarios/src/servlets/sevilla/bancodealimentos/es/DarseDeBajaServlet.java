@@ -2,7 +2,6 @@ package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -11,8 +10,16 @@ import java.time.temporal.ChronoUnit;
 import java.util.Properties;
 import java.util.UUID;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import jakarta.mail.Authenticator;
+import jakarta.mail.Message;
+import jakarta.mail.PasswordAuthentication;
+import jakarta.mail.Session;
+import jakarta.mail.Transport;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -21,22 +28,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
-import util.sevilla.bancodealimentos.es.LogUtil;
-
-// JavaMail API
-// Nota: Necesitarás añadir los jars de javax.mail y javax.activation a tu WEB-INF/lib
-import jakarta.mail.Authenticator;
-import jakarta.mail.Message;
-import jakarta.mail.PasswordAuthentication;
-import jakarta.mail.Session;
-import jakarta.mail.Transport;
-import jakarta.mail.internet.InternetAddress;
-import jakarta.mail.internet.MimeMessage;
-
 
 @WebServlet("/darse-de-baja")
 public class DarseDeBajaServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -44,36 +40,24 @@ public class DarseDeBajaServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         HttpSession session = request.getSession(false);
-        JsonObject jsonResponse = new JsonObject();
 
-        // 1. Verificar que hay una sesión activa
         if (session == null || session.getAttribute("usuario") == null) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "No tienes permiso para realizar esta acción.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "No tienes permiso para realizar esta acción.");
             return;
         }
 
         String usuario = (String) session.getAttribute("usuario");
-        String email = (String) session.getAttribute("email"); // Asumimos que el email se guarda en sesión durante el login
+        String email = (String) session.getAttribute("email");
 
         if (email == null || email.isEmpty()) {
-             // Si el email no está en sesión, habría que hacer una consulta extra para obtenerlo
-             // Por simplicidad, asumimos que sí está. Si no, habría que añadir esa lógica aquí.
-             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-             jsonResponse.addProperty("success", false);
-             jsonResponse.addProperty("message", "No se pudo encontrar el email del usuario en la sesión.");
-             response.getWriter().write(jsonResponse.toString());
+             sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "No se pudo encontrar el email del usuario en la sesión.");
              return;
         }
 
         try {
-            // 2. Generar un token de baja seguro y su fecha de caducidad (ej. 1 hora)
             String tokenBaja = UUID.randomUUID().toString();
             Timestamp expiryDate = Timestamp.from(Instant.now().plus(1, ChronoUnit.HOURS));
 
-            // 3. Guardar el token y la fecha en la base de datos
             try (Connection conn = DatabaseUtil.getConnection()) {
                 String sql = "UPDATE voluntarios SET token_baja = ?, token_baja_expiry = ? WHERE Usuario = ?";
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -86,38 +70,20 @@ public class DarseDeBajaServlet extends HttpServlet {
                 throw new ServletException("Error de base de datos al guardar el token de baja", e);
             }
 
-            // 4. Enviar el correo de confirmación (simulado)
             sendConfirmationEmail(email, tokenBaja, request);
 
-            jsonResponse.addProperty("success", true);
-            jsonResponse.addProperty("message", "Se ha enviado un correo de confirmación a tu dirección. Por favor, sigue las instrucciones para completar la baja.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Se ha enviado un correo de confirmación a tu dirección. Por favor, sigue las instrucciones para completar la baja.");
 
         } catch (Exception e) {
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error interno del servidor. Inténtalo más tarde.");
-            response.getWriter().write(jsonResponse.toString());
             e.printStackTrace();
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error interno del servidor. Inténtalo más tarde.");
         }
     }
     
     private void sendConfirmationEmail(String emailDestino, String token, HttpServletRequest request) throws Exception {
-        // Construir el enlace de confirmación
         String baseUrl = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort() + request.getContextPath();
         String confirmationLink = baseUrl + "/confirmar-baja.html?token=" + token;
 
-        // --- SIMULACIÓN DE ENVÍO DE CORREO ---
-        // En un entorno real, el siguiente bloque se descomentaría y configuraría.
-//        System.out.println("--- SIMULACIÓN DE ENVÍO DE CORREO DE CONFIRMACIÓN DE BAJA ---");
-//        System.out.println("Para: " + emailDestino);
-//        System.out.println("Asunto: Confirma tu solicitud de baja");
-//        System.out.println("Cuerpo: Para confirmar que quieres dar de baja tu cuenta, por favor, haz clic en el siguiente enlace:");
-//        System.out.println(confirmationLink);
-//        System.out.println("----------------------------------------------------------");
-
-
-//         --- CÓDIGO REAL PARA ENVIAR CORREO (necesita configuración en Config.java) --- 
         final String username = Config.SMTP_USER;
         final String password = Config.SMTP_PASSWORD;
 
@@ -152,11 +118,18 @@ public class DarseDeBajaServlet extends HttpServlet {
             message.setContent(emailBody, "text/html; charset=utf-8");
 
             Transport.send(message); 
-//            System.out.println("Correo de confirmación de baja enviado (simulado).");
 
         } catch (Exception e) {
             e.printStackTrace();
             throw new ServletException("Error al enviar el correo de confirmación de baja.", e);
         }
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
+        response.setStatus(status);
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

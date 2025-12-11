@@ -7,7 +7,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -22,27 +23,20 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/sync-voluntarios")
 public class SyncVoluntariosServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
     private static final String SHAREPOINT_LIST_NAME = "Voluntarios";
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
         HttpSession session = request.getSession(false);
 
         if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Acceso denegado.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
 
-        Connection conn = null;
-        try {
-            conn = DatabaseUtil.getConnection();
+        try (Connection conn = DatabaseUtil.getConnection()) {
             String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
             if (listId == null) {
                 throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada en SharePoint.");
@@ -57,16 +51,12 @@ public class SyncVoluntariosServlet extends HttpServlet {
                 while(rs.next()){
                     FieldValueSet fields = new FieldValueSet();
 
-                    // --- Mapeo basado en tu imagen ---
-
-                    // 1. Campo Title (unión de Nombre y Apellidos)
                     String nombre = rs.getString("Nombre");
                     String apellidos = rs.getString("Apellidos");
                     String title = ((nombre != null ? nombre : "") + " " + (apellidos != null ? apellidos : "")).trim();
                     if (title.isEmpty()) { title = "Voluntario " + rs.getString("SqlRowUUID"); }
                     fields.getAdditionalData().put("Title", title);
 
-                    // 2. Mapeo del resto de campos
                     fields.getAdditionalData().put("field_1", nombre);
                     fields.getAdditionalData().put("field_2", apellidos);
                     fields.getAdditionalData().put("field_3", rs.getString("DNI NIF"));
@@ -97,24 +87,27 @@ public class SyncVoluntariosServlet extends HttpServlet {
                     fields.getAdditionalData().put("Verificado", "S".equalsIgnoreCase(rs.getString("verificado")));
                     fields.getAdditionalData().put("SqlRowUUID", rs.getString("SqlRowUUID"));
 
-                    // --- Fin del mapeo ---
-
                     SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
                 }
             }
-
-            jsonResponse.addProperty("success", true);
-            jsonResponse.addProperty("message", "Sincronización de Voluntarios completada con éxito.");
             LogUtil.logOperation(conn, "SYNC_VOLUNTARIOS", (String) session.getAttribute("usuario"), "Sincronización masiva de Voluntarios completada.");
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Sincronización de Voluntarios completada con éxito.");
 
         } catch (Exception e) {
             e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error en la sincronización de Voluntarios: " + e.getMessage());
-        } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error en la sincronización de Voluntarios: " + e.getMessage());
+        }
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, int statusCode, boolean success, String message) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(statusCode);
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            ObjectNode jsonResponse = objectMapper.createObjectNode();
+            jsonResponse.put("success", success);
+            jsonResponse.put("message", message);
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }
 }

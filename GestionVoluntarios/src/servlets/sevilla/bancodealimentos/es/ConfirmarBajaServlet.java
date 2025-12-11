@@ -7,12 +7,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -26,7 +27,8 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/confirmar-baja")
 public class ConfirmarBajaServlet extends HttpServlet {
-    private static final long serialVersionUID = 3L; // Versión actualizada
+    private static final long serialVersionUID = 4L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -34,13 +36,9 @@ public class ConfirmarBajaServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         String token = request.getParameter("token");
-        JsonObject jsonResponse = new JsonObject();
         
         if (token == null || token.trim().isEmpty()) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Token no proporcionado.");
-            response.getWriter().write(jsonResponse.toString());
+            sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "Token no proporcionado.");
             return;
         }
 
@@ -81,9 +79,7 @@ public class ConfirmarBajaServlet extends HttpServlet {
                         String isoDate = bajaTimestamp.toInstant().atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
                         spData.put("field_21", isoDate); 
 
-                        // ** INICIO DE LA CORRECCIÓN **
                         SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
-                        // ** FIN DE LA CORRECCIÓN **
 
                         LogUtil.logOperation(conn, "REPLICATE_SUCCESS", usuario, "Baja replicada a SharePoint (marcado como inactivo).");
                     } catch (Exception e) {
@@ -95,23 +91,24 @@ public class ConfirmarBajaServlet extends HttpServlet {
                 }
 
                 conn.commit();
-                jsonResponse.addProperty("success", true);
-                jsonResponse.addProperty("message", "Tu cuenta ha sido dada de baja correctamente.");
+                sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Tu cuenta ha sido dada de baja correctamente.");
 
             } else {
                 conn.rollback();
-                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                jsonResponse.addProperty("success", false);
-                jsonResponse.addProperty("message", "El enlace de confirmación no es válido o ha caducado. Por favor, solicita la baja de nuevo.");
+                sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "El enlace de confirmación no es válido o ha caducado. Por favor, solicita la baja de nuevo.");
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error de base de datos. Inténtalo más tarde.");
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos. Inténtalo más tarde.");
         } 
-
-        response.getWriter().write(jsonResponse.toString());
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
+        response.setStatus(status);
+        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        jsonResponse.put("success", success);
+        jsonResponse.put("message", message);
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

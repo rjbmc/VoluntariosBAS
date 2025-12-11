@@ -1,7 +1,8 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -12,7 +13,8 @@ import jakarta.servlet.http.HttpSession;
 
 @WebServlet("/usuario-actual")
 public class UsuarioActualServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -24,11 +26,11 @@ public class UsuarioActualServlet extends HttpServlet {
             String usuario = (String) session.getAttribute("usuario");
             boolean isAdmin = (Boolean) session.getAttribute("isAdmin");
 
-            JsonObject jsonResponse = new JsonObject();
-            jsonResponse.addProperty("usuario", usuario);
-            jsonResponse.addProperty("isAdmin", isAdmin);
+            ObjectNode jsonResponse = objectMapper.createObjectNode();
+            jsonResponse.put("usuario", usuario);
+            jsonResponse.put("isAdmin", isAdmin);
 
-            response.getWriter().write(jsonResponse.toString());
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
         } else {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No hay una sesión de usuario activa.");
         }

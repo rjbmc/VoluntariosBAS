@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
 
-import com.google.gson.JsonObject;
 import com.microsoft.graph.models.ListItem;
 import com.microsoft.graph.models.ListItemCollectionResponse;
 
@@ -18,7 +17,7 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/cleanup-tiendas")
 public class CleanupTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada
     private static final String SHAREPOINT_LIST_NAME = "Tiendas";
     private static final int PAUSA_CORTA_MS = 75;
 
