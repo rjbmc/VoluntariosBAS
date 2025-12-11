@@ -3,74 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verificación de Cuenta- Banco de Alimentos de Sevilla</title>
+    <title>Verificación de Cuenta - Banco de Alimentos de Sevilla</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <script src="/VoluntariosBAS/js/config.js"></script>
 </head>
-<body class="flex items-center justify-center min-h-screen">
+<body class="flex items-center justify-center min-h-screen bg-gray-50">
 
-    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl card-shadow m-4 text-center">
+    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl shadow-lg m-4 text-center">
         <div class="flex justify-center">
             <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
         </div>
         
-        <div>
-            <h2 id="status-title" class="text-2xl font-bold text-gray-800">Verificando tu cuenta...</h2>
-            <p id="status-message" class="mt-2 text-gray-600">Por favor, espera un momento.</p>
+        <div id="status-container">
+            <!-- Estado Inicial: Cargando -->
+            <div id="loading">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-orange-500 mx-auto mb-4"></div>
+                <h2 class="text-2xl font-bold text-gray-800">Verificando tu cuenta...</h2>
+                <p class="mt-2 text-gray-600">Por favor, espera un momento.</p>
+            </div>
+
+            <!-- Estado Final: Título y Mensaje -->
+            <h2 id="status-title" class="text-2xl font-bold text-gray-800 hidden"></h2>
+            <p id="status-message" class="mt-2 text-gray-600 hidden"></p>
         </div>
         
         <div id="action-button-container" class="hidden pt-4">
-            <a href="login.html" id="action-button" class="inline-block w-full px-4 py-3 text-sm font-medium text-white border border-transparent rounded-md btn-primary">
+            <a href="login.html" id="action-button" class="inline-block w-full px-4 py-3 text-sm font-medium text-white bg-orange-600 rounded-md hover:bg-orange-700 transition-colors">
                 Ir a Iniciar Sesión
             </a>
         </div>
     </div>
 
-    <!-- CAMBIO: Incluir el fichero de configuración -->
+    <!-- Script de configuración -->
     <script src="js/config.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const params = new URLSearchParams(window.location.search);
             const token = params.get('token');
 
+            const loadingEl = document.getElementById('loading');
             const titleEl = document.getElementById('status-title');
             const messageEl = document.getElementById('status-message');
             const buttonContainerEl = document.getElementById('action-button-container');
 
+            function showResult(title, message, isSuccess) {
+                loadingEl.classList.add('hidden');
+                
+                titleEl.textContent = title;
+                titleEl.className = `text-2xl font-bold ${isSuccess ? 'text-green-600' : 'text-red-600'} block`;
+                
+                messageEl.textContent = message;
+                messageEl.classList.remove('hidden');
+
+                if (isSuccess) {
+                    buttonContainerEl.classList.remove('hidden');
+                }
+            }
+
             if (!token) {
-                titleEl.textContent = 'Error de Verificación';
-                messageEl.textContent = 'El enlace de verificación no es válido o está incompleto. Por favor, utiliza el enlace exacto de tu correo electrónico.';
+                showResult('Error de Verificación', 'El enlace de verificación no es válido o está incompleto.', false);
                 return;
             }
 
             try {
-                const response = await fetch(AppConfig.getUrl('VERIFICAR_EMAIL'), {
-                    method: 'POST',
+                // CORRECCIÓN: Usamos GET para coincidir con el Servlet doPost/doGet según corresponda.
+                // En este caso, VerificarEmailServlet suele ser GET cuando se llama por enlace, 
+                // pero si lo hemos definido como doGet en Java, el fetch debe ser GET.
+                // Si el servlet espera POST, habría que cambiar el servlet a doGet o mantener el POST aquí.
+                // Asumiendo que el servlet refactorizado usa doGet:
+                
+                const url = `${AppConfig.getUrl('VERIFICAR_EMAIL')}?token=${encodeURIComponent(token)}`;
+                
+                const response = await fetch(url, {
+                    method: 'GET', // Cambiado a GET para mayor compatibilidad con enlaces
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `token=${encodeURIComponent(token)}`
+                        'Accept': 'application/json'
+                    }
                 });
 
                 const result = await response.json();
 
                 if (result.success) {
-                    titleEl.textContent = '¡Cuenta Verificada!';
-                    titleEl.classList.add('text-green-600');
-                    messageEl.textContent = result.message;
-                    buttonContainerEl.classList.remove('hidden');
+                    showResult('¡Cuenta Verificada!', result.message, true);
                 } else {
-                    titleEl.textContent = 'Error de Verificación';
-                    titleEl.classList.add('text-red-600');
-                    messageEl.textContent = result.message;
+                    showResult('Error de Verificación', result.message, false);
                 }
 
             } catch (error) {
                 console.error('Error en la solicitud de verificación:', error);
-                titleEl.textContent = 'Error de Conexión';
-                messageEl.textContent = 'No se pudo conectar con el servidor para verificar tu cuenta. Por favor, inténtalo de nuevo más tarde.';
+                showResult('Error de Conexión', 'No se pudo conectar con el servidor. Inténtalo más tarde.', false);
             }
         });
     </script>

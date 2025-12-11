@@ -1,13 +1,15 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -26,8 +28,13 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/lista-sharepoint")
 public class SharepointListServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
-    private static final ObjectMapper objectMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+    private static final long serialVersionUID = 2L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(SharepointListServlet.class);
+    
+    // 2. Jackson ObjectMapper (Con indentación para facilitar la lectura en herramientas de desarrollo)
+    private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -41,8 +48,7 @@ public class SharepointListServlet extends HttpServlet {
 
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        PrintWriter out = response.getWriter();
-
+        
         String siteId = SharepointUtil.SITE_ID; // Por defecto
 
         if ("voluntarios".equalsIgnoreCase(siteSelection)) {
@@ -53,6 +59,8 @@ public class SharepointListServlet extends HttpServlet {
 
         try {
             if (listIdOrName != null && !listIdOrName.trim().isEmpty()) {
+                logger.info("Solicitando detalles de la lista '{}' en el sitio '{}'...", listIdOrName, siteSelection);
+                
                 // --- OBTENER COLUMNAS E ITEMS DE UNA LISTA ESPECÍFICA ---
 
                 ColumnDefinitionCollectionResponse columnsResponse = SharepointUtil.getListColumns(siteId, listIdOrName);
@@ -89,12 +97,16 @@ public class SharepointListServlet extends HttpServlet {
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("columns", columnDetails);
                 result.put("items", itemDetails);
-                objectMapper.writeValue(out, result);
+                
+                mapper.writeValue(response.getWriter(), result);
 
             } else {
+                logger.info("Solicitando todas las listas del sitio '{}'...", siteSelection);
+                
                 // --- OBTENER TODAS LAS LISTAS DEL SITIO ---
                 ListCollectionResponse allLists = SharepointUtil.getAllLists(siteId);
                 List<Map<String, String>> listDetails = new ArrayList<>();
+                
                 if (allLists != null && allLists.getValue() != null) {
                     for (com.microsoft.graph.models.List list : allLists.getValue()) {
                         Map<String, String> map = new HashMap<>();
@@ -104,18 +116,16 @@ public class SharepointListServlet extends HttpServlet {
                         listDetails.add(map);
                     }
                 }
-                objectMapper.writeValue(out, listDetails);
+                mapper.writeValue(response.getWriter(), listDetails);
             }
 
         } catch (Exception e) {
-            System.err.println("Error al obtener datos de SharePoint: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Error al obtener datos de SharePoint (Sitio: {}, Lista: {})", siteSelection, listIdOrName, e);
+            
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             Map<String, String> errorPayload = new HashMap<>();
             errorPayload.put("error", "Error al procesar la solicitud de SharePoint: " + e.getMessage());
-            objectMapper.writeValue(out, errorPayload);
-        } finally {
-            out.flush();
+            mapper.writeValue(response.getWriter(), errorPayload);
         }
     }
 }

@@ -1,15 +1,21 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -26,10 +32,35 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 @WebServlet("/admin-voluntarios")
 public class AdminVoluntariosServlet extends HttpServlet {
     private static final long serialVersionUID = 2L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(AdminVoluntariosServlet.class);
+    
+    // 2. Jackson ObjectMapper
+    private final ObjectMapper mapper = new ObjectMapper();
 
+    // DTO para enviar datos de voluntarios al frontend de forma limpia
+    public static class VoluntarioDTO {
+        public String usuario;
+        public String nombre;
+        public String apellidos;
+        public String dni;
+        public String email;
+        public String telefono;
+        public String cp;
+        public String fechaNacimiento;
+        public Integer tiendaReferencia;
+        public String esAdmin;
+    }
+
+    // 3. Verificación de seguridad estandarizada
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        return session != null && session.getAttribute("isAdmin") != null && (boolean) session.getAttribute("isAdmin");
+        if (session == null || session.getAttribute("usuario") == null) return false;
+        
+        Object isAdminAttr = session.getAttribute("isAdmin");
+        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
+               ("S".equals(isAdminAttr));
     }
 
     private String getUsuario(HttpServletRequest request) {
@@ -42,66 +73,76 @@ public class AdminVoluntariosServlet extends HttpServlet {
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
         if (!isAdmin(request)) {
+            logger.warn("Acceso denegado a AdminVoluntarios (GET). IP: {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;
         }
 
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        PrintWriter out = response.getWriter();
-        StringBuilder jsonBuilder = new StringBuilder("[");
-
+        List<VoluntarioDTO> voluntarios = new ArrayList<>();
         String sql = "SELECT Usuario, Nombre, Apellidos, `DNI NIF`, Email, telefono, administrador, cp, fechaNacimiento, tiendaReferencia FROM voluntarios ORDER BY Apellidos, Nombre";
 
         try (Connection conn = DatabaseUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
 
-            boolean first = true;
             while (rs.next()) {
-                if (!first) jsonBuilder.append(",");
-                jsonBuilder.append("{");
-                jsonBuilder.append("\"usuario\":\"").append(escapeJson(rs.getString("Usuario"))).append("\",");
-                jsonBuilder.append("\"nombre\":\"").append(escapeJson(rs.getString("Nombre"))).append("\",");
-                jsonBuilder.append("\"apellidos\":\"").append(escapeJson(rs.getString("Apellidos"))).append("\",");
-                jsonBuilder.append("\"dni\":\"").append(escapeJson(rs.getString("DNI NIF"))).append("\",");
-                jsonBuilder.append("\"email\":\"").append(escapeJson(rs.getString("Email"))).append("\",");
-                jsonBuilder.append("\"telefono\":\"").append(escapeJson(rs.getString("telefono"))).append("\",");
-                jsonBuilder.append("\"cp\":\"").append(escapeJson(rs.getString("cp"))).append("\",");
-                jsonBuilder.append("\"fechaNacimiento\":\"").append(rs.getDate("fechaNacimiento")).append("\",");
-                jsonBuilder.append("\"tiendaReferencia\":").append(rs.getInt("tiendaReferencia")).append(",");
-                jsonBuilder.append("\"esAdmin\":\"").append(escapeJson(rs.getString("administrador"))).append("\"");
-                jsonBuilder.append("}");
-                first = false;
+                VoluntarioDTO v = new VoluntarioDTO();
+                v.usuario = rs.getString("Usuario");
+                v.nombre = rs.getString("Nombre");
+                v.apellidos = rs.getString("Apellidos");
+                v.dni = rs.getString("DNI NIF");
+                v.email = rs.getString("Email");
+                v.telefono = rs.getString("telefono");
+                v.cp = rs.getString("cp");
+                
+                Date fecha = rs.getDate("fechaNacimiento");
+                v.fechaNacimiento = (fecha != null) ? fecha.toString() : null;
+                
+                int tiendaRef = rs.getInt("tiendaReferencia");
+                v.tiendaReferencia = rs.wasNull() ? null : tiendaRef;
+                
+                v.esAdmin = rs.getString("administrador");
+                
+                voluntarios.add(v);
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar los voluntarios.");
-            return;
-        }
+            
+            // Serialización automática con Jackson
+            mapper.writeValue(response.getWriter(), voluntarios);
 
-        jsonBuilder.append("]");
-        out.print(jsonBuilder.toString());
-        out.flush();
+        } catch (SQLException e) {
+            logger.error("Error SQL al consultar los voluntarios.", e);
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar los voluntarios.");
+        }
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
         if (!isAdmin(request)) {
+            logger.warn("Acceso denegado a AdminVoluntarios (POST). IP: {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;
         }
         
-        request.setCharacterEncoding("UTF-8");
         String action = request.getParameter("action");
         
-        if ("toggleAdmin".equals(action)) {
-            handleToggleAdmin(request, response);
-        } else if ("save".equals(action)) {
-            handleSave(request, response);
-        } else {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Acción desconocida.");
+        try {
+            if ("toggleAdmin".equals(action)) {
+                handleToggleAdmin(request, response);
+            } else if ("save".equals(action)) {
+                handleSave(request, response);
+            } else {
+                sendJsonResponse(response, false, "Acción desconocida.");
+            }
+        } catch (Exception e) {
+            logger.error("Error no controlado en doPost", e);
+            sendJsonResponse(response, false, "Error interno del servidor.");
         }
     }
     
@@ -110,7 +151,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
         String adminUser = getUsuario(request);
         String sqlRowUuid = null;
         
-        // Obtenemos los parámetros de forma segura
+        // Parámetros
         String nombre = request.getParameter("nombre");
         String apellidos = request.getParameter("apellidos");
         String dni = request.getParameter("dni");
@@ -131,41 +172,40 @@ public class AdminVoluntariosServlet extends HttpServlet {
                 stmt.setString(4, email);
                 stmt.setString(5, telefono);
 
-                // --- MANEJO ROBUSTO DE FECHA ---
+                // Manejo de fecha
                 if (fechaNacimientoStr != null && !fechaNacimientoStr.trim().isEmpty()) {
                     try {
                         stmt.setDate(6, Date.valueOf(fechaNacimientoStr));
                     } catch (IllegalArgumentException e) {
-                        stmt.setNull(6, Types.DATE); // Si el formato es inválido, guarda NULL
+                        stmt.setNull(6, Types.DATE);
                     }
                 } else {
-                    stmt.setNull(6, Types.DATE); // Si está vacío, guarda NULL
+                    stmt.setNull(6, Types.DATE);
                 }
                 
                 stmt.setString(7, cp);
 
-                // --- MANEJO ROBUSTO DE NÚMERO (TIENDA) ---
+                // Manejo de tienda (int)
                 if (tiendaReferenciaStr != null && !tiendaReferenciaStr.trim().isEmpty()) {
                     try {
                         stmt.setInt(8, Integer.parseInt(tiendaReferenciaStr));
                     } catch (NumberFormatException e) {
-                        stmt.setNull(8, Types.INTEGER); // Si no es un número válido, guarda NULL
+                        stmt.setNull(8, Types.INTEGER);
                     }
                 } else {
-                    stmt.setNull(8, Types.INTEGER); // Si está vacío, guarda NULL
+                    stmt.setNull(8, Types.INTEGER);
                 }
                 
                 stmt.setString(9, usuarioToUpdate);
                 stmt.executeUpdate();
             }
             
-            String logComment = "Admin " + adminUser + " modificó los datos del voluntario: " + usuarioToUpdate;
-            LogUtil.logOperation(conn, "ADMIN_UPDATE_VOL", adminUser, logComment);
+            LogUtil.logOperation(conn, "ADMIN_UPDATE_VOL", adminUser, "Admin " + adminUser + " modificó datos de: " + usuarioToUpdate);
             
             sqlRowUuid = getSqlRowUuid(conn, usuarioToUpdate);
             conn.commit();
             
-            // Replicación a SharePoint (si procede)
+            // Replicación a SharePoint (si aplica)
             if (sqlRowUuid != null) {
                 try {
                     Map<String, Object> spData = new HashMap<>();
@@ -184,34 +224,31 @@ public class AdminVoluntariosServlet extends HttpServlet {
                     if (tiendaReferenciaStr != null && !tiendaReferenciaStr.isEmpty()) {
                         try {
                             spData.put("field_5", Integer.parseInt(tiendaReferenciaStr));
-                        } catch (NumberFormatException e) { /* No se envía si no es un número */ }
+                        } catch (NumberFormatException e) { /* Ignorar */ }
                     }
                     
                     SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
-                    System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint la modificación de datos para " + usuarioToUpdate + ". Causa: " + e.getMessage());
+                    logger.error("Fallo al replicar a SharePoint la modificación de {}", usuarioToUpdate, e);
                 }
             }
 
-            sendSuccess(response, "Datos del voluntario actualizados correctamente.");
+            sendJsonResponse(response, true, "Datos del voluntario actualizados correctamente.");
 
         } catch (SQLException e) {
-            e.printStackTrace();
-            sendError(response, "Error al actualizar los datos. El DNI o el email podrían estar ya en uso.");
-        } catch (Exception e) { // Captura genérica para cualquier otro error inesperado
-            e.printStackTrace();
-            sendError(response, "Error en los datos enviados. Revisa que todos los campos sean correctos.");
+            logger.error("Error SQL al actualizar voluntario {}", usuarioToUpdate, e);
+            sendJsonResponse(response, false, "Error al actualizar los datos (posible duplicado de DNI/Email).");
         }
     }
 
-    private void handleToggleAdmin(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+    private void handleToggleAdmin(HttpServletRequest request, HttpServletResponse response) throws IOException {
         String usuarioToUpdate = request.getParameter("usuario");
         String newAdminStatus = request.getParameter("esAdmin");
         String adminUser = getUsuario(request);
         String sqlRowUuid = null;
 
         if (usuarioToUpdate == null || newAdminStatus == null || (!"S".equals(newAdminStatus) && !"N".equals(newAdminStatus))) {
-            sendError(response, "Datos inválidos para la actualización.");
+            sendJsonResponse(response, false, "Datos inválidos para la actualización.");
             return;
         }
 
@@ -225,8 +262,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
                 stmt.executeUpdate();
             }
             
-            String logComment = "Admin " + adminUser + " cambió el rol de " + usuarioToUpdate + " a admin=" + newAdminStatus;
-            LogUtil.logOperation(conn, "ADMIN_ROLE_CHANGE", adminUser, logComment);
+            LogUtil.logOperation(conn, "ADMIN_ROLE_CHANGE", adminUser, "Admin cambió rol de " + usuarioToUpdate + " a " + newAdminStatus);
 
             sqlRowUuid = getSqlRowUuid(conn, usuarioToUpdate);
             conn.commit();
@@ -235,51 +271,35 @@ public class AdminVoluntariosServlet extends HttpServlet {
                 try {
                     Map<String, Object> spData = new HashMap<>();
                     spData.put("administrador", "S".equals(newAdminStatus) ? "Si" : "No");
-                    
                     SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
-                    System.err.println("ADVERTENCIA: Fallo al replicar a SharePoint el cambio de rol para " + usuarioToUpdate + ". Causa: " + e.getMessage());
+                    logger.error("Fallo al replicar a SharePoint el cambio de rol de {}", usuarioToUpdate, e);
                 }
             }
 
-            sendSuccess(response, "Rol de administrador actualizado correctamente.");
+            sendJsonResponse(response, true, "Rol de administrador actualizado correctamente.");
 
         } catch (SQLException e) {
-            e.printStackTrace();
-            sendError(response, "Error al actualizar el rol del voluntario.");
+            logger.error("Error SQL al cambiar rol de {}", usuarioToUpdate, e);
+            sendJsonResponse(response, false, "Error al actualizar el rol.");
         }
     }
     
     private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
-        String uuid = null;
         String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, usuario);
             try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    uuid = rs.getString("SqlRowUUID");
-                }
+                if (rs.next()) return rs.getString("SqlRowUUID");
             }
         }
-        return uuid;
+        return null;
     }
 
-    private void sendSuccess(HttpServletResponse response, String message) throws IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        response.getWriter().print("{\"success\": true, \"message\": \"" + escapeJson(message) + "\"}");
-    }
-
-    private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-        response.getWriter().print("{\"success\": false, \"message\": \"" + escapeJson(message) + "\"}");
-    }
-    
-    private String escapeJson(String str) {
-        if (str == null) return "";
-        return str.replace("\\", "\\\\").replace("\"", "\\\"").replace("\b", "\\b").replace("\f", "\\f")
-                  .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+    private void sendJsonResponse(HttpServletResponse response, boolean success, String message) throws IOException {
+        Map<String, Object> json = new HashMap<>();
+        json.put("success", success);
+        json.put("message", message);
+        mapper.writeValue(response.getWriter(), json);
     }
 }

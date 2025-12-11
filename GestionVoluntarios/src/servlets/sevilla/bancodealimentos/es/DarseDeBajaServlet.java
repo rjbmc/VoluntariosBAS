@@ -7,11 +7,15 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import jakarta.mail.Authenticator;
 import jakarta.mail.Message;
@@ -31,8 +35,13 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 @WebServlet("/darse-de-baja")
 public class DarseDeBajaServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final long serialVersionUID = 2L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(DarseDeBajaServlet.class);
+    
+    // 2. Jackson ObjectMapper
+    private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -42,6 +51,7 @@ public class DarseDeBajaServlet extends HttpServlet {
         HttpSession session = request.getSession(false);
 
         if (session == null || session.getAttribute("usuario") == null) {
+            logger.warn("Intento de baja sin sesión activa. IP: {}", request.getRemoteAddr());
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "No tienes permiso para realizar esta acción.");
             return;
         }
@@ -50,12 +60,16 @@ public class DarseDeBajaServlet extends HttpServlet {
         String email = (String) session.getAttribute("email");
 
         if (email == null || email.isEmpty()) {
+             logger.error("Usuario {} intentó darse de baja pero no tiene email en sesión.", usuario);
              sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "No se pudo encontrar el email del usuario en la sesión.");
              return;
         }
 
+        logger.info("Iniciando proceso de solicitud de baja para el usuario: {}", usuario);
+
         try {
             String tokenBaja = UUID.randomUUID().toString();
+            // Token válido por 1 hora
             Timestamp expiryDate = Timestamp.from(Instant.now().plus(1, ChronoUnit.HOURS));
 
             try (Connection conn = DatabaseUtil.getConnection()) {
@@ -64,18 +78,26 @@ public class DarseDeBajaServlet extends HttpServlet {
                     ps.setString(1, tokenBaja);
                     ps.setTimestamp(2, expiryDate);
                     ps.setString(3, usuario);
-                    ps.executeUpdate();
+                    int rows = ps.executeUpdate();
+                    if (rows > 0) {
+                        logger.debug("Token de baja generado y guardado para usuario {}", usuario);
+                    } else {
+                        logger.warn("No se encontró el usuario {} en la base de datos para actualizar el token de baja.", usuario);
+                    }
                 }
             } catch (SQLException e) {
+                logger.error("Error de base de datos al guardar token de baja para {}", usuario, e);
                 throw new ServletException("Error de base de datos al guardar el token de baja", e);
             }
 
             sendConfirmationEmail(email, tokenBaja, request);
+            
+            logger.info("Correo de confirmación de baja enviado a {}", email);
 
             sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Se ha enviado un correo de confirmación a tu dirección. Por favor, sigue las instrucciones para completar la baja.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error interno al procesar la solicitud de baja de {}", usuario, e);
             sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error interno del servidor. Inténtalo más tarde.");
         }
     }
@@ -120,16 +142,16 @@ public class DarseDeBajaServlet extends HttpServlet {
             Transport.send(message); 
 
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new ServletException("Error al enviar el correo de confirmación de baja.", e);
+            // Propagamos la excepción para que sea logueada correctamente en el doPost
+            throw e;
         }
     }
     
     private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
         response.setStatus(status);
-        ObjectNode jsonResponse = objectMapper.createObjectNode();
+        Map<String, Object> jsonResponse = new HashMap<>();
         jsonResponse.put("success", success);
         jsonResponse.put("message", message);
-        objectMapper.writeValue(response.getWriter(), jsonResponse);
+        mapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

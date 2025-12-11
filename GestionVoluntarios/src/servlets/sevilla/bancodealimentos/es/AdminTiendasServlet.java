@@ -29,13 +29,8 @@ public class AdminTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     
     private static final Logger logger = LoggerFactory.getLogger(AdminTiendasServlet.class);
-    
-    // Instancia de Jackson
     private final ObjectMapper mapper = new ObjectMapper();
 
-    // POJO interno para representar una tienda.
-    // IMPORTANTE: Jackson necesita que los campos sean públicos o tengan Getters.
-    // Hacemos la clase estática y los campos públicos para simplificar la serialización.
     public static class Tienda {
         public int codigo;
         public int prioridad;
@@ -53,13 +48,28 @@ public class AdminTiendasServlet extends HttpServlet {
         public String disponible;
     }
 
+    // --- CORRECCIÓN: Método de seguridad robusto (acepta Boolean true o String "S") ---
+    private boolean isAdmin(HttpSession session) {
+        if (session == null || session.getAttribute("usuario") == null) return false;
+        
+        Object isAdminAttr = session.getAttribute("isAdmin");
+        if (isAdminAttr instanceof Boolean) {
+            return (Boolean) isAdminAttr;
+        } else if (isAdminAttr instanceof String) {
+            return "S".equals(isAdminAttr);
+        }
+        return false;
+    }
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
+        
         HttpSession session = request.getSession(false);
 
-        if (session == null || session.getAttribute("usuario") == null || !"S".equals(session.getAttribute("isAdmin"))) {
+        // Usamos el método robusto
+        if (!isAdmin(session)) {
             logger.warn("Intento de acceso no autorizado a AdminTiendas (GET). IP: {}", request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
@@ -106,13 +116,11 @@ public class AdminTiendasServlet extends HttpServlet {
                 }
             }
             
-            // Jackson convierte la lista a JSON automáticamente
             mapper.writeValue(response.getWriter(), tiendas);
 
         } catch (SQLException e) {
             logger.error("Error SQL al obtener la lista de tiendas.", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            // Respuesta de error usando Jackson y un Map
             Map<String, String> errorMap = new HashMap<>();
             errorMap.put("error", "Error interno de base de datos");
             mapper.writeValue(response.getWriter(), errorMap);
@@ -124,12 +132,11 @@ public class AdminTiendasServlet extends HttpServlet {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         
-        // Usamos un Map para construir la respuesta JSON { "success": true, "message": "..." }
         Map<String, Object> jsonResponse = new HashMap<>();
-        
         HttpSession session = request.getSession(false);
 
-        if (session == null || session.getAttribute("usuario") == null || !"S".equals(session.getAttribute("isAdmin"))) {
+        // Usamos el método robusto
+        if (!isAdmin(session)) {
             logger.warn("Intento de acceso no autorizado a AdminTiendas (POST). IP: {}", request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             jsonResponse.put("success", false);
@@ -199,7 +206,6 @@ public class AdminTiendasServlet extends HttpServlet {
                 response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
             
-            // Escritura final con Jackson
             mapper.writeValue(response.getWriter(), jsonResponse);
         }
     }

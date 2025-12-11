@@ -1,7 +1,6 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -9,6 +8,10 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -20,62 +23,85 @@ import jakarta.servlet.http.HttpSession;
 
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/guardar-turnos")
 public class GuardarTurnosServlet extends HttpServlet {
-    private static final long serialVersionUID = 8L; // Versión actualizada
+    private static final long serialVersionUID = 8L;
+    
+    private static final Logger logger = LoggerFactory.getLogger(GuardarTurnosServlet.class);
+    private final ObjectMapper mapper = new ObjectMapper();
 
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
         Object isAdminAttr = session.getAttribute("isAdmin");
-        return isAdminAttr != null && (boolean) isAdminAttr;
+        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
+               ("S".equals(isAdminAttr));
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         request.setCharacterEncoding("UTF-8");
         response.setContentType("application/json");
-        PrintWriter out = response.getWriter();
-        String jsonResponse;
+        response.setCharacterEncoding("UTF-8");
 
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("usuario") == null) {
+            logger.warn("Intento de guardar turnos sin sesión activa. IP: {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "No hay una sesión de usuario activa.");
             return;
         }
 
         String usuarioEnSesion = (String) session.getAttribute("usuario");
+        
         String usuarioAGuardar = request.getParameter("usuario");
-        String usuarioFinal = (isAdmin(session) && usuarioAGuardar != null && !usuarioAGuardar.trim().isEmpty()) ? usuarioAGuardar : usuarioEnSesion;
+        boolean esAdmin = isAdmin(session);
+        String usuarioFinal = (esAdmin && usuarioAGuardar != null && !usuarioAGuardar.trim().isEmpty()) ? usuarioAGuardar : usuarioEnSesion;
         
         String campanaId = request.getParameter("campanaId");
+        
+        Map<String, Object> jsonResponse = new HashMap<>();
 
-        try (Connection conn = DatabaseUtil.getConnection()) {
+        Connection conn = null;
+        try {
+            conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
 
-            guardarTurnosEnDB(conn, request, campanaId, usuarioFinal, isAdmin(session), usuarioEnSesion);
+            // 1. Guardar en Base de Datos Local
+            guardarTurnosEnDB(conn, request, campanaId, usuarioFinal, esAdmin, usuarioEnSesion);
+            
+            // 2. Replicar a SharePoint
             replicarAsignacionASharePoint(conn, campanaId, usuarioFinal);
 
             conn.commit();
-            jsonResponse = "{\"success\": true, \"message\": \"¡Turnos guardados y sincronizados con éxito!\"}";
+            
+            logger.info("Turnos guardados y sincronizados correctamente para el usuario {}", usuarioFinal);
+            jsonResponse.put("success", true);
+            jsonResponse.put("message", "¡Turnos guardados y sincronizados con éxito!");
 
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error SQL al guardar turnos para {}", usuarioFinal, e);
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Rollback fallido", ex); }
+            
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse = "{\"success\": false, \"message\": \"Error de base de datos. Los cambios no se guardaron.\"}";
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error de base de datos. Los cambios no se guardaron.");
+            
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error general al procesar turnos para {}", usuarioFinal, e);
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Rollback fallido", ex); }
+            
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            jsonResponse = "{\"success\": false, \"message\": \"Error en los datos enviados: " + e.getMessage() + "\"}";
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error en el proceso: " + e.getMessage());
+        } finally {
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
         }
 
-        out.print(jsonResponse);
-        out.flush();
+        mapper.writeValue(response.getWriter(), jsonResponse);
     }
 
-    private void guardarTurnosEnDB(Connection conn, HttpServletRequest request, String campanaId, String usuarioFinal, boolean isAdmin, String usuarioEnSesion) throws SQLException, ServletException {
+    private void guardarTurnosEnDB(Connection conn, HttpServletRequest request, String campanaId, String usuarioFinal, boolean isAdmin, String usuarioEnSesion) throws SQLException {
         String sql = "INSERT INTO voluntarios_en_campana (Campana, Usuario, Turno1, Comentario1, Turno2, Comentario2, Turno3, Comentario3, Turno4, Comentario4, notificar) " +
                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
                      "ON DUPLICATE KEY UPDATE " +
@@ -89,32 +115,53 @@ public class GuardarTurnosServlet extends HttpServlet {
             stmt.setString(1, campanaId);
             stmt.setString(2, usuarioFinal);
             
-            Integer[] tiendas = new Integer[4];
-            String[] comentarios = new String[4];
-
+            // Procesar los 4 turnos
             for (int i = 1; i <= 4; i++) {
                 String tiendaStr = request.getParameter("tienda_" + i);
+                String comentarioInput = request.getParameter("comentario_" + i);
+                
+                // CORRECCIÓN: Comprobamos ambas versiones del parámetro (con n y con ñ)
+                String acompanantesStr = request.getParameter("acompanantes_" + i);
+                if (acompanantesStr == null) {
+                    acompanantesStr = request.getParameter("acompañantes_" + i);
+                }
+                
+                int idxTienda = 3 + (i - 1) * 2;
+                int idxComent = 4 + (i - 1) * 2;
+
                 if (tiendaStr != null && !tiendaStr.isEmpty()) {
-                    tiendas[i - 1] = Integer.parseInt(tiendaStr);
-                    comentarios[i - 1] = request.getParameter("comentario_" + i);
+                    stmt.setInt(idxTienda, Integer.parseInt(tiendaStr));
+                    
+                    StringBuilder sbComentario = new StringBuilder();
+                    
+                    // Procesar número de acompañantes
+                    if (acompanantesStr != null && !acompanantesStr.trim().isEmpty()) {
+                        try {
+                            int num = Integer.parseInt(acompanantesStr.trim());
+                            if (num > 0) {
+                                sbComentario.append("Voluntarios: ").append(num).append(". ");
+                            }
+                        } catch (NumberFormatException e) {
+                            logger.debug("Valor no numérico en acompañantes para turno {}: {}", i, acompanantesStr);
+                        }
+                    }
+                    
+                    if (comentarioInput != null && !comentarioInput.trim().isEmpty()) {
+                        sbComentario.append(comentarioInput.trim());
+                    }
+                    
+                    stmt.setString(idxComent, sbComentario.toString());
                 } else {
-                    tiendas[i - 1] = null;
-                    comentarios[i - 1] = "";
+                    stmt.setNull(idxTienda, java.sql.Types.INTEGER);
+                    stmt.setString(idxComent, "");
                 }
             }
 
-            stmt.setObject(3, tiendas[0]);
-            stmt.setString(4, comentarios[0]);
-            stmt.setObject(5, tiendas[1]);
-            stmt.setString(6, comentarios[1]);
-            stmt.setObject(7, tiendas[2]);
-            stmt.setString(8, comentarios[2]);
-            stmt.setObject(9, tiendas[3]);
-            stmt.setString(10, comentarios[3]);
             stmt.setString(11, "S");
 
             stmt.executeUpdate();
-            String logComment = isAdmin ? "Admin " + usuarioEnSesion + " modificó los turnos de " + usuarioFinal : "Guardado/Modificación de turnos para la campaña " + campanaId;
+            
+            String logComment = isAdmin ? "Admin " + usuarioEnSesion + " modificó los turnos de " + usuarioFinal : "Voluntario modificó sus turnos. Campaña " + campanaId;
             LogUtil.logOperation(conn, "ASIGNACION", usuarioEnSesion, logComment);
         }
     }
@@ -129,22 +176,21 @@ public class GuardarTurnosServlet extends HttpServlet {
         String listIdTiendas = SharepointUtil.getListId(SharepointUtil.SITE_ID, listNameTiendas);
 
         if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) {
-            throw new Exception("Una o más listas de SharePoint no se encontraron (Asignaciones, Voluntarios, Tiendas).");
+            throw new Exception("Error de configuración SharePoint: No se encontraron una o más listas requeridas.");
         }
 
         String voluntarioUuid = getSqlRowUuid(conn, usuario);
         if (voluntarioUuid == null) {
-             System.err.println("ADVERTENCIA: No se pudo encontrar el SqlRowUUID para el usuario '" + usuario + "'. No se puede replicar la asignación.");
-            return;
+             logger.warn("El usuario {} no tiene SqlRowUUID. Se omite la replicación a SharePoint.", usuario);
+             return;
         }
         
         String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
         if (spVoluntarioId == null) {
-            throw new Exception("El voluntario con UUID '" + voluntarioUuid + "' no fue encontrado en SharePoint.");
+            throw new Exception("Voluntario UUID " + voluntarioUuid + " no encontrado en lista SharePoint.");
         }
 
-        String assignmentUuid = "AS-" + voluntarioUuid; // Usamos el UUID del voluntario para el título
-        
+        String assignmentUuid = "AS-" + voluntarioUuid;
         FieldValueSet fields = new FieldValueSet();
         fields.getAdditionalData().put("Title", assignmentUuid);
         fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
@@ -152,6 +198,7 @@ public class GuardarTurnosServlet extends HttpServlet {
         
         String sqlSelect = "SELECT Turno1, Comentario1, Turno2, Comentario2, Turno3, Comentario3, Turno4, Comentario4 FROM voluntarios_en_campana WHERE Usuario = ? AND Campana = ?";
         boolean tieneTurnos = false;
+        
         try (PreparedStatement stmt = conn.prepareStatement(sqlSelect)) {
             stmt.setString(1, usuario);
             stmt.setString(2, campanaId);
@@ -161,7 +208,7 @@ public class GuardarTurnosServlet extends HttpServlet {
                     int idTiendaDb = rs.getInt("Turno" + i);
                     String comentario = rs.getString("Comentario" + i);
 
-                    fields.getAdditionalData().put("Turno" + i + "LookupId", null); // Limpiar por defecto
+                    fields.getAdditionalData().put("Turno" + i + "LookupId", null);
                     fields.getAdditionalData().put("Comentario" + i, comentario);
 
                     if (idTiendaDb > 0) {
@@ -171,6 +218,8 @@ public class GuardarTurnosServlet extends HttpServlet {
                             String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                             if (spTiendaId != null) {
                                 fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
+                            } else {
+                                logger.warn("Tienda UUID {} no encontrada en SharePoint. El turno {} quedará vacío en SP.", tiendaUuid, i);
                             }
                         }
                     }
@@ -180,43 +229,35 @@ public class GuardarTurnosServlet extends HttpServlet {
 
         String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
 
-        if (itemId != null) { // El item existe
+        if (itemId != null) { 
             if (tieneTurnos) {
                 SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
+                logger.debug("Asignación actualizada en SharePoint: {}", assignmentUuid);
             } else {
                 SharepointUtil.deleteListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId);
+                logger.debug("Asignación eliminada de SharePoint (sin turnos): {}", assignmentUuid);
             }
-        } else { // El item no existe
+        } else { 
             if (tieneTurnos) {
                 SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
+                logger.debug("Nueva asignación creada en SharePoint: {}", assignmentUuid);
             }
         }
-        LogUtil.logOperation(conn, "REPLICATE_ASIGNACION", usuario, "Asignación replicada a SharePoint para campaña " + campanaId);
+        
+        LogUtil.logOperation(conn, "REPLICATE_ASIGNACION", usuario, "Sincronización con SharePoint completada.");
     }
 
     private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
-        String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement stmt = conn.prepareStatement("SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?")) {
             stmt.setString(1, usuario);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getString("SqlRowUUID");
-                }
-            }
+            try (ResultSet rs = stmt.executeQuery()) { return rs.next() ? rs.getString(1) : null; }
         }
-        return null;
     }
-
-    private String getSqlRowUuidForTienda(Connection conn, int codigoTienda) throws SQLException {
-        String sql = "SELECT SqlRowUUID FROM tiendas WHERE codigo = ?";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setInt(1, codigoTienda);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getString("SqlRowUUID");
-                }
-            }
+    
+    private String getSqlRowUuidForTienda(Connection conn, int codigo) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement("SELECT SqlRowUUID FROM tiendas WHERE codigo = ?")) {
+            stmt.setInt(1, codigo);
+            try (ResultSet rs = stmt.executeQuery()) { return rs.next() ? rs.getString(1) : null; }
         }
-        return null;
     }
 }

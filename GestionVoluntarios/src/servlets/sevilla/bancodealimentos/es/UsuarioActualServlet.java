@@ -23,7 +23,7 @@ public class UsuarioActualServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         if (session != null && session.getAttribute("usuario") != null) {
-            String usuario = (String) session.getAttribute("usuario");
+            String usuario = ((String) session.getAttribute("usuario")).toUpperCase();
             boolean isAdmin = (Boolean) session.getAttribute("isAdmin");
 
             ObjectNode jsonResponse = objectMapper.createObjectNode();

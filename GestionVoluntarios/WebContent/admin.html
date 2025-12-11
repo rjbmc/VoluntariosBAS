@@ -63,6 +63,19 @@
                 <h2 class="text-xl font-semibold text-gray-800">Sincronizar SharePoint</h2>
                 <p class="text-gray-500 mt-2">Recargar datos desde la base de datos.</p>
             </a>
+            <!-- Tarjeta: Registro de Actividad (Logs) -->
+			<a href="admin-logs.html" class="block">
+			    <div class="bg-white p-6 rounded-lg shadow-md hover:shadow-lg transition-shadow border-l-4 border-gray-600 h-full flex flex-col items-center text-center">
+			        <div class="p-3 bg-gray-100 rounded-full mb-4">
+			            <!-- Icono de Lista/Log -->
+			            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+			                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+			            </svg>
+			        </div>
+			        <h3 class="text-xl font-bold text-gray-800 mb-2">Registro de Actividad</h3>
+			        <p class="text-gray-600 text-sm">Consulta el historial de accesos, errores y operaciones del sistema.</p>
+			    </div>
+			</a>
         </div>
     </main>
 
@@ -79,10 +92,6 @@
                     window.location.href = 'login.html';
                     return; // Añadido return para asegurar que el script se detiene
                 }
-
-                // *** NUEVA CONDICIÓN PARA SUPERADMIN ***
-                // Ocultar la tarjeta de sincronización si el usuario no es el superadministrador específico.
-                // Se asume que el JSON de usuario contiene un campo "usuario" con el ID.
                 if (user.usuario !== '28654139A') {
                     const syncCard = document.getElementById('sync-card');
                     if (syncCard) {

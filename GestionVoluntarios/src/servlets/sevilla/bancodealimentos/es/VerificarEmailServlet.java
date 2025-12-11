@@ -9,8 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -24,92 +26,134 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/verificar-email")
 public class VerificarEmailServlet extends HttpServlet {
-    private static final long serialVersionUID = 3L; // Versión actualizada
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final long serialVersionUID = 3L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(VerificarEmailServlet.class);
+    
+    // 2. Jackson ObjectMapper
+    private final ObjectMapper mapper = new ObjectMapper();
+    
     private static final String SP_LIST_NAME = "Voluntarios";
     private static final String SP_UUID_FIELD = "SqlRowUUID";
-    private static final String SP_VERIFIED_FIELD = "EmailVerificado";
+    private static final String SP_VERIFIED_FIELD = "Verificado"; // Ajustado para coincidir con SyncVoluntarios
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
         String token = request.getParameter("token");
 
         if (token == null || token.isEmpty()) {
+            logger.warn("Intento de verificación de email sin token. IP: {}", request.getRemoteAddr());
             sendJsonResponse(response, false, "Token de verificación no proporcionado.", HttpServletResponse.SC_BAD_REQUEST);
             return;
         }
 
-        try (Connection conn = DatabaseUtil.getConnection()) {
+        Connection conn = null;
+        try {
+            conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
+            
             String usuario = null;
             String sqlRowUuid = null;
 
-            String findSql = "SELECT Usuario, SqlRowUUID FROM voluntarios WHERE token_verificacion_email = ? AND EmailVerificado = 'N'";
+            // Buscar usuario por token y que NO esté verificado aún
+            String findSql = "SELECT Usuario, SqlRowUUID FROM voluntarios WHERE token_verificacion = ? AND verificado = 'N'";
             try (PreparedStatement stmt = conn.prepareStatement(findSql)) {
                 stmt.setString(1, token);
-                ResultSet rs = stmt.executeQuery();
-                if (rs.next()) {
-                    usuario = rs.getString("Usuario");
-                    sqlRowUuid = rs.getString("SqlRowUUID");
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        usuario = rs.getString("Usuario");
+                        sqlRowUuid = rs.getString("SqlRowUUID");
+                    }
                 }
             }
 
             if (usuario != null) {
-                if (sqlRowUuid == null) {
+                // Si por alguna razón no tenía UUID (registro antiguo), le asignamos uno ahora
+                boolean uuidGeneradoAhora = false;
+                if (sqlRowUuid == null || sqlRowUuid.isEmpty()) {
                     sqlRowUuid = UUID.randomUUID().toString();
+                    uuidGeneradoAhora = true;
                 }
 
-                String updateSql = "UPDATE voluntarios SET EmailVerificado = 'S', token_verificacion_email = NULL, SqlRowUUID = ?, notificar = 'S' WHERE Usuario = ?";
+                // Actualizar DB local
+                String updateSql = "UPDATE voluntarios SET verificado = 'S', token_verificacion = NULL, SqlRowUUID = ?, notificar = 'S' WHERE Usuario = ?";
                 try (PreparedStatement updateStmt = conn.prepareStatement(updateSql)) {
                     updateStmt.setString(1, sqlRowUuid);
                     updateStmt.setString(2, usuario);
                     updateStmt.executeUpdate();
                 }
+                
+                LogUtil.logOperation(conn, "EMAIL_VERIFIED", usuario, "Email verificado correctamente con token.");
 
+                // Replicar a SharePoint (Best effort)
                 try {
                     String listId = SharepointUtil.getListId(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
-                    if (listId == null) {
-                        throw new Exception("Lista '" + SP_LIST_NAME + "' no encontrada.");
-                    }
-
-                    String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
-                    
-                    Map<String, Object> spData = new HashMap<>();
-                    spData.put(SP_VERIFIED_FIELD, "S");
-                    FieldValueSet fields = new FieldValueSet();
-                    fields.setAdditionalData(spData);
-
-                    if (itemId != null) {
-                        SharepointUtil.updateListItem(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
-                        LogUtil.logOperation(conn, "SP_VERIFY_UPDATE", usuario, "Verificación de email actualizada en SharePoint.");
+                    if (listId != null) {
+                        String itemId = null;
+                        
+                        // Si ya tenía UUID, intentamos buscarlo por UUID
+                        if (!uuidGeneradoAhora) {
+                            itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
+                        }
+                        
+                        // Si no lo encontramos por UUID (o acabamos de generarlo), intentamos buscar por Title (Nombre) o Email como fallback, 
+                        // pero lo más seguro es asumir que si no está por UUID, quizás no se sincronizó.
+                        // En este caso, si no se encuentra, NO creamos uno nuevo automáticamente para evitar duplicados si la sync va con retraso.
+                        // Solo actualizamos si lo encontramos.
+                        
+                        if (itemId != null) {
+                            Map<String, Object> spData = new HashMap<>();
+                            spData.put(SP_VERIFIED_FIELD, true); // Booleano para campo Yes/No en SP
+                            
+                            FieldValueSet fields = new FieldValueSet();
+                            fields.setAdditionalData(spData);
+                            
+                            SharepointUtil.updateListItem(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
+                            logger.info("Estado de verificación replicado a SharePoint para usuario {}", usuario);
+                        } else {
+                            logger.warn("Usuario {} verificado localmente, pero no encontrado en SharePoint (UUID: {}). Se sincronizará en el próximo barrido.", usuario, sqlRowUuid);
+                        }
                     } else {
-                        LogUtil.logOperation(conn, "SP_VERIFY_WARN", usuario, "No se encontró item en SP para UUID " + sqlRowUuid + ". No se pudo actualizar la verificación.");
+                        logger.error("Lista SharePoint '{}' no encontrada durante verificación.", SP_LIST_NAME);
                     }
                 } catch (Exception e) {
-                    LogUtil.logOperation(conn, "SP_VERIFY_ERROR", usuario, "Error al replicar verificación de email: " + e.getMessage());
-                    e.printStackTrace();
+                    // No bloqueamos el commit local por un fallo en SharePoint
+                    logger.error("Error al replicar verificación de email a SharePoint para {}", usuario, e);
+                    LogUtil.logOperation(conn, "SP_VERIFY_ERROR", usuario, "Error al replicar verificación: " + e.getMessage());
                 }
 
                 conn.commit();
+                logger.info("Cuenta verificada exitosamente: {}", usuario);
+                
+                // Redirigir o mostrar mensaje de éxito
                 sendJsonResponse(response, true, "¡Gracias por verificar tu correo electrónico! Ya puedes iniciar sesión.", HttpServletResponse.SC_OK);
 
             } else {
                 conn.rollback();
+                logger.warn("Intento de verificación fallido. Token inválido o cuenta ya verificada: {}", token);
                 sendJsonResponse(response, false, "El enlace de verificación no es válido o tu correo ya ha sido verificado.", HttpServletResponse.SC_BAD_REQUEST);
             }
+
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Error SQL durante verificación de email", e);
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Rollback fallido", ex); }
             sendJsonResponse(response, false, "Error de base de datos durante la verificación.", HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
         }
     }
     
     private void sendJsonResponse(HttpServletResponse response, boolean success, String message, int statusCode) throws IOException {
-        response.setStatus(statusCode);
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        ObjectNode jsonResponse = objectMapper.createObjectNode();
-        jsonResponse.put("success", success);
-        jsonResponse.put("message", message);
-        objectMapper.writeValue(response.getWriter(), jsonResponse);
+        if (!response.isCommitted()) {
+            response.setStatus(statusCode);
+            Map<String, Object> jsonResponse = new HashMap<>();
+            jsonResponse.put("success", success);
+            jsonResponse.put("message", message);
+            mapper.writeValue(response.getWriter(), jsonResponse);
+        }
     }
 }

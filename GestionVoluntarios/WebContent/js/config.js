@@ -49,7 +49,8 @@ const AppConfig = {
 		SYNC_TIENDAS: '/sync-tiendas',
 	    SYNC_VOLUNTARIOS: '/sync-voluntarios',
 	    SYNC_CAMPANAS: '/sync-campanas',
-	    SYNC_ASIGNACIONES: '/sync-asignaciones'
+	    SYNC_ASIGNACIONES: '/sync-asignaciones',
+		ADMIN_LOGS_DATA: '/admin-logs-data'
 	},
 
 

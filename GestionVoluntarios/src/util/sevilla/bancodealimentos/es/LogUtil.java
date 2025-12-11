@@ -6,6 +6,9 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.Date;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import jakarta.servlet.ServletException;
 
 /**
@@ -13,6 +16,9 @@ import jakarta.servlet.ServletException;
  * Centraliza toda la lógica de logging de la aplicación.
  */
 public class LogUtil {
+
+    // 1. Logger SLF4J (para registrar errores del propio sistema de logs)
+    private static final Logger logger = LoggerFactory.getLogger(LogUtil.class);
 
     /**
      * Registra una operación en el log usando una conexión a la BD existente.
@@ -51,8 +57,9 @@ public class LogUtil {
             // Reutiliza el método anterior
             logOperation(conn, operation, operator, comment);
         } catch (SQLException e) {
-            System.err.println("Error CRÍTICO al registrar la operación en el log (conexión propia): " + e.getMessage());
-            e.printStackTrace();
+            // Sustitución de System.err por logger profesional
+            logger.error("Error CRÍTICO al registrar operación de auditoría en BD (op: {}, usuario: {}). Causa: ", operation, operator, e);
+            
             // Envuelve el error en una ServletException para notificar al contenedor que algo ha ido mal.
             throw new ServletException("Fallo al registrar la operación en el log.", e);
         }

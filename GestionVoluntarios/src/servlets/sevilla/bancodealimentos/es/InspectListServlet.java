@@ -1,10 +1,14 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.graph.models.ColumnDefinition;
@@ -24,6 +28,11 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 @WebServlet("/inspeccionar-lista")
 public class InspectListServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(InspectListServlet.class);
+    
+    // 2. Jackson ObjectMapper
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -34,40 +43,52 @@ public class InspectListServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         String siteId = SharepointUtil.SITE_ID; // Usamos el SiteID por defecto
+        Map<String, Object> jsonResponse = new HashMap<>();
 
         try {
             if (listName == null || listName.trim().isEmpty()) {
+                logger.warn("Petición de inspección sin nombre de lista. IP: {}", request.getRemoteAddr());
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                objectMapper.writeValue(response.getWriter(), Map.of("error", "El parámetro 'listName' es obligatorio."));
+                jsonResponse.put("error", "El parámetro 'listName' es obligatorio.");
+                objectMapper.writeValue(response.getWriter(), jsonResponse);
                 return;
             }
+
+            logger.info("Inspeccionando estructura de lista SharePoint: {}", listName);
 
             String listId = SharepointUtil.getListId(siteId, listName);
 
             if (listId == null) {
+                logger.warn("Lista '{}' no encontrada en el sitio configurado.", listName);
                 response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                objectMapper.writeValue(response.getWriter(), Map.of("error", "La lista '" + listName + "' no fue encontrada."));
+                jsonResponse.put("error", "La lista '" + listName + "' no fue encontrada.");
+                objectMapper.writeValue(response.getWriter(), jsonResponse);
                 return;
             }
 
             ColumnDefinitionCollectionResponse columnsResponse = SharepointUtil.getListColumns(siteId, listId);
             List<ColumnDefinition> columns = columnsResponse.getValue();
 
+            // Mapeamos a una lista de objetos simples para el JSON
             List<Map<String, String>> columnDetails = columns.stream()
                 .map(c -> {
                     Map<String, String> map = new LinkedHashMap<>();
                     map.put("displayName", c.getDisplayName());
-                    map.put("internalName", c.getName());
+                    map.put("internalName", c.getName()); // Este es el valor clave para los 'fields' en Graph API
                     return map;
                 })
                 .collect(Collectors.toList());
 
-            objectMapper.writeValue(response.getWriter(), Map.of("columns", columnDetails));
+            jsonResponse.put("columns", columnDetails);
+            
+            // Respuesta exitosa
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error crítico al inspeccionar la lista '{}'", listName, e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            objectMapper.writeValue(response.getWriter(), Map.of("error", "Error interno al inspeccionar la lista: " + e.getMessage()));
+            jsonResponse.put("error", "Error interno al inspeccionar la lista: " + e.getMessage());
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }
 

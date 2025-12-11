@@ -3,6 +3,9 @@ package servlets.sevilla.bancodealimentos.es;
 import java.io.IOException;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -17,7 +20,12 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/crud-sharepoint")
 public class SharepointCrudServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final long serialVersionUID = 2L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(SharepointCrudServlet.class);
+    
+    // 2. Jackson ObjectMapper
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -29,23 +37,32 @@ public class SharepointCrudServlet extends HttpServlet {
         String payload = request.getParameter("payload");
 
         if (siteId == null || listName == null || action == null) {
+            logger.warn("Petición CRUD inválida: Faltan parámetros. IP: {}", request.getRemoteAddr());
             sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, Map.of("error", "Parámetros 'siteId', 'listName' y 'action' son requeridos."));
             return;
         }
 
-        switch (action.toUpperCase()) {
-            case "DELETE":
-                handleDelete(siteId, listName, itemId, response);
-                break;
-            case "CREATE":
-                handleCreate(siteId, listName, payload, response);
-                break;
-            case "UPDATE":
-                handleUpdate(siteId, listName, itemId, payload, response);
-                break;
-            default:
-                sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, Map.of("error", "Acción no válida. Use CREATE, UPDATE o DELETE."));
-                break;
+        logger.info("Acción CRUD solicitada: {} en lista '{}' (Sitio: {})", action, listName, siteId);
+
+        try {
+            switch (action.toUpperCase()) {
+                case "DELETE":
+                    handleDelete(siteId, listName, itemId, response);
+                    break;
+                case "CREATE":
+                    handleCreate(siteId, listName, payload, response);
+                    break;
+                case "UPDATE":
+                    handleUpdate(siteId, listName, itemId, payload, response);
+                    break;
+                default:
+                    logger.warn("Acción desconocida solicitada: {}", action);
+                    sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, Map.of("error", "Acción no válida. Use CREATE, UPDATE o DELETE."));
+                    break;
+            }
+        } catch (Exception e) {
+            // Captura general por si algo se escapa de los handlers específicos
+            handleException(e, response);
         }
     }
 
@@ -56,6 +73,7 @@ public class SharepointCrudServlet extends HttpServlet {
         }
         try {
             SharepointUtil.deleteListItem(siteId, listName, itemId);
+            logger.info("Elemento eliminado correctamente. ID: {}", itemId);
             sendJsonResponse(res, HttpServletResponse.SC_OK, Map.of("success", "Elemento borrado correctamente."));
         } catch (Exception e) {
             handleException(e, res);
@@ -75,10 +93,12 @@ public class SharepointCrudServlet extends HttpServlet {
             newFields.setAdditionalData(fields);
             
             SharepointUtil.createListItem(siteId, listName, newFields);
+            logger.info("Elemento creado correctamente en lista '{}'", listName);
 
             sendJsonResponse(res, HttpServletResponse.SC_CREATED, Map.of("success", "Elemento creado correctamente."));
 
         } catch (JsonProcessingException e) {
+            logger.warn("Error de formato JSON en payload de creación: {}", e.getMessage());
             sendJsonResponse(res, HttpServletResponse.SC_BAD_REQUEST, Map.of("error", "El 'payload' no es un JSON válido: " + e.getMessage()));
         } catch (Exception e) {
             handleException(e, res);
@@ -98,10 +118,12 @@ public class SharepointCrudServlet extends HttpServlet {
             fieldsToUpdate.setAdditionalData(fields);
 
             SharepointUtil.updateListItem(siteId, listName, itemId, fieldsToUpdate);
+            logger.info("Elemento actualizado correctamente. ID: {}", itemId);
 
             sendJsonResponse(res, HttpServletResponse.SC_OK, Map.of("success", "Elemento actualizado correctamente."));
 
         } catch (JsonProcessingException e) {
+            logger.warn("Error de formato JSON en payload de actualización: {}", e.getMessage());
             sendJsonResponse(res, HttpServletResponse.SC_BAD_REQUEST, Map.of("error", "El 'payload' no es un JSON válido: " + e.getMessage()));
         } catch (Exception e) {
             handleException(e, res);
@@ -109,14 +131,13 @@ public class SharepointCrudServlet extends HttpServlet {
     }
 
     private void handleException(Exception e, HttpServletResponse res) throws IOException {
-        System.err.println("Error en SharepointCrudServlet: " + e.getMessage());
-        e.printStackTrace();
+        logger.error("Error crítico en operación SharepointCrudServlet", e);
         if (!res.isCommitted()) {
             sendJsonResponse(res, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, Map.of("error", "Error interno en el servidor: " + e.getMessage()));
         }
     }
 
-    private void sendJsonResponse(HttpServletResponse response, int statusCode, Map<String, String> data) throws IOException {
+    private void sendJsonResponse(HttpServletResponse response, int statusCode, Map<String, ?> data) throws IOException {
         response.setStatus(statusCode);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");

@@ -1,13 +1,20 @@
-// Paquete: servlets.sevilla.bancodealimentos.es
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -15,8 +22,6 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-
-import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 /**
@@ -26,41 +31,80 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/informe-campana")
 public class InformeCampanaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(InformeCampanaServlet.class);
+    
+    // 2. Jackson ObjectMapper
+    private final ObjectMapper mapper = new ObjectMapper();
 
+    // --- DTOs para estructurar la respuesta JSON compleja ---
+    public static class InformeDTO {
+        public CampanaDTO campana;
+        public List<TiendaInformeDTO> tiendas = new ArrayList<>();
+    }
+
+    public static class CampanaDTO {
+        public String id;
+        public String denominacion;
+        public String fecha1;
+        public String fecha2;
+    }
+
+    public static class TiendaInformeDTO {
+        public int codigo;
+        public String denominacion;
+        public TurnosDTO turnos = new TurnosDTO();
+    }
+
+    public static class TurnosDTO {
+        public List<VoluntarioResumenDTO> turno1 = new ArrayList<>();
+        public List<VoluntarioResumenDTO> turno2 = new ArrayList<>();
+        public List<VoluntarioResumenDTO> turno3 = new ArrayList<>();
+        public List<VoluntarioResumenDTO> turno4 = new ArrayList<>();
+    }
+
+    public static class VoluntarioResumenDTO {
+        public String nombre;
+        public String apellidos;
+        public int acompanantes;
+    }
+
+    // 3. Verificación de seguridad estandarizada
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        return session != null && session.getAttribute("isAdmin") != null && (boolean) session.getAttribute("isAdmin");
+        if (session == null || session.getAttribute("usuario") == null) return false;
+        
+        Object isAdminAttr = session.getAttribute("isAdmin");
+        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
+               ("S".equals(isAdminAttr));
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+
         if (!isAdmin(request)) {
+            logger.warn("Acceso denegado a InformeCampana. IP: {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;
         }
 
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        PrintWriter out = response.getWriter();
-
         String campanaId = request.getParameter("campana");
-        if (campanaId == null || campanaId.trim().isEmpty()) {
-            try {
-                campanaId = getActiveCampaign();
+        
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            
+            // Si no se especifica, buscar activa
+            if (campanaId == null || campanaId.trim().isEmpty()) {
+                campanaId = getActiveCampaign(conn);
                 if (campanaId == null) {
                     response.sendError(HttpServletResponse.SC_NOT_FOUND, "No hay ninguna campaña activa.");
                     return;
                 }
-            } catch (SQLException e) {
-                e.printStackTrace();
-                response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al buscar la campaña activa.");
-                return;
             }
-        }
 
-        try (Connection conn = DatabaseUtil.getConnection()) {
-            
-            StringBuilder jsonBuilder = new StringBuilder("{");
+            InformeDTO informe = new InformeDTO();
 
             // 1. Obtener detalles de la campaña
             String sqlCampana = "SELECT denominacion, fecha1, fecha2 FROM campanas WHERE Campana = ?";
@@ -68,20 +112,25 @@ public class InformeCampanaServlet extends HttpServlet {
                 stmt.setString(1, campanaId);
                 try (ResultSet rs = stmt.executeQuery()) {
                     if (rs.next()) {
-                        jsonBuilder.append("\"campana\":{");
-                        jsonBuilder.append("\"id\":\"").append(escapeJson(campanaId)).append("\",");
-                        jsonBuilder.append("\"denominacion\":\"").append(escapeJson(rs.getString("denominacion"))).append("\",");
-                        jsonBuilder.append("\"fecha1\":\"").append(rs.getDate("fecha1")).append("\",");
-                        jsonBuilder.append("\"fecha2\":\"").append(rs.getDate("fecha2")).append("\"");
-                        jsonBuilder.append("},");
+                        CampanaDTO c = new CampanaDTO();
+                        c.id = campanaId;
+                        c.denominacion = rs.getString("denominacion");
+                        Date f1 = rs.getDate("fecha1");
+                        Date f2 = rs.getDate("fecha2");
+                        c.fecha1 = (f1 != null) ? f1.toString() : "";
+                        c.fecha2 = (f2 != null) ? f2.toString() : "";
+                        informe.campana = c;
                     } else {
-                        throw new ServletException("campaña no encontrada.");
+                        response.sendError(HttpServletResponse.SC_NOT_FOUND, "Campaña no encontrada.");
+                        return;
                     }
                 }
             }
 
-            // 2. Obtener todas las asignaciones y construir la estructura de datos
-            jsonBuilder.append("\"tiendas\":[");
+            // 2. Obtener asignaciones y organizarlas por tienda
+            // Usamos LinkedHashMap para mantener el orden de las tiendas por denominación
+            Map<Integer, TiendaInformeDTO> tiendasMap = new LinkedHashMap<>();
+
             String sqlAsignaciones = "SELECT t.codigo, t.denominacion, v.Nombre, v.Apellidos, " +
                                      "vec.Turno1, vec.Comentario1, vec.Turno2, vec.Comentario2, " +
                                      "vec.Turno3, vec.Comentario3, vec.Turno4, vec.Comentario4 " +
@@ -94,162 +143,79 @@ public class InformeCampanaServlet extends HttpServlet {
             try (PreparedStatement stmt = conn.prepareStatement(sqlAsignaciones)) {
                 stmt.setString(1, campanaId);
                 try (ResultSet rs = stmt.executeQuery()) {
-                    
-                    int currentTiendaId = -1;
-                    boolean firstTienda = true;
-
                     while (rs.next()) {
                         int tiendaId = rs.getInt("codigo");
-                        if (tiendaId != currentTiendaId) {
-                            if (!firstTienda) {
-                                jsonBuilder.append("]}},"); // Cierra la tienda anterior
-                            }
-                            jsonBuilder.append("{");
-                            jsonBuilder.append("\"codigo\":").append(tiendaId).append(",");
-                            jsonBuilder.append("\"denominacion\":\"").append(escapeJson(rs.getString("denominacion"))).append("\",");
-                            jsonBuilder.append("\"turnos\":{\"turno1\":[],\"turno2\":[],\"turno3\":[],\"turno4\":[]}}");
-                            
-                            // Volver atrás para rellenar los turnos de esta tienda
-                            jsonBuilder.setLength(jsonBuilder.length() - 2); // Quita "}}"
-                            jsonBuilder.append(",\"turno1\":[");
-                            currentTiendaId = tiendaId;
-                            firstTienda = false;
-                        }
                         
-                        // lógica para rellenar los turnos (simplificada para el ejemplo)
-                        // Una implementación más robusta procesaría esto en Java después de la consulta.
-                    }
-                     if (!firstTienda) {
-                        jsonBuilder.append("]}}");
+                        // Obtener o crear el DTO de la tienda
+                        TiendaInformeDTO tienda = tiendasMap.computeIfAbsent(tiendaId, k -> {
+                            TiendaInformeDTO t = new TiendaInformeDTO();
+                            t.codigo = tiendaId;
+                            try { t.denominacion = rs.getString("denominacion"); } catch (SQLException e) {}
+                            return t;
+                        });
+
+                        // Si hay un voluntario en esta fila (LEFT JOIN podría devolver nulos si no hay nadie)
+                        String nombreVoluntario = rs.getString("Nombre");
+                        if (nombreVoluntario != null) {
+                            VoluntarioResumenDTO vol = new VoluntarioResumenDTO();
+                            vol.nombre = nombreVoluntario;
+                            vol.apellidos = rs.getString("Apellidos");
+                            
+                            // Determinar en qué turno(s) está este voluntario EN ESTA TIENDA
+                            // Un voluntario puede estar en la misma tienda en varios turnos, o en diferentes tiendas.
+                            // La consulta SQL devuelve una fila por asignación que involucre a esta tienda.
+                            
+                            checkAndAddVoluntario(rs, tiendaId, 1, vol, tienda.turnos.turno1);
+                            checkAndAddVoluntario(rs, tiendaId, 2, vol, tienda.turnos.turno2);
+                            checkAndAddVoluntario(rs, tiendaId, 3, vol, tienda.turnos.turno3);
+                            checkAndAddVoluntario(rs, tiendaId, 4, vol, tienda.turnos.turno4);
+                        }
                     }
                 }
             }
-            // NOTA: La consulta SQL anterior es compleja. Una alternativa más legible sería hacer
-            // una consulta por cada tienda, pero sería menos eficiente. Para este caso,
-            // una consulta más simple y procesado en Java es mejor. Se implementará
-            // una versión más robusta y legible a continuación.
             
-            // versión más robusta y legible
-            jsonBuilder.setLength(0); // Reiniciar el builder
-            jsonBuilder.append("{");
-            // Repetir la obtención de detalles de campaña
-            // ...
+            // Pasar del Map a la Lista final
+            informe.tiendas.addAll(tiendasMap.values());
             
-            // Esta es la implementación final que usaremos
-            out.print(getReportDataAsJson(conn, campanaId));
+            // 3. Serialización automática con Jackson
+            mapper.writeValue(response.getWriter(), informe);
 
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (SQLException e) {
+            logger.error("Error SQL al generar el informe de campaña.", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al generar los datos del informe.");
         }
     }
-    
-    // método refactorizado y final para obtener los datos del informe
-    private String getReportDataAsJson(Connection conn, String campanaId) throws SQLException, ServletException {
-        StringBuilder jsonBuilder = new StringBuilder("{");
 
-        // 1. Detalles de la campaña
-        String sqlCampana = "SELECT denominacion, fecha1, fecha2 FROM campanas WHERE Campana = ?";
-        try (PreparedStatement stmt = conn.prepareStatement(sqlCampana)) {
-            stmt.setString(1, campanaId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    jsonBuilder.append("\"campana\":{");
-                    jsonBuilder.append("\"id\":\"").append(escapeJson(campanaId)).append("\",");
-                    jsonBuilder.append("\"denominacion\":\"").append(escapeJson(rs.getString("denominacion"))).append("\",");
-                    jsonBuilder.append("\"fecha1\":\"").append(rs.getDate("fecha1")).append("\",");
-                    jsonBuilder.append("\"fecha2\":\"").append(rs.getDate("fecha2")).append("\"");
-                    jsonBuilder.append("},");
-                } else {
-                    throw new ServletException("campaña no encontrada.");
-                }
-            }
-        }
-
-        // 2. Obtener todas las tiendas y sus voluntarios por turno
-        jsonBuilder.append("\"tiendas\":[");
-        String sqlTiendas = "SELECT codigo, denominacion FROM tiendas WHERE disponible = 'S' ORDER BY denominacion";
-        try (PreparedStatement stmtTiendas = conn.prepareStatement(sqlTiendas)) {
-            try (ResultSet rsTiendas = stmtTiendas.executeQuery()) {
-                boolean firstTienda = true;
-                while (rsTiendas.next()) {
-                    if (!firstTienda) jsonBuilder.append(",");
-                    
-                    int tiendaId = rsTiendas.getInt("codigo");
-                    jsonBuilder.append("{");
-                    jsonBuilder.append("\"codigo\":").append(tiendaId).append(",");
-                    jsonBuilder.append("\"denominacion\":\"").append(escapeJson(rsTiendas.getString("denominacion"))).append("\",");
-                    jsonBuilder.append("\"turnos\":{");
-
-                    // Para cada tienda, obtener los voluntarios de cada turno
-                    for (int i = 1; i <= 4; i++) {
-                        jsonBuilder.append("\"turno").append(i).append("\":[");
-                        appendVoluntariosForTurno(conn, campanaId, tiendaId, i, jsonBuilder);
-                        jsonBuilder.append(i == 4 ? "]" : "],");
-                    }
-
-                    jsonBuilder.append("}}");
-                    firstTienda = false;
-                }
-            }
-        }
-        jsonBuilder.append("]}");
-        return jsonBuilder.toString();
-    }
-
-    private void appendVoluntariosForTurno(Connection conn, String campanaId, int tiendaId, int turnoNum, StringBuilder jsonBuilder) throws SQLException {
-        String turnoCol = "Turno" + turnoNum;
-        String comentarioCol = "Comentario" + turnoNum;
-        String sqlVoluntarios = "SELECT v.Nombre, v.Apellidos, vec." + comentarioCol + " AS Comentario " +
-                                "FROM voluntarios_en_campana vec JOIN voluntarios v ON vec.Usuario = v.Usuario " +
-                                "WHERE vec.Campana = ? AND vec." + turnoCol + " = ? ORDER BY v.Apellidos, v.Nombre";
+    private void checkAndAddVoluntario(ResultSet rs, int currentTiendaId, int turnoNum, VoluntarioResumenDTO baseVol, List<VoluntarioResumenDTO> list) throws SQLException {
+        int assignedTiendaId = rs.getInt("Turno" + turnoNum);
         
-        try (PreparedStatement stmt = conn.prepareStatement(sqlVoluntarios)) {
-            stmt.setString(1, campanaId);
-            stmt.setInt(2, tiendaId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                boolean firstVoluntario = true;
-                while (rs.next()) {
-                    if (!firstVoluntario) jsonBuilder.append(",");
-                    
-                    int acompanantes = 0;
-                    String comentario = rs.getString("Comentario");
-                    if (comentario != null && comentario.startsWith("Voluntarios: ")) {
-                        try {
-                            String numStr = comentario.substring("Voluntarios: ".length()).split("\\.")[0].trim();
-                            acompanantes = Integer.parseInt(numStr);
-                        } catch (Exception e) { /* Ignorar */ }
-                    }
+        // Si el voluntario tiene asignado el turno X en ESTA tienda
+        if (assignedTiendaId == currentTiendaId) {
+            // Creamos una copia o usamos el base, calculando acompañantes específicos de este turno
+            VoluntarioResumenDTO v = new VoluntarioResumenDTO();
+            v.nombre = baseVol.nombre;
+            v.apellidos = baseVol.apellidos;
+            v.acompanantes = 0;
 
-                    jsonBuilder.append("{");
-                    jsonBuilder.append("\"nombre\":\"").append(escapeJson(rs.getString("Nombre"))).append("\",");
-                    jsonBuilder.append("\"apellidos\":\"").append(escapeJson(rs.getString("Apellidos"))).append("\",");
-                    jsonBuilder.append("\"acompanantes\":").append(acompanantes);
-                    jsonBuilder.append("}");
-                    firstVoluntario = false;
-                }
+            String comentario = rs.getString("Comentario" + turnoNum);
+            if (comentario != null && comentario.startsWith("Voluntarios: ")) {
+                try {
+                    String numStr = comentario.substring("Voluntarios: ".length()).split("\\.")[0].trim();
+                    v.acompanantes = Integer.parseInt(numStr);
+                } catch (Exception e) { /* Ignorar error de parseo */ }
             }
+            list.add(v);
         }
     }
 
-    private String getActiveCampaign() throws SQLException {
-        String campanaId = null;
+    private String getActiveCampaign(Connection conn) throws SQLException {
         String sql = "SELECT Campana FROM campanas WHERE estado = 'S' LIMIT 1";
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
+        try (PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             if (rs.next()) {
-                campanaId = rs.getString("Campana");
+                return rs.getString("Campana");
             }
         }
-        return campanaId;
-    }
-    
-    private String escapeJson(String str) {
-        if (str == null) return "";
-        return str.replace("\\", "\\\\").replace("\"", "\\\"").replace("\b", "\\b").replace("\f", "\\f")
-                  .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+        return null;
     }
 }
-

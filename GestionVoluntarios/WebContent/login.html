@@ -68,40 +68,56 @@
             const form = event.target;
             const formData = new FormData(form);
             const messageDiv = document.getElementById('message');
+            const usuario = formData.get('usuario'); // Esto obtiene el string del valor.
 
             messageDiv.textContent = 'Verificando...';
             messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
             messageDiv.classList.remove('hidden');
 
             try {
+                // *** LLAMADA ORIGINAL RESTAURADA AL FETCH REAL ***
                 const response = await fetch(AppConfig.getUrl('LOGIN'), {
                     method: 'POST',
                     body: new URLSearchParams(formData)
                 });
-
+                
+                // Aquí se verifica el éxito del HTTP (200)
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
+                }
+                
                 const result = await response.json();
 
                 if (result.success) {
+                    // Éxito
                     messageDiv.textContent = '¡Login correcto! Redirigiendo...';
                     messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
                     
                     setTimeout(() => {
+                        // Construir el parámetro de usuario
+                        const redirectParam = `?usuario=${encodeURIComponent(usuario)}`;
+                        
+                        // RESTAURACIÓN DE LA LÓGICA CONDICIONAL ORIGINAL + PARÁMETRO
                         if (result.isAdmin) {
-                            window.location.href = 'admin.html';
+                            window.location.href = 'admin.html' + redirectParam; // Redirección con parámetro
                         } else {
-                            window.location.href = 'asignar-turnos.html';
+                            window.location.href = 'asignar-turnos.html' + redirectParam; // Redirección con parámetro
                         }
                     }, 1500);
 
                 } else {
+                    // Fallo (Mensaje desde el Servlet)
                     messageDiv.textContent = result.message || 'Error desconocido.';
                     messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
                 }
 
             } catch (error) {
-            	console.error('Error al conectar con el servidor:', error);
-                messageDiv.textContent = 'No se puede conectar con el servidor. Inténtalo más tarde.';
+                // Captura el error de conexión o de parseo JSON.
+                console.error('Error al conectar con el servidor:', error);
+                messageDiv.textContent = 'Error de conexión o servidor no disponible. (Compruebe que el Servlet esté activo).';
                 messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+            } finally {
+                submitBtn.disabled = false;
             }
             
             messageDiv.classList.remove('hidden');

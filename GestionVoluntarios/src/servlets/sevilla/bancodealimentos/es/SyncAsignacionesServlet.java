@@ -5,9 +5,13 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -21,17 +25,33 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 
 @WebServlet("/sync-asignaciones")
 public class SyncAsignacionesServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final long serialVersionUID = 2L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(SyncAsignacionesServlet.class);
+    
+    // 2. Jackson ObjectMapper
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
     private static final String SP_LIST_ASIGNACIONES = "Asignaciones";
     private static final String SP_LIST_VOLUNTARIOS = "Voluntarios";
     private static final String SP_LIST_TIENDAS = "Tiendas";
-    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    // 3. Verificación de seguridad estandarizada
+    private boolean isAdmin(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute("usuario") == null) return false;
+        
+        Object isAdminAttr = session.getAttribute("isAdmin");
+        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
+               ("S".equals(isAdminAttr));
+    }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        HttpSession session = request.getSession(false);
-        if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
-            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado. La sesión ha expirado. Por favor, cierra sesión y vuelve a entrar.", "");
+        if (!isAdmin(request)) {
+            logger.warn("Acceso denegado a SyncAsignaciones. IP: {}", request.getRemoteAddr());
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado. Permisos insuficientes.", "");
             return;
         }
 
@@ -39,17 +59,22 @@ public class SyncAsignacionesServlet extends HttpServlet {
         int fallidos = 0;
         int totalProcesados = 0;
 
+        logger.info("Iniciando sincronización masiva de asignaciones con SharePoint...");
+
         try (Connection conn = DatabaseUtil.getConnection()) {
+            // Validar existencia de listas en SharePoint
             String listIdAsignaciones = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_ASIGNACIONES);
             String listIdTiendas = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_TIENDAS);
             String listIdVoluntarios = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_VOLUNTARIOS);
 
-            if (listIdAsignaciones == null) throw new Exception("La lista 'Asignaciones' no fue encontrada en SharePoint.");
-            if (listIdTiendas == null) throw new Exception("La lista 'Tiendas' no fue encontrada en SharePoint.");
-            if (listIdVoluntarios == null) throw new Exception("La lista 'Voluntarios' no fue encontrada en SharePoint.");
+            if (listIdAsignaciones == null) throw new Exception("Lista 'Asignaciones' no encontrada en SP.");
+            if (listIdTiendas == null) throw new Exception("Lista 'Tiendas' no encontrada en SP.");
+            if (listIdVoluntarios == null) throw new Exception("Lista 'Voluntarios' no encontrada en SP.");
 
+            // Limpieza inicial
+            logger.info("Eliminando asignaciones antiguas en SharePoint...");
             SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listIdAsignaciones);
-            Thread.sleep(1000); // Pausa prudencial
+            Thread.sleep(1000); // Pausa técnica
 
             String sql = "SELECT * FROM voluntarios_en_campana";
             try (PreparedStatement psVoluntariosCampana = conn.prepareStatement(sql);
@@ -57,64 +82,87 @@ public class SyncAsignacionesServlet extends HttpServlet {
 
                 while (rs.next()) {
                     totalProcesados++;
-                    String voluntarioRowUuid = rs.getString("SqlRowUUID");
+                    String voluntarioRowUuid = rs.getString("SqlRowUUID"); // UUID de la tabla voluntarios_en_campana (si existe)
+                    // Si la tabla de asignaciones no tiene UUID propio, podríamos generarlo o usar el del voluntario.
+                    // Asumiremos que el código original usa el UUID de la tabla intermedia o lo genera.
+                    // Si rs.getString("SqlRowUUID") es null, deberíamos generar uno lógico.
+                    if (voluntarioRowUuid == null) voluntarioRowUuid = "AS-" + rs.getString("Usuario"); 
+                    
                     String idVoluntarioDb = rs.getString("Usuario");
 
                     try {
                         FieldValueSet fields = new FieldValueSet();
+                        // Nota: El campo SqlRowUUID en la lista de Asignaciones es útil para futuras sincronizaciones
                         fields.getAdditionalData().put("SqlRowUUID", voluntarioRowUuid);
-                        fields.getAdditionalData().put("Title", voluntarioRowUuid); // Title es obligatorio
+                        fields.getAdditionalData().put("Title", voluntarioRowUuid);
 
-                        // --- VOLUNTARIO ---
+                        // --- BUSCAR LOOKUP DEL VOLUNTARIO ---
+                        // Necesitamos el UUID de la tabla 'voluntarios' para buscarlo en la lista 'Voluntarios' de SP
                         String voluntarioUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM voluntarios WHERE usuario = ?", idVoluntarioDb);
+                        
                         if (voluntarioUuid != null) {
                             String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
                             if (spVoluntarioId != null) {
                                 fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
                             } else {
-                                throw new Exception("Voluntario con UUID " + voluntarioUuid + " no encontrado en SharePoint.");
+                                throw new Exception("Voluntario UUID " + voluntarioUuid + " no encontrado en lista SP 'Voluntarios'.");
                             }
                         } else {
-                            throw new Exception("Voluntario con ID " + idVoluntarioDb + " no encontrado en la BD local.");
+                            throw new Exception("Voluntario ID " + idVoluntarioDb + " no encontrado en BD local o sin UUID.");
                         }
                         
                         fields.getAdditionalData().put("Campana", rs.getString("Campana"));
 
-                        // --- TURNOS ---
+                        // --- PROCESAR TURNOS (Lookups de Tiendas) ---
+                        boolean tieneAlgunTurno = false;
                         for (int i = 1; i <= 4; i++) {
                             int idTiendaDb = rs.getInt("Turno" + i);
                             String comentario = rs.getString("Comentario" + i);
 
                             if (idTiendaDb > 0 && !rs.wasNull()) {
+                                tieneAlgunTurno = true;
                                 String tiendaUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM tiendas WHERE codigo = ?", idTiendaDb);
+                                
                                 if (tiendaUuid != null) {
                                     String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                                     if (spTiendaId != null) {
                                         fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
                                         fields.getAdditionalData().put("Comentario" + i, comentario);
                                     } else {
-                                        throw new Exception("Tienda para Turno"+i+" con UUID " + tiendaUuid + " no encontrada en SharePoint.");
+                                        // Advertencia pero no fallo total del ítem
+                                        logger.warn("Tienda UUID {} no encontrada en SP. Turno {} quedará vacío.", tiendaUuid, i);
+                                        errorLog.append("WARN: Tienda UUID ").append(tiendaUuid).append(" no en SP (Turno ").append(i).append(").\n");
                                     }
                                 } else {
-                                    throw new Exception("Tienda para Turno"+i+" con ID " + idTiendaDb + " no encontrada en la BD.");
+                                    throw new Exception("Tienda ID " + idTiendaDb + " no encontrada en BD local.");
                                 }
                             }
                         }
                         
+                        // Solo creamos el ítem si tiene al menos un turno o si es necesario registrar la asignación vacía
+                        // (Asumimos que siempre se crea si existe en la tabla voluntarios_en_campana)
                         SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
+
+                        // Pausa breve para evitar throttling
+                        if (totalProcesados % 10 == 0) Thread.sleep(200);
 
                     } catch (Exception e) {
                         fallidos++;
-                        errorLog.append("[FALLO] Fila de voluntario "+ idVoluntarioDb +" (UUID: " + voluntarioRowUuid + "). Causa: ").append(e.getMessage()).append("\n");
+                        String msg = "Error procesando asignación para voluntario " + idVoluntarioDb + ": " + e.getMessage();
+                        logger.error(msg);
+                        errorLog.append("[FALLO] ").append(msg).append("\n");
                     }
                 }
             }
+            
             String message = String.format("Sincronización de Asignaciones completada. Total: %d. Fallidos: %d.", totalProcesados, fallidos);
+            logger.info(message);
+            
             sendJsonResponse(response, HttpServletResponse.SC_OK, fallidos == 0, message, errorLog.toString());
             
         } catch (Exception e) {
-            e.printStackTrace();
-            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error CRÍTICO en SyncAsignacionesServlet: " + e.getMessage(), "");
+            logger.error("Error CRÍTICO en SyncAsignacionesServlet", e);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error crítico: " + e.getMessage(), "");
         }
     }
 
@@ -136,12 +184,14 @@ public class SyncAsignacionesServlet extends HttpServlet {
             response.setStatus(statusCode);
             response.setContentType("application/json");
             response.setCharacterEncoding("UTF-8");
-            ObjectNode jsonResponse = objectMapper.createObjectNode();
+            
+            Map<String, Object> jsonResponse = new HashMap<>();
             jsonResponse.put("success", success);
             jsonResponse.put("message", message);
             if (errorLog != null && !errorLog.isEmpty()) {
                 jsonResponse.put("errors", errorLog);
             }
+            
             objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }

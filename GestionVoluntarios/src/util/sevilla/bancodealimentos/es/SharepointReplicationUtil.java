@@ -5,10 +5,16 @@ import java.sql.SQLException;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.microsoft.graph.models.FieldValueSet;
 
 // UTILIDAD PARA REPLICAR CAMBIOS DE UN ÚNICO ELEMENTO (CRUD)
 public final class SharepointReplicationUtil {
+
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(SharepointReplicationUtil.class);
 
     public enum Operation {
         INSERT,
@@ -32,11 +38,13 @@ public final class SharepointReplicationUtil {
                 throw new Exception("La lista '" + listName + "' no se encontró en el sitio de SharePoint.");
             }
         } catch (Exception e) {
+            logger.error("Error al obtener ID de lista SharePoint '{}'", listName, e);
             logReplicationError(conn, listName, rowUuid, "No se pudo obtener el ID de la lista: " + e.getMessage());
             return;
         }
 
         try {
+            logger.debug("Iniciando replicación: {} en lista {}", operation, listName);
             switch (operation) {
                 case INSERT:
                     handleInsert(conn, targetSiteId, listId, listName, data, rowUuid);
@@ -49,8 +57,8 @@ public final class SharepointReplicationUtil {
                     break;
             }
         } catch (Exception e) {
+            logger.error("Fallo genérico en la replicación para UUID {}", rowUuid, e);
             logReplicationError(conn, listName, rowUuid, "Fallo genérico en la replicación: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
@@ -106,7 +114,8 @@ public final class SharepointReplicationUtil {
             LogUtil.logOperation(conn, "REPLICATE_SUCCESS", "SYSTEM",
                 "Operación " + operation + " replicada a SP en lista: " + listName + " para UUID: " + rowUuid);
         } catch (SQLException e) {
-            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_SUCCESS: " + e.getMessage());
+            // Si falla el log en base de datos, usamos el logger de archivo como respaldo crítico
+            logger.error("CRITICAL: Fallo al registrar LOG de REPLICATE_SUCCESS en base de datos", e);
         }
     }
     
@@ -115,7 +124,7 @@ public final class SharepointReplicationUtil {
             LogUtil.logOperation(conn, "REPLICATE_ERROR", "SYSTEM",
                 "Error de replicación en lista '" + listName + "' para UUID '" + rowUuid + "': " + details);
         } catch (SQLException e) {
-            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_ERROR: " + e.getMessage());
+            logger.error("CRITICAL: Fallo al registrar LOG de REPLICATE_ERROR en base de datos", e);
         }
     }
 
@@ -124,7 +133,7 @@ public final class SharepointReplicationUtil {
             LogUtil.logOperation(conn, "REPLICATE_WARNING", "SYSTEM",
                 "Warning de replicación en lista '" + listName + "' para UUID '" + rowUuid + "': " + details);
         } catch (SQLException e) {
-            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_WARNING: " + e.getMessage());
+            logger.error("CRITICAL: Fallo al registrar LOG de REPLICATE_WARNING en base de datos", e);
         }
     }
 }
