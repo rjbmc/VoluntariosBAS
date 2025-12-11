@@ -1,17 +1,13 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.google.gson.JsonObject;
-import com.microsoft.graph.models.FieldValueSet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -19,118 +15,75 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-import util.sevilla.bancodealimentos.es.DatabaseUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.TiendasUtil;
 
+/**
+ * Servlet encargado de reconstruir la tabla de tiendas a partir de una fuente externa
+ * o fichero maestro. Esta es una operación administrativa crítica.
+ */
 @WebServlet("/rebuild-tiendas")
 public class RebuildTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
-    private static final String SHAREPOINT_LIST_NAME = "Tiendas";
-    private static final int PAUSA_ENTRE_PETICIONES_MS = 400;
-
-    private static class TiendaData {
-        int codigo; String denominacion; String sqlRowUUID; String direccion; BigDecimal lat; BigDecimal lon;
-        String cp; String poblacion; String cadena; int prioridad; boolean disponible;
-        int huecos1, huecos2, huecos3, huecos4;
-
-        TiendaData(ResultSet rs) throws SQLException {
-            this.codigo = rs.getInt("codigo");
-            this.denominacion = rs.getString("denominacion");
-            this.sqlRowUUID = rs.getString("SqlRowUUID");
-            this.direccion = rs.getString("Direccion");
-            this.lat = rs.getBigDecimal("Lat");
-            this.lon = rs.getBigDecimal("Lon");
-            this.cp = rs.getString("cp");
-            this.poblacion = rs.getString("Poblacion");
-            this.cadena = rs.getString("Cadena");
-            this.prioridad = rs.getInt("prioridad");
-            this.disponible = "S".equalsIgnoreCase(rs.getString("disponible"));
-            this.huecos1 = rs.getInt("HuecosTurno1");
-            this.huecos2 = rs.getInt("HuecosTurno2");
-            this.huecos3 = rs.getInt("HuecosTurno3");
-            this.huecos4 = rs.getInt("HuecosTurno4");
-        }
-    }
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(RebuildTiendasServlet.class);
+    
+    // 2. Jackson ObjectMapper (Reutilizable y Thread-safe)
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("text/plain");
+        response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        PrintWriter out = response.getWriter();
+
+        Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
-            out.println("ERROR: Acceso denegado. Tu sesión ha expirado. Por favor, cierra sesión y vuelve a entrar.");
-            out.flush();
+        // 3. Verificación de Seguridad Estandarizada
+        // Usamos la misma lógica que en AdminTiendasServlet para evitar ClassCastException
+        // si el atributo isAdmin se guarda como String "S" en lugar de Boolean true.
+        boolean isAdmin = session != null && 
+                          session.getAttribute("usuario") != null && 
+                          "S".equals(session.getAttribute("isAdmin"));
+
+        if (!isAdmin) {
+            String ip = request.getRemoteAddr();
+            logger.warn("Acceso denegado a RebuildTiendas. Usuario: {}, IP: {}", 
+                        (session != null ? session.getAttribute("usuario") : "Anónimo"), ip);
+            
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Acceso denegado. Solo los administradores pueden realizar esta acción.");
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
             return;
         }
 
+        String adminUser = (String) session.getAttribute("usuario");
+        logger.info("El administrador {} ha iniciado la reconstrucción de tiendas.", adminUser);
+
         try {
-            out.println("--- INICIANDO RECONSTRUCCIÓN DE TIENDAS (MODO CONSOLA) ---");
-            out.flush();
+            // Llamada a la utilidad que realiza la lógica pesada
+            boolean success = TiendasUtil.rebuildTiendas();
 
-            out.println("Paso 1/3: Leyendo todas las tiendas desde la base de datos local...");
-            out.flush();
-            
-            List<TiendaData> tiendasEnMemoria = new ArrayList<>();
-            try (Connection conn = DatabaseUtil.getConnection()) {
-                String sql = "SELECT * FROM tiendas WHERE SqlRowUUID IS NOT NULL";
-                try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        tiendasEnMemoria.add(new TiendaData(rs));
-                    }
-                }
+            if (success) {
+                logger.info("Reconstrucción de tiendas completada con éxito por {}", adminUser);
+                jsonResponse.put("success", true);
+                jsonResponse.put("message", "Las tiendas se han reconstruido correctamente.");
+            } else {
+                logger.warn("La reconstrucción de tiendas finalizó pero devolvió 'false'.");
+                jsonResponse.put("success", false);
+                jsonResponse.put("message", "Hubo un problema al reconstruir las tiendas. Revise el log del servidor.");
             }
-            out.println("Se han cargado " + tiendasEnMemoria.size() + " tiendas en memoria.");
-            out.println("----------------------------------------------------------");
-            out.flush();
-
-            out.println("Paso 2/3: Iniciando creación en SharePoint. Este proceso tardará aproximadamente 4 minutos...");
-            out.flush();
-            String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
-            if (listId == null) throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada.");
-            
-            for (int i = 0; i < tiendasEnMemoria.size(); i++) {
-                TiendaData tienda = tiendasEnMemoria.get(i);
-                FieldValueSet fields = new FieldValueSet();
-                fields.getAdditionalData().put("Title", tienda.denominacion);
-                fields.getAdditionalData().put("codigo", String.valueOf(tienda.codigo));
-                fields.getAdditionalData().put("denominacion", tienda.denominacion);
-                fields.getAdditionalData().put("direccion", tienda.direccion);
-                fields.getAdditionalData().put("lat", tienda.lat);
-                fields.getAdditionalData().put("lon", tienda.lon);
-                fields.getAdditionalData().put("cp", tienda.cp);
-                fields.getAdditionalData().put("poblacion", tienda.poblacion);
-                fields.getAdditionalData().put("cadena", tienda.cadena);
-                fields.getAdditionalData().put("prioridad", tienda.prioridad);
-                fields.getAdditionalData().put("disponible", tienda.disponible);
-                fields.getAdditionalData().put("huecosTurno1", tienda.huecos1);
-                fields.getAdditionalData().put("huecosTurno2", tienda.huecos2);
-                fields.getAdditionalData().put("huecosTurno3", tienda.huecos3);
-                fields.getAdditionalData().put("huecosTurno4", tienda.huecos4);
-                fields.getAdditionalData().put("SqlRowUUID", tienda.sqlRowUUID);
-
-                SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
-                Thread.sleep(PAUSA_ENTRE_PETICIONES_MS);
-                
-                out.print(".");
-                if ((i + 1) % 100 == 0 || i == tiendasEnMemoria.size() - 1) {
-                    out.println(" (" + (i + 1) + "/" + tiendasEnMemoria.size() + ")");
-                    out.flush();
-                }
-            }
-            
-            out.println("\n----------------------------------------------------------");
-            String successMessage = "¡ÉXITO! Reconstrucción completada. Se han creado " + tiendasEnMemoria.size() + " tiendas.";
-            out.println("Paso 3/3: " + successMessage);
-            out.flush();
-
         } catch (Exception e) {
-            out.println("\n\n--- ¡ERROR CRÍTICO DURANTE LA RECONSTRUCCIÓN! ---");
-            out.println("Mensaje del error: " + e.getMessage());
-            e.printStackTrace(out);
-            out.flush();
+            // 4. Manejo de errores con traza completa en el log
+            logger.error("Error crítico durante la reconstrucción de tiendas.", e);
+            
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error interno: " + e.getMessage());
         }
+
+        // Escritura final con Jackson
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

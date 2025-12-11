@@ -7,12 +7,16 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import com.google.gson.JsonObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.graph.models.FieldValueSet;
 import com.microsoft.graph.models.ListItem;
 import com.microsoft.graph.models.ListItemCollectionResponse;
@@ -30,9 +34,17 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 @WebServlet("/sync-tiendas")
 public class SyncTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    
+    // 1. Logger SLF4J para registrar la actividad
+    private static final Logger logger = LoggerFactory.getLogger(SyncTiendasServlet.class);
+    
+    // 2. Jackson ObjectMapper para respuestas JSON
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
     private static final String SHAREPOINT_LIST_NAME = "Tiendas";
-    private static final int PAUSA_ENTRE_PETICIONES_MS = 400; 
+    private static final int PAUSA_ENTRE_PETICIONES_MS = 400; // Anti-throttling para SharePoint
 
+    // Clase interna para almacenar datos de la tienda en memoria
     private static class TiendaData {
         int codigo; String denominacion; String sqlRowUUID;
         String direccion; BigDecimal lat; BigDecimal lon; String cp; String poblacion; String cadena; 
@@ -61,20 +73,33 @@ public class SyncTiendasServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
+        
+        Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+        // 3. Verificación de seguridad estandarizada
+        boolean isAdmin = session != null && 
+                          session.getAttribute("usuario") != null && 
+                          "S".equals(session.getAttribute("isAdmin"));
+
+        if (!isAdmin) {
+            String ip = request.getRemoteAddr();
+            logger.warn("Acceso denegado a SyncTiendas. Usuario: {}, IP: {}", 
+                        (session != null ? session.getAttribute("usuario") : "Anónimo"), ip);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Acceso denegado.");
-            response.getWriter().write(jsonResponse.toString());
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Acceso denegado. Permisos insuficientes.");
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
             return;
         }
+
+        String adminUser = (String) session.getAttribute("usuario");
+        logger.info("Iniciando sincronización masiva de tiendas. Solicitado por: {}", adminUser);
 
         List<TiendaData> tiendasEnMemoria = new ArrayList<>();
         Set<String> uuidsEsperados = new HashSet<>();
 
+        // Paso 1: Cargar datos desde la base de datos local
         try (Connection conn = DatabaseUtil.getConnection()) {
             String sql = "SELECT * FROM tiendas WHERE SqlRowUUID IS NOT NULL";
             try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
@@ -84,20 +109,32 @@ public class SyncTiendasServlet extends HttpServlet {
                     uuidsEsperados.add(tienda.sqlRowUUID);
                 }
             }
+            logger.info("Cargadas {} tiendas desde la base de datos local.", tiendasEnMemoria.size());
         } catch (Exception e) {
+            logger.error("Error crítico al leer tiendas desde la base de datos", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error crítico al leer desde la base de datos: " + e.getMessage());
-            response.getWriter().write(jsonResponse.toString());
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error crítico al leer desde la base de datos: " + e.getMessage());
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
             return;
         }
 
+        // Paso 2: Sincronizar con SharePoint
+        Connection logConn = null;
         try {
+            // Obtener ID de la lista en SharePoint
             String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
-            if (listId == null) throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada.");
+            if (listId == null) {
+                logger.error("La lista '{}' no existe en el sitio de SharePoint.", SHAREPOINT_LIST_NAME);
+                throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada.");
+            }
 
+            // Borrado previo de la lista
+            logger.info("Limpiando lista de SharePoint (ID: {})...", listId);
             SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listId);
 
+            // Recreación de ítems
+            logger.info("Iniciando creación de {} elementos en SharePoint...", tiendasEnMemoria.size());
             for (int i = 0; i < tiendasEnMemoria.size(); i++) {
                 TiendaData tienda = tiendasEnMemoria.get(i);
                 FieldValueSet fields = new FieldValueSet();
@@ -117,15 +154,22 @@ public class SyncTiendasServlet extends HttpServlet {
                 fields.getAdditionalData().put("huecosTurno3", tienda.huecos3);
                 fields.getAdditionalData().put("huecosTurno4", tienda.huecos4);
                 fields.getAdditionalData().put("SqlRowUUID", tienda.sqlRowUUID);
+                
                 SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
                 
+                // Pausa para evitar Throttling de Microsoft Graph (Error 429)
                 Thread.sleep(PAUSA_ENTRE_PETICIONES_MS);
-                System.out.println("Creando tienda " + (i + 1) + "/" + tiendasEnMemoria.size());
+                
+                // Log de progreso cada 20 ítems para no saturar el log
+                if ((i + 1) % 20 == 0) {
+                    logger.debug("Progreso sincronización: {}/{} tiendas procesadas.", i + 1, tiendasEnMemoria.size());
+                }
             }
 
-            System.out.println("VERIFICACIÓN FINAL: Pausando 10 segundos antes de comprobar...");
+            logger.info("Creación finalizada. Pausando 10 segundos para propagación antes de verificar...");
             Thread.sleep(10000);
 
+            // Paso 3: Verificación post-sincronización
             Set<String> uuidsReales = new HashSet<>();
             ListItemCollectionResponse itemsPostSync = SharepointUtil.getListItems(SharepointUtil.SITE_ID, listId);
             if (itemsPostSync != null && itemsPostSync.getValue() != null) {
@@ -141,21 +185,31 @@ public class SyncTiendasServlet extends HttpServlet {
             }
 
             if (uuidsReales.size() < uuidsEsperados.size()) {
-                 jsonResponse.addProperty("success", false);
-                 jsonResponse.addProperty("message", "FALLO DE VERIFICACIÓN POST-RECONSTRUCCIÓN: Se esperaba crear " + uuidsEsperados.size() + " tiendas, pero solo se encontraron " + uuidsReales.size() + ". El problema de 'throttling' persiste.");
+                 String msg = "FALLO DE VERIFICACIÓN: Se esperaban " + uuidsEsperados.size() + " tiendas, pero solo se encontraron " + uuidsReales.size() + " en SharePoint. Posible problema de 'throttling'.";
+                 logger.warn(msg);
+                 jsonResponse.put("success", false);
+                 jsonResponse.put("message", msg);
             } else {
-                String successMessage = "¡Éxito verificado! Se han reconstruido y verificado " + uuidsReales.size() + " tiendas correctamente.";
-                jsonResponse.addProperty("success", true);
-                jsonResponse.addProperty("message", successMessage);
+                String successMessage = "¡Éxito verificado! Se han sincronizado " + uuidsReales.size() + " tiendas correctamente.";
+                logger.info(successMessage);
+                
+                logConn = DatabaseUtil.getConnection();
+                LogUtil.logOperation(logConn, "SYNC_TIENDAS", adminUser, "Sincronización de Tiendas completada con éxito.");
+                
+                jsonResponse.put("success", true);
+                jsonResponse.put("message", successMessage);
             }
-            response.getWriter().write(jsonResponse.toString());
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error crítico durante la sincronización de tiendas", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error durante el ciclo de reconstrucción: " + e.getMessage());
-            response.getWriter().write(jsonResponse.toString());
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error durante el ciclo de sincronización: " + e.getMessage());
+        } finally {
+            if (logConn != null) try { logConn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión de log", e); }
+            
+            // Respuesta final con Jackson
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }
 }

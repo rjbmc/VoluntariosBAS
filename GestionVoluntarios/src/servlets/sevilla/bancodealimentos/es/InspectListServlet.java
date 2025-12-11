@@ -1,14 +1,12 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.graph.models.ColumnDefinition;
 import com.microsoft.graph.models.ColumnDefinitionCollectionResponse;
 
@@ -26,6 +24,7 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 @WebServlet("/inspeccionar-lista")
 public class InspectListServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -33,16 +32,13 @@ public class InspectListServlet extends HttpServlet {
 
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        Gson gson = new GsonBuilder().setPrettyPrinting().create();
-        PrintWriter out = response.getWriter();
-        
+
         String siteId = SharepointUtil.SITE_ID; // Usamos el SiteID por defecto
 
         try {
             if (listName == null || listName.trim().isEmpty()) {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                out.print(gson.toJson(Map.of("error", "El parámetro 'listName' es obligatorio.")));
-                out.flush();
+                objectMapper.writeValue(response.getWriter(), Map.of("error", "El parámetro 'listName' es obligatorio."));
                 return;
             }
 
@@ -50,8 +46,7 @@ public class InspectListServlet extends HttpServlet {
 
             if (listId == null) {
                 response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                out.print(gson.toJson(Map.of("error", "La lista '" + listName + "' no fue encontrada.")));
-                out.flush();
+                objectMapper.writeValue(response.getWriter(), Map.of("error", "La lista '" + listName + "' no fue encontrada."));
                 return;
             }
 
@@ -66,15 +61,13 @@ public class InspectListServlet extends HttpServlet {
                     return map;
                 })
                 .collect(Collectors.toList());
-            
-            out.print(gson.toJson(Map.of("columns", columnDetails)));
+
+            objectMapper.writeValue(response.getWriter(), Map.of("columns", columnDetails));
 
         } catch (Exception e) {
             e.printStackTrace();
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            out.print(gson.toJson(Map.of("error", "Error interno al inspeccionar la lista: " + e.getMessage())));
-        } finally {
-            out.flush();
+            objectMapper.writeValue(response.getWriter(), Map.of("error", "Error interno al inspeccionar la lista: " + e.getMessage()));
         }
     }
 

@@ -6,8 +6,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.google.gson.JsonObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
@@ -23,41 +28,69 @@ import util.sevilla.bancodealimentos.es.SharepointUtil;
 @WebServlet("/sync-campanas")
 public class SyncCampanasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(SyncCampanasServlet.class);
+    
+    // 2. Jackson ObjectMapper
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    
     private static final String SHAREPOINT_LIST_NAME = "Campanas";
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
+        
+        Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        if (session == null || session.getAttribute("usuario") == null || !Boolean.TRUE.equals(session.getAttribute("isAdmin"))) {
+        // 3. Verificación de seguridad estandarizada (Busca "S" como en los otros servlets)
+        boolean isAdmin = session != null && 
+                          session.getAttribute("usuario") != null && 
+                          "S".equals(session.getAttribute("isAdmin"));
+
+        if (!isAdmin) {
+            String ip = request.getRemoteAddr();
+            logger.warn("Acceso denegado a SyncCampanas. Usuario: {}, IP: {}", 
+                        (session != null ? session.getAttribute("usuario") : "Anónimo"), ip);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Acceso denegado.");
-            response.getWriter().write(jsonResponse.toString());
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Acceso denegado. Permisos insuficientes.");
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
             return;
         }
+
+        String adminUser = (String) session.getAttribute("usuario");
+        logger.info("Iniciando sincronización de campañas con SharePoint. Usuario: {}", adminUser);
 
         Connection conn = null;
         try {
             conn = DatabaseUtil.getConnection();
-            String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
+            
+            // CORRECCIÓN: Usamos SharepointUtil.SITE_ID en lugar de SITE_ID_VOLUNTARIOS
+            // Asumimos que SITE_ID apunta al sitio correcto donde está la lista "Campanas"
+            String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME); 
+            
             if (listId == null) {
+                logger.error("No se encontró la lista '{}' en el sitio de SharePoint.", SHAREPOINT_LIST_NAME);
                 throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada en SharePoint.");
             }
 
+            logger.debug("Limpiando lista de SharePoint (ID: {})...", listId);
             SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listId);
 
             String sql = "SELECT SqlRowUUID, denominacion, Campana, fecha1, fecha2, estado, Comentarios, turnospordia FROM campanas";
+            
+            logger.debug("Consultando base de datos y preparando subida...");
             try (PreparedStatement ps = conn.prepareStatement(sql);
                  ResultSet rs = ps.executeQuery()) {
                 
+                int count = 0;
                 while(rs.next()){
                     FieldValueSet fields = new FieldValueSet();
 
-                    // --- VERSIÓN FINAL: Todos los campos reactivados ---
+                    // Mapeo de campos
                     fields.getAdditionalData().put("SqlRowUUID", rs.getString("SqlRowUUID"));
                     fields.getAdditionalData().put("Title", rs.getString("denominacion"));
                     fields.getAdditionalData().put("nombre", rs.getString("Campana"));
@@ -83,22 +116,28 @@ public class SyncCampanasServlet extends HttpServlet {
                         fields.getAdditionalData().put("fecha_fin", fecha2_sql.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE));
                     }
 
+                    // Creación del ítem en SharePoint usando SITE_ID
                     SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
+                    count++;
                 }
+                logger.info("Sincronización finalizada. {} campañas procesadas.", count);
             }
 
-            jsonResponse.addProperty("success", true);
-            jsonResponse.addProperty("message", "¡Éxito! Sincronización de Campañas (con todos los campos) completada.");
-            LogUtil.logOperation(conn, "SYNC_CAMPANAS_FINAL", (String) session.getAttribute("usuario"), "Sincronización de Campañas (final) completada con éxito.");
+            jsonResponse.put("success", true);
+            jsonResponse.put("message", "¡Éxito! Sincronización de Campañas completada.");
+            
+            LogUtil.logOperation(conn, "SYNC_CAMPANAS", adminUser, "Sincronización de Campañas completada con éxito.");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error crítico durante la sincronización de campañas", e);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error en la sincronización de Campañas: " + e.getMessage());
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error en la sincronización: " + e.getMessage());
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
-            response.getWriter().write(jsonResponse.toString());
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
+            
+            // Respuesta final con Jackson
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }
 }

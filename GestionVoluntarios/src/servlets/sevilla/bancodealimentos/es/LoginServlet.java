@@ -5,10 +5,12 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.mindrot.jbcrypt.BCrypt;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -22,6 +24,7 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 @WebServlet("/login")
 public class LoginServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -30,7 +33,7 @@ public class LoginServlet extends HttpServlet {
 
         String usuario = request.getParameter("usuario");
         String clave = request.getParameter("clave");
-        JsonObject jsonResponse = new JsonObject();
+        Map<String, Object> jsonResponse = new HashMap<>();
 
         try (Connection conn = DatabaseUtil.getConnection()) {
             String sql = "SELECT Email, Clave, administrador, verificado, fecha_baja FROM voluntarios WHERE Usuario = ?";
@@ -44,8 +47,8 @@ public class LoginServlet extends HttpServlet {
 
                         // 1. Comprobar si la cuenta está dada de baja
                         if (fechaBaja != null) {
-                            jsonResponse.addProperty("success", false);
-                            jsonResponse.addProperty("message", "Esta cuenta ha sido dada de baja.");
+                            jsonResponse.put("success", false);
+                            jsonResponse.put("message", "Esta cuenta ha sido dada de baja.");
                             LogUtil.logOperation("LOGIN-FAIL", usuario, "Intento de login en cuenta inactiva.");
                         }
                         // 2. Comprobar la contraseña
@@ -62,35 +65,35 @@ public class LoginServlet extends HttpServlet {
                                 session.setAttribute("isAdmin", "S".equals(esAdmin));
                                 session.setMaxInactiveInterval(10 * 60); // 10 minutos de inactividad
 
-                                jsonResponse.addProperty("success", true);
-                                jsonResponse.addProperty("isAdmin", "S".equals(esAdmin));
+                                jsonResponse.put("success", true);
+                                jsonResponse.put("isAdmin", "S".equals(esAdmin));
                                 
                                 LogUtil.logOperation("LOGIN-OK", usuario, "Inicio de sesión exitoso.");
 
                             } else {
-                                jsonResponse.addProperty("success", false);
-                                jsonResponse.addProperty("message", "Tu cuenta aún no ha sido verificada. Por favor, revisa tu correo electrónico.");
+                                jsonResponse.put("success", false);
+                                jsonResponse.put("message", "Tu cuenta aún no ha sido verificada. Por favor, revisa tu correo electrónico.");
                                 LogUtil.logOperation("LOGIN-FAIL", usuario, "Intento de login sin verificar email.");
                             }
                         } else {
-                            jsonResponse.addProperty("success", false);
-                            jsonResponse.addProperty("message", "Usuario o contraseña incorrectos.");
+                            jsonResponse.put("success", false);
+                            jsonResponse.put("message", "Usuario o contraseña incorrectos.");
                             LogUtil.logOperation("LOGIN-FAIL", usuario, "Contraseña incorrecta.");
                         }
                     } else {
-                        jsonResponse.addProperty("success", false);
-                        jsonResponse.addProperty("message", "Usuario o contraseña incorrectos.");
+                        jsonResponse.put("success", false);
+                        jsonResponse.put("message", "Usuario o contraseña incorrectos.");
                          LogUtil.logOperation("LOGIN-FAIL", usuario, "Usuario no encontrado.");
                     }
                 }
             }
         } catch (SQLException e) {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error de base de datos. Inténtalo más tarde.");
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error de base de datos. Inténtalo más tarde.");
             e.printStackTrace();
         }
 
-        response.getWriter().write(jsonResponse.toString());
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

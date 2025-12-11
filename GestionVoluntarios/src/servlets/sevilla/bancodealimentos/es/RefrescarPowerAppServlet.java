@@ -3,11 +3,9 @@ package servlets.sevilla.bancodealimentos.es;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
@@ -20,13 +18,10 @@ import java.util.Set;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.apache.poi.ss.util.AreaReference;
-import org.apache.poi.ss.util.CellReference;
-import org.apache.poi.xssf.usermodel.XSSFTable;
-import org.openxmlformats.schemas.spreadsheetml.x2006.main.CTTableStyleInfo;
-import org.apache.poi.ss.SpreadsheetVersion; // Añadido para AreaReference
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import com.google.gson.JsonObject;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.activation.DataHandler;
 import jakarta.activation.DataSource;
@@ -51,11 +46,21 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
+/**
+ * Servlet que gestiona la exportación de datos a Excel para la Power App,
+ * envía el archivo por correo y actualiza los registros de cambios.
+ */
 @WebServlet("/refrescar-powerapp")
 public class RefrescarPowerAppServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
+    
+    // 1. Logger SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(RefrescarPowerAppServlet.class);
+    
+    // 2. Jackson ObjectMapper
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-    // Clase interna para guardar los datos de una asignación y facilitar la comparación
+    // Clase interna para mapear asignaciones durante la comparación
     private static class Asignacion {
         String usuario, dni, comentario1, comentario2, comentario3, comentario4;
         int turno1, turno2, turno3, turno4;
@@ -78,119 +83,117 @@ public class RefrescarPowerAppServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        JsonObject jsonResponse = new JsonObject();
+        
+        Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        if (session == null || session.getAttribute("usuario") == null || !((boolean)session.getAttribute("isAdmin"))) {
+        // 3. Verificación de seguridad estandarizada
+        boolean isAdmin = session != null && 
+                          session.getAttribute("usuario") != null && 
+                          "S".equals(session.getAttribute("isAdmin"));
+
+        if (!isAdmin) {
+            String ip = request.getRemoteAddr();
+            logger.warn("Acceso denegado a RefrescarPowerApp. Usuario: {}, IP: {}", 
+                        (session != null ? session.getAttribute("usuario") : "Anónimo"), ip);
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Acceso denegado.");
-            response.getWriter().write(jsonResponse.toString());
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Acceso denegado.");
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
             return;
         }
 
         String adminUser = (String) session.getAttribute("usuario");
-        Connection conn = null;
+        logger.info("Iniciando proceso de refresco PowerApp solicitado por: {}", adminUser);
 
+        Connection conn = null;
         try {
             conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
 
+            logger.debug("Generando libro Excel...");
             XSSFWorkbook workbook = new XSSFWorkbook();
             
+            // Generación de hojas
             createExcelSheet(conn, workbook, "Voluntarios", "SELECT * FROM voluntarios WHERE notificar = 'S'");
             createExcelSheet(conn, workbook, "Asignaciones", "SELECT * FROM voluntarios_en_campana WHERE notificar = 'S'");
             createResumenAsignacionesSheet(conn, workbook);
             createResumenConCambiosSheet(conn, workbook);
 
+            // Convertir Excel a bytes
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             workbook.write(bos);
             byte[] excelData = bos.toByteArray();
             workbook.close();
+            logger.debug("Excel generado correctamente. Tamaño: {} bytes", excelData.length);
 
+            logger.debug("Enviando correo a Sistemas...");
             sendEmailWithAttachments(excelData);
 
-            updateSnapshot(conn);
+            logger.debug("Actualizando estados 'notificar' y snapshot...");
             updateNotificarStatus(conn);
+            updateSnapshot(conn);
             
             conn.commit();
             
+            logger.info("Proceso de refresco PowerApp completado con éxito.");
             LogUtil.logOperation(conn, "EXPORT", adminUser, "Refresco de Power App con análisis de cambios completado.");
 
-            jsonResponse.addProperty("success", true);
-            jsonResponse.addProperty("message", "Correo enviado correctamente y registros actualizados.");
+            jsonResponse.put("success", true);
+            jsonResponse.put("message", "Correo enviado correctamente y registros actualizados.");
 
         } catch (Exception e) {
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
-            e.printStackTrace();
+            logger.error("Error crítico durante el proceso de refresco PowerApp", e);
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.error("Error al hacer rollback", ex); }
+            
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.addProperty("success", false);
-            jsonResponse.addProperty("message", "Error al procesar la solicitud: " + e.getMessage());
+            jsonResponse.put("success", false);
+            jsonResponse.put("message", "Error al procesar la solicitud: " + e.getMessage());
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error al cerrar conexión", e); }
         }
 
-        response.getWriter().write(jsonResponse.toString());
+        // Respuesta final con Jackson
+        objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
     
-    private void createResumenAsignacionesSheet(Connection conn, XSSFWorkbook workbook) throws SQLException {
-        XSSFSheet sheet = workbook.createSheet("Resumen_Asignaciones");
-        String[] headers = {"CAMPAÑA", "NUM", "USUARIO", "DNI", "T1_TIENDA", "T1_NOTAS", "T2_TIENDA", "T2_NOTAS", "T3_TIENDA", "T3_NOTAS", "T4_TIENDA", "T4_NOTAS", "NTURNOS", "PROCESADO"};
-        Row headerRow = sheet.createRow(0);
-        for (int i = 0; i < headers.length; i++) {
-            headerRow.createCell(i).setCellValue(headers[i]);
-        }
-        
-        String activeCampaignId = getActiveCampaignId(conn);
-        if (activeCampaignId.isEmpty()) return;
+    // --- Métodos Privados Auxiliares ---
 
-        // --- MODIFICACIÓN: Crear el formato de fecha y hora ---
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        String timestamp = sdf.format(new Date());
-        DecimalFormat df = new DecimalFormat("######000");
+    private void sendEmailWithAttachments(byte[] excelData) throws MessagingException {
+        Properties prop = new Properties();
+        prop.put("mail.smtp.auth", "true");
+        prop.put("mail.smtp.starttls.enable", "true");
+        prop.put("mail.smtp.host", Config.SMTP_HOST);
+        prop.put("mail.smtp.port", Config.SMTP_PORT);
         
-        String query = "SELECT vc.Campana, vc.Usuario, v.`DNI NIF`, vc.Turno1, vc.Comentario1, vc.Turno2, vc.Comentario2, vc.Turno3, vc.Comentario3, vc.Turno4, vc.Comentario4 FROM voluntarios_en_campana vc JOIN voluntarios v ON vc.Usuario = v.Usuario WHERE vc.Campana = ? and vc.notificar = 'S' ORDER BY vc.Usuario";
-        try (PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, activeCampaignId);
-            ResultSet rs = stmt.executeQuery();
-            int correlativo = 1;
-            while (rs.next()) {
-                Row row = sheet.createRow(correlativo);
-                
-                // --- MODIFICACIÓN: Construir el NUM único ---
-                String uniqueNum = timestamp + "-" + correlativo;
-
-                int nTurnos = 0;
-                int turno1 = rs.getInt("Turno1"); if (turno1 > 0) nTurnos++;
-                String turno1S = df.format(turno1);if (turno1S.equals("000")) turno1S="0";
-                int turno2 = rs.getInt("Turno2"); if (turno2 > 0) nTurnos++;
-                String turno2S = df.format(turno2);if (turno2S.equals("000")) turno2S="0";
-                int turno3 = rs.getInt("Turno3"); if (turno3 > 0) nTurnos++;
-                String turno3S = df.format(turno3);if (turno3S.equals("000")) turno3S="0";
-                int turno4 = rs.getInt("Turno4"); if (turno4 > 0) nTurnos++;
-                String turno4S = df.format(turno4);if (turno4S.equals("000")) turno4S="0";
-                
-                row.createCell(0).setCellValue(rs.getString("Campana"));
-                row.createCell(1).setCellValue(uniqueNum); // Usar el NUM único
-                row.createCell(2).setCellValue(rs.getString("Usuario"));
-                row.createCell(3).setCellValue(rs.getString("DNI NIF"));
-                row.createCell(4).setCellValue(turno1S);
-                row.createCell(5).setCellValue(rs.getString("Comentario1"));
-                row.createCell(6).setCellValue(turno2S);
-                row.createCell(7).setCellValue(rs.getString("Comentario2"));
-                row.createCell(8).setCellValue(turno3S);
-                row.createCell(9).setCellValue(rs.getString("Comentario3"));
-                row.createCell(10).setCellValue(turno4S);
-                row.createCell(11).setCellValue(rs.getString("Comentario4"));
-                row.createCell(12).setCellValue(nTurnos);
-                row.createCell(13).setCellValue("NO");
-                
-                correlativo++;
+        Session session = Session.getInstance(prop, new jakarta.mail.Authenticator() {
+            protected PasswordAuthentication getPasswordAuthentication() {
+                return new PasswordAuthentication(Config.SMTP_USER, Config.SMTP_PASSWORD);
             }
-            applyTableFormatting(sheet, "ResumenAsignaciones");
-        }
-    }
+        });
 
+        Message message = new MimeMessage(session);
+        message.setFrom(new InternetAddress(Config.SMTP_USER));
+        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(Config.SISTEMAS_EMAIL));
+        message.setSubject("Refresco de Datos para Power App - VoluntariosBAS");
+        
+        MimeBodyPart textPart = new MimeBodyPart();
+        textPart.setText("Se adjunta el fichero Excel con los últimos cambios y resúmenes registrados en la aplicación de voluntarios.");
+        
+        MimeBodyPart excelAttachment = new MimeBodyPart();
+        DataSource excelDataSource = new ByteArrayDataSource(excelData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        excelAttachment.setDataHandler(new DataHandler(excelDataSource));
+        excelAttachment.setFileName("refresco_powerapp.xlsx");
+        
+        Multipart multipart = new MimeMultipart();
+        multipart.addBodyPart(textPart);
+        multipart.addBodyPart(excelAttachment);
+        
+        message.setContent(multipart);
+        Transport.send(message);
+        logger.info("Correo enviado exitosamente a {}", Config.SISTEMAS_EMAIL);
+    }
+    
     private void createExcelSheet(Connection conn, XSSFWorkbook workbook, String sheetName, String query) throws SQLException {
         XSSFSheet sheet = workbook.createSheet(sheetName);
         try (PreparedStatement stmt = conn.prepareStatement(query); ResultSet rs = stmt.executeQuery()) {
@@ -207,10 +210,59 @@ public class RefrescarPowerAppServlet extends HttpServlet {
                     row.createCell(i - 1).setCellValue(value != null ? value.toString() : "");
                 }
             }
-            applyTableFormatting(sheet, sheetName.replaceAll("\\s+", "")); // Usamos un nombre de tabla sin espacios
         }
     }
+    
+    private void createResumenAsignacionesSheet(Connection conn, XSSFWorkbook workbook) throws SQLException {
+        XSSFSheet sheet = workbook.createSheet("Resumen_Asignaciones");
+        String[] headers = {"CAMPAÑA", "NUM", "USUARIO", "DNI", "T1_TIENDA", "T1_NOTAS", "T2_TIENDA", "T2_NOTAS", "T3_TIENDA", "T3_NOTAS", "T4_TIENDA", "T4_NOTAS", "NTURNOS", "PROCESADO"};
+        Row headerRow = sheet.createRow(0);
+        for (int i = 0; i < headers.length; i++) {
+            headerRow.createCell(i).setCellValue(headers[i]);
+        }
+        
+        String activeCampaignId = getActiveCampaignId(conn);
+        if (activeCampaignId.isEmpty()) return;
 
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        // String timestamp = sdf.format(new Date()); // Opcional, si se usa
+
+        String query = "SELECT vc.Campana, vc.Usuario, v.`DNI NIF`, vc.Turno1, vc.Comentario1, vc.Turno2, vc.Comentario2, vc.Turno3, vc.Comentario3, vc.Turno4, vc.Comentario4 FROM voluntarios_en_campana vc JOIN voluntarios v ON vc.Usuario = v.Usuario WHERE vc.Campana = ? ORDER BY vc.Usuario";
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setString(1, activeCampaignId);
+            ResultSet rs = stmt.executeQuery();
+            int correlativo = 1;
+            while (rs.next()) {
+                Row row = sheet.createRow(correlativo);
+                
+                String uniqueNum = sdf.format(new Date()) + "-" + correlativo;
+
+                int nTurnos = 0;
+                int turno1 = rs.getInt("Turno1"); if (turno1 > 0) nTurnos++;
+                int turno2 = rs.getInt("Turno2"); if (turno2 > 0) nTurnos++;
+                int turno3 = rs.getInt("Turno3"); if (turno3 > 0) nTurnos++;
+                int turno4 = rs.getInt("Turno4"); if (turno4 > 0) nTurnos++;
+                
+                row.createCell(0).setCellValue(rs.getString("Campana"));
+                row.createCell(1).setCellValue(uniqueNum);
+                row.createCell(2).setCellValue(rs.getString("Usuario"));
+                row.createCell(3).setCellValue(rs.getString("DNI NIF"));
+                row.createCell(4).setCellValue(turno1);
+                row.createCell(5).setCellValue(rs.getString("Comentario1"));
+                row.createCell(6).setCellValue(turno2);
+                row.createCell(7).setCellValue(rs.getString("Comentario2"));
+                row.createCell(8).setCellValue(turno3);
+                row.createCell(9).setCellValue(rs.getString("Comentario3"));
+                row.createCell(10).setCellValue(turno4);
+                row.createCell(11).setCellValue(rs.getString("Comentario4"));
+                row.createCell(12).setCellValue(nTurnos);
+                row.createCell(13).setCellValue("NO");
+                
+                correlativo++;
+            }
+        }
+    }
+    
     private void createResumenConCambiosSheet(Connection conn, XSSFWorkbook workbook) throws SQLException {
         XSSFSheet sheet = workbook.createSheet("Resumen_Con_Cambios");
         
@@ -248,7 +300,6 @@ public class RefrescarPowerAppServlet extends HttpServlet {
                 rowNum = compareAssignments(sheet, rowNum, current, snapshot);
             }
         }
-        applyTableFormatting(sheet, "ResumenConCambios");
     }
     
     private int compareAssignments(XSSFSheet sheet, int rowNum, Asignacion current, Asignacion snapshot) {
@@ -311,13 +362,13 @@ public class RefrescarPowerAppServlet extends HttpServlet {
         String activeCampaignId = getActiveCampaignId(conn);
         if (activeCampaignId.isEmpty()) return;
         
-//        String deleteSql = "DELETE FROM voluntarios_en_campana_snapshot WHERE Campana = ?";
-//        try (PreparedStatement stmt = conn.prepareStatement(deleteSql)) {
-//            stmt.setString(1, activeCampaignId);
-//            stmt.executeUpdate();
-//        }
+        String deleteSql = "DELETE FROM voluntarios_en_campana_snapshot WHERE Campana = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(deleteSql)) {
+            stmt.setString(1, activeCampaignId);
+            stmt.executeUpdate();
+        }
 
-        String insertSql = "INSERT INTO voluntarios_en_campana_snapshot SELECT * FROM voluntarios_en_campana WHERE Campana = ? and notificar = 'S'";
+        String insertSql = "INSERT INTO voluntarios_en_campana_snapshot SELECT * FROM voluntarios_en_campana WHERE Campana = ?";
         try (PreparedStatement stmt = conn.prepareStatement(insertSql)) {
             stmt.setString(1, activeCampaignId);
             stmt.executeUpdate();
@@ -346,75 +397,4 @@ public class RefrescarPowerAppServlet extends HttpServlet {
             stmt4.executeUpdate();
         }
     }
-
-    private void sendEmailWithAttachments(byte[] excelData) throws MessagingException {
-        Properties prop = new Properties();
-        prop.put("mail.smtp.auth", "true");
-        prop.put("mail.smtp.starttls.enable", "true");
-        prop.put("mail.smtp.host", Config.SMTP_HOST);
-        prop.put("mail.smtp.port", Config.SMTP_PORT);
-        Session session = Session.getInstance(prop, new jakarta.mail.Authenticator() {
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(Config.SMTP_USER, Config.SMTP_PASSWORD);
-            }
-        });
-        Message message = new MimeMessage(session);
-        message.setFrom(new InternetAddress(Config.SMTP_USER));
-        message.addRecipients(Message.RecipientType.TO, InternetAddress.parse(Config.SISTEMAS_EMAIL));
-        message.addRecipients(Message.RecipientType.CC, InternetAddress.parse(Config.ROBERTO_EMAIL));
-        message.setSubject("Refresco de Datos para Power App - VoluntariosBAS");
-        
-        MimeBodyPart textPart = new MimeBodyPart();
-        textPart.setText("Se adjunta el fichero Excel con los últimos cambios y resúmenes registrados en la aplicación de voluntarios.");
-        
-        MimeBodyPart excelAttachment = new MimeBodyPart();
-        DataSource excelDataSource = new ByteArrayDataSource(excelData, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-        excelAttachment.setDataHandler(new DataHandler(excelDataSource));
-        excelAttachment.setFileName("refresco_powerapp.xlsx");
-        
-        Multipart multipart = new MimeMultipart();
-        multipart.addBodyPart(textPart);
-        multipart.addBodyPart(excelAttachment);
-        
-        message.setContent(multipart);
-        Transport.send(message);
-    }
-    /**
-     * Aplica el formato de "Tabla de Excel" a una hoja con datos ya existentes.
-     * @param sheet La hoja a la que se le aplicará el formato.
-     * @param tableName Un nombre único para la tabla dentro del libro de trabajo.
-     */
-    private void applyTableFormatting(XSSFSheet sheet, String tableName) {
-        // Paso 1: Determinar el rango de la tabla (desde A1 hasta la última celda con datos)
-        int firstRow = 0;
-        int lastRow = sheet.getLastRowNum();
-        if (lastRow < firstRow) { return; } // No hacer nada si la hoja está vacía
-
-        int firstCol = sheet.getRow(0).getFirstCellNum();
-        int lastCol = sheet.getRow(0).getLastCellNum() - 1;
-
-        // Crear la referencia del área, ej: "A1:E50"
-        CellReference topLeft = new CellReference(firstRow, firstCol);
-        CellReference bottomRight = new CellReference(lastRow, lastCol);
-        AreaReference area = new AreaReference(topLeft, bottomRight, SpreadsheetVersion.EXCEL2007);
-
-        // Paso 2: Crear el objeto Tabla sobre esa área
-        XSSFTable table = sheet.createTable(area);
-        table.setName(tableName);
-        table.setDisplayName(tableName);
-
-        // Paso 3: Configurar la tabla
-        // Indicar que la primera fila es la cabecera
-        table.getCTTable().setHeaderRowCount(1);
-
-        // Habilitar el autofiltro en la cabecera
-        table.getCTTable().addNewAutoFilter();
-
-        // Paso 4: Aplicar un estilo visual a la tabla
-        CTTableStyleInfo styleInfo = table.getCTTable().addNewTableStyleInfo();
-        styleInfo.setName("TableStyleMedium2"); // Un estilo azul común. Puedes probar otros como "TableStyleMedium9" (verde), etc.
-        styleInfo.setShowRowStripes(true); // Habilitar las filas con bandas de colores
-        styleInfo.setShowColumnStripes(false);
-    }
 }
-
