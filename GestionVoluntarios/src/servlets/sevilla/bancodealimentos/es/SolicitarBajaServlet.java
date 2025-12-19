@@ -28,7 +28,7 @@ import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/solicitar-baja")
 public class SolicitarBajaServlet extends HttpServlet {
@@ -111,7 +111,7 @@ public class SolicitarBajaServlet extends HttpServlet {
                     String fechaBajaString = new SimpleDateFormat("yyyy-MM-dd").format(fechaBajaSql);
                     spData.put("field_21", fechaBajaString); // Campo 'FechaBaja' en SP
                     
-                    SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                    SharepointReplicationUtil.replicate(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
                 } catch (Exception e) {
                     logger.error("Error al replicar baja a SharePoint para {}", usuario, e);
                     // No hacemos rollback porque la baja local es prioritaria

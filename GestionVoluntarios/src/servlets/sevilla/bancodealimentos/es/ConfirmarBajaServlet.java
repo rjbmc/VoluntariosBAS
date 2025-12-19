@@ -25,7 +25,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/confirmar-baja")
 public class ConfirmarBajaServlet extends HttpServlet {
@@ -93,7 +93,7 @@ public class ConfirmarBajaServlet extends HttpServlet {
                         spData.put("field_21", isoDate); // Campo fecha de baja en SharePoint
 
                         // Nota: "voluntarios" o "Voluntarios" debe coincidir con el nombre de la lista en SP
-                        SharepointReplicationUtil.replicate(conn, SharepointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                        SharepointReplicationUtil.replicate(conn, SharePointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
 
                         LogUtil.logOperation(conn, "REPLICATE_SUCCESS", usuario, "Baja replicada a SharePoint (marcado como inactivo).");
                     } catch (Exception e) {

@@ -80,30 +80,34 @@
     </main>
 
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                const response = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
-                if (!response.ok) {
-                    window.location.href = 'login.html';
-                    return;
-                }
-                const user = await response.json();
-                if (!user.isAdmin) {
-                    window.location.href = 'login.html';
-                    return; // Añadido return para asegurar que el script se detiene
-                }
-                if (user.usuario !== '28654139A') {
-                    const syncCard = document.getElementById('sync-card');
-                    if (syncCard) {
-                        syncCard.style.display = 'none';
-                    }
-                }
-
-            } catch (error) {
-                console.error("Error al verificar el usuario:", error);
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const response = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
+            if (!response.ok) {
                 window.location.href = 'login.html';
+                return;
             }
-        });
+            const user = await response.json();
+            
+            if (!user.isAdmin) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // Actualizamos el mensaje de bienvenida con el nombre real
+            document.getElementById('welcome-admin').textContent = `Bienvenido/a, ${user.nombre || user.usuario}`;
+
+            // Control de la tarjeta de sincronización basado en el ID de usuario de la sesión
+            if (user.usuario !== '28654139A') {
+                const syncCard = document.getElementById('sync-card');
+                if (syncCard) syncCard.style.display = 'none';
+            }
+
+        } catch (error) {
+            console.error("Error de sesión:", error);
+            window.location.href = 'login.html';
+        }
+    });
 
         async function logout() {
             try {

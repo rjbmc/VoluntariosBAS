@@ -21,7 +21,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/sync-asignaciones")
 public class SyncAsignacionesServlet extends HttpServlet {
@@ -63,9 +63,9 @@ public class SyncAsignacionesServlet extends HttpServlet {
 
         try (Connection conn = DatabaseUtil.getConnection()) {
             // Validar existencia de listas en SharePoint
-            String listIdAsignaciones = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_ASIGNACIONES);
-            String listIdTiendas = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_TIENDAS);
-            String listIdVoluntarios = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_VOLUNTARIOS);
+            String listIdAsignaciones = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_ASIGNACIONES);
+            String listIdTiendas = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_TIENDAS);
+            String listIdVoluntarios = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_VOLUNTARIOS);
 
             if (listIdAsignaciones == null) throw new Exception("Lista 'Asignaciones' no encontrada en SP.");
             if (listIdTiendas == null) throw new Exception("Lista 'Tiendas' no encontrada en SP.");
@@ -73,7 +73,7 @@ public class SyncAsignacionesServlet extends HttpServlet {
 
             // Limpieza inicial
             logger.info("Eliminando asignaciones antiguas en SharePoint...");
-            SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listIdAsignaciones);
+            SharePointUtil.deleteAllListItems(SharePointUtil.SITE_ID, listIdAsignaciones);
             Thread.sleep(1000); // Pausa técnica
 
             String sql = "SELECT * FROM voluntarios_en_campana";
@@ -101,7 +101,7 @@ public class SyncAsignacionesServlet extends HttpServlet {
                         String voluntarioUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM voluntarios WHERE usuario = ?", idVoluntarioDb);
                         
                         if (voluntarioUuid != null) {
-                            String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+                            String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
                             if (spVoluntarioId != null) {
                                 fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
                             } else {
@@ -124,7 +124,7 @@ public class SyncAsignacionesServlet extends HttpServlet {
                                 String tiendaUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM tiendas WHERE codigo = ?", idTiendaDb);
                                 
                                 if (tiendaUuid != null) {
-                                    String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                                    String spTiendaId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                                     if (spTiendaId != null) {
                                         fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
                                         fields.getAdditionalData().put("Comentario" + i, comentario);
@@ -141,7 +141,7 @@ public class SyncAsignacionesServlet extends HttpServlet {
                         
                         // Solo creamos el ítem si tiene al menos un turno o si es necesario registrar la asignación vacía
                         // (Asumimos que siempre se crea si existe en la tabla voluntarios_en_campana)
-                        SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
+                        SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
 
                         // Pausa breve para evitar throttling
                         if (totalProcesados % 10 == 0) Thread.sleep(200);

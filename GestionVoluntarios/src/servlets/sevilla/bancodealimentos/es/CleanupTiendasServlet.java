@@ -13,7 +13,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/cleanup-tiendas")
 public class CleanupTiendasServlet extends HttpServlet {
@@ -43,7 +43,7 @@ public class CleanupTiendasServlet extends HttpServlet {
 
             out.println("Paso 1/4: Solicitando ID de la lista '" + SHAREPOINT_LIST_NAME + "'...");
             out.flush();
-            String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
+            String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
             if (listId == null) {
                 throw new Exception("ERROR CRÍTICO: La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada en SharePoint.");
             }
@@ -62,7 +62,7 @@ public class CleanupTiendasServlet extends HttpServlet {
                 out.println("\n[Pase " + pases + "] Solicitando lote de items desde SharePoint...");
                 out.flush();
                 
-                ListItemCollectionResponse currentPage = SharepointUtil.getListItems(SharepointUtil.SITE_ID, listId);
+                ListItemCollectionResponse currentPage = SharePointUtil.getListItems(SharePointUtil.SITE_ID, listId);
                 
                 if (currentPage == null || currentPage.getValue().isEmpty()) {
                     out.println("[Pase " + pases + "] Respuesta vacía. No se encontraron más items.");
@@ -76,7 +76,7 @@ public class CleanupTiendasServlet extends HttpServlet {
 
                 for (int i = 0; i < itemsEnPagina.size(); i++) {
                     ListItem item = itemsEnPagina.get(i);
-                    SharepointUtil.deleteListItem(SharepointUtil.SITE_ID, listId, item.getId());
+                    SharePointUtil.deleteListItem(SharePointUtil.SITE_ID, listId, item.getId());
                     out.print("."); // Imprime un punto por cada item borrado
                     if ((i + 1) % 100 == 0) { // Añade un salto de línea cada 100 puntos
                         out.println();
@@ -94,7 +94,7 @@ public class CleanupTiendasServlet extends HttpServlet {
             out.println("Paso 3/4: Verificación final. Comprobando si la lista está realmente vacía...");
             out.flush();
             
-            ListItemCollectionResponse finalCheck = SharepointUtil.getListItems(SharepointUtil.SITE_ID, listId);
+            ListItemCollectionResponse finalCheck = SharePointUtil.getListItems(SharePointUtil.SITE_ID, listId);
             if(finalCheck != null && !finalCheck.getValue().isEmpty()) {
                  throw new Exception("¡FALLO DE VERIFICACIÓN! La limpieza terminó, pero la lista todavía contiene " + finalCheck.getValue().size() + " items.");
             }

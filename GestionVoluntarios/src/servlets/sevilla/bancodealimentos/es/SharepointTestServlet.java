@@ -12,7 +12,7 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/test-sharepoint-insert")
 public class SharepointTestServlet extends HttpServlet {
@@ -27,7 +27,7 @@ public class SharepointTestServlet extends HttpServlet {
         out.println("--- INICIANDO PRUEBA DE INSERCIÓN EN SHAREPOINT ---");
 
         try {
-            String siteId = SharepointUtil.SP_SITE_ID_VOLUNTARIOS;
+            String siteId = SharePointUtil.SP_SITE_ID_VOLUNTARIOS;
             String listName = "campanas";
 
             out.println("Site ID: " + siteId);
@@ -44,10 +44,10 @@ public class SharepointTestServlet extends HttpServlet {
             fields.setAdditionalData(spData);
             out.println("FieldValueSet construido con éxito.");
 
-            // Paso 3: Llamar al método de creación de SharepointUtil
-            out.println("Intentando llamar a SharepointUtil.createListItem...");
-            SharepointUtil.createListItem(siteId, listName, fields);
-            out.println("¡ÉXITO! La llamada a SharepointUtil.createListItem se completó sin excepciones.");
+            // Paso 3: Llamar al método de creación de SharePointUtil
+            out.println("Intentando llamar a SharePointUtil.createListItem...");
+            SharePointUtil.createListItem(siteId, listName, fields);
+            out.println("¡ÉXITO! La llamada a SharePointUtil.createListItem se completó sin excepciones.");
             out.println("Se ha creado un nuevo elemento en la lista 'campanas'.");
 
         } catch (Exception e) {

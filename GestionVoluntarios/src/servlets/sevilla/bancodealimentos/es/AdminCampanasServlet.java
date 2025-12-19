@@ -25,33 +25,32 @@ import jakarta.servlet.http.HttpSession;
 
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/admin-campanas")
 public class AdminCampanasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
     
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(AdminCampanasServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     private static final String SP_LIST_NAME = "Campanas";
-    private static final String SP_UUID_FIELD = "Title"; // Usamos el campo Title para guardar el UUID en SharePoint
+    private static final String SP_UUID_FIELD = "Title"; 
 
-    // DTO para listar campañas
+    /**
+     * DTO para listar campañas. 
+     * Se han cambiado los nombres a minúsculas para que coincidan con el acceso en JavaScript (c.campana, c.comentarios).
+     */
     public static class CampanaDTO {
-        public String Campana; // UUID
+        public String campana; // Antes 'Campana'
         public String denominacion;
         public String fecha1;
         public String fecha2;
-        public String Comentarios;
+        public String comentarios; // Antes 'Comentarios'
         public String estado;
         public int turnospordia;
     }
 
-    // 3. Verificación de seguridad robusta (soporta Boolean true y String "S")
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("usuario") == null) return false;
@@ -75,7 +74,6 @@ public class AdminCampanasServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         if (!isAdmin(request)) {
-            logger.warn("Acceso denegado a AdminCampanas (GET). IP: {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;
         }
@@ -89,23 +87,20 @@ public class AdminCampanasServlet extends HttpServlet {
 
             while (rs.next()) {
                 CampanaDTO c = new CampanaDTO();
-                c.Campana = rs.getString("Campana");
+                c.campana = rs.getString("Campana");
                 c.denominacion = rs.getString("denominacion");
-                // Convertir fecha a String simple si es necesario, o dejar que el driver lo haga
                 c.fecha1 = rs.getString("fecha1"); 
                 c.fecha2 = rs.getString("fecha2");
                 c.turnospordia = rs.getInt("turnospordia");
-                c.Comentarios = rs.getString("Comentarios");
+                c.comentarios = rs.getString("Comentarios");
                 c.estado = rs.getString("estado");
                 campanas.add(c);
             }
-            
-            // Jackson serializa la lista automáticamente
             objectMapper.writeValue(response.getWriter(), campanas);
 
         } catch (SQLException e) {
             logger.error("Error SQL al obtener campañas", e);
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error de base de datos.");
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -115,20 +110,15 @@ public class AdminCampanasServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         if (!isAdmin(request)) {
-            logger.warn("Acceso denegado a AdminCampanas (POST). IP: {}", request.getRemoteAddr());
-            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             return;
         }
         
-        // request.setCharacterEncoding("UTF-8"); // Generalmente gestionado por filtro, pero no hace daño
         String action = request.getParameter("action");
-        
         if (action == null) {
             sendJsonResponse(response, false, "Acción no especificada.");
             return;
         }
-
-        logger.info("Admin {} ejecutando acción: {}", getUsuario(request), action);
 
         try {
             switch (action) {
@@ -145,12 +135,11 @@ public class AdminCampanasServlet extends HttpServlet {
                     handleDeactivate(request, response);
                     break;
                 default:
-                    logger.warn("Acción desconocida solicitada: {}", action);
                     sendJsonResponse(response, false, "Acción desconocida.");
             }
         } catch (Exception e) {
-            logger.error("Error no controlado en doPost", e);
-            sendJsonResponse(response, false, "Error interno del servidor.");
+            logger.error("Error en doPost para acción: " + action, e);
+            sendJsonResponse(response, false, "Error interno: " + e.getMessage());
         }
     }
 
@@ -164,17 +153,12 @@ public class AdminCampanasServlet extends HttpServlet {
         boolean isUpdate = "true".equals(request.getParameter("isUpdate"));
         String adminUser = getUsuario(request);
 
-        Connection conn = null;
-        try {
-            conn = DatabaseUtil.getConnection();
+        try (Connection conn = DatabaseUtil.getConnection()) {
             conn.setAutoCommit(false);
 
-            String sql;
-            if (isUpdate) {
-                sql = "UPDATE campanas SET denominacion = ?, fecha1 = ?, fecha2 = ?, turnospordia = ?, Comentarios = ?, notificar = 'S' WHERE Campana = ?";
-            } else {
-                sql = "INSERT INTO campanas (denominacion, fecha1, fecha2, turnospordia, Comentarios, Campana, estado, notificar) VALUES (?, ?, ?, ?, ?, ?, 'N', 'S')";
-            }
+            String sql = isUpdate 
+                ? "UPDATE campanas SET denominacion = ?, fecha1 = ?, fecha2 = ?, turnospordia = ?, Comentarios = ?, notificar = 'S' WHERE Campana = ?"
+                : "INSERT INTO campanas (denominacion, fecha1, fecha2, turnospordia, Comentarios, Campana, estado, notificar) VALUES (?, ?, ?, ?, ?, ?, 'N', 'S')";
 
             try (PreparedStatement stmt = conn.prepareStatement(sql)) {
                 stmt.setString(1, denominacion);
@@ -186,64 +170,42 @@ public class AdminCampanasServlet extends HttpServlet {
                 stmt.executeUpdate();
             }
 
-            // Sincronización con SharePoint
+            // Sincronización SharePoint (opcional según el flujo de red)
             try {
-                Map<String, Object> spData = new HashMap<>();
-                spData.put(SP_UUID_FIELD, campanaId); // Title = UUID
-                spData.put("denominacion", denominacion);
-                // Nota: Asegúrate de que el formato de fecha sea compatible con SP (ISO 8601 o yyyy-MM-dd)
-                spData.put("fecha1", fecha1); 
-                spData.put("fecha2", fecha2);
-                spData.put("turnospordia", turnospordia);
-                spData.put("Comentarios", comentarios);
-                
-                // Usamos el SITE_ID estándar (o SITE_ID_VOLUNTARIOS si lo prefieres)
-                String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
-                
-                if (listId == null) {
-                    logger.error("Lista SharePoint '{}' no encontrada. No se pudo sincronizar.", SP_LIST_NAME);
-                    throw new Exception("Lista SharePoint no encontrada.");
-                }
-
-                if (isUpdate) {
-                    String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
-                    if (itemId != null) {
-                        FieldValueSet fieldsToUpdate = new FieldValueSet();
-                        fieldsToUpdate.setAdditionalData(spData);
-                        SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listId, itemId, fieldsToUpdate);
-                    } else {
-                        // Si no existe en SP pero sí en BD (inconsistencia), lo creamos
-                        logger.warn("Campaña {} no encontrada en SP para actualizar. Creando nueva.", campanaId);
-                        spData.put("estado", "N");
-                        FieldValueSet fieldsToCreate = new FieldValueSet();
-                        fieldsToCreate.setAdditionalData(spData);
-                        SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fieldsToCreate);
-                    }
-                } else {
-                    spData.put("estado", "N");
-                    FieldValueSet fieldsToCreate = new FieldValueSet();
-                    fieldsToCreate.setAdditionalData(spData);
-                    SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fieldsToCreate);
-                }
+                syncWithSharePoint(campanaId, denominacion, fecha1, fecha2, turnospordia, comentarios, isUpdate);
             } catch (Exception e) {
-                // El fallo en SharePoint no debería abortar la transacción DB, pero sí loguearse
-                logger.error("Error sincronizando campaña {} con SharePoint", campanaId, e);
-                LogUtil.logOperation(conn, "SP_CAMP_SAVE_ERROR", adminUser, "Error sync SP: " + e.getMessage());
+                logger.error("Error sync SharePoint: {}", e.getMessage());
             }
 
-            String logComment = (isUpdate ? "Modificada campaña: " : "Creada campaña: ") + campanaId;
-            LogUtil.logOperation(conn, "ADMIN_SAVE_CAMP", adminUser, logComment);
-            
+            LogUtil.logOperation(conn, "ADMIN_SAVE_CAMP", adminUser, (isUpdate ? "Modificada" : "Creada") + " campaña: " + campanaId);
             conn.commit();
-            logger.info("Campaña {} guardada exitosamente.", campanaId);
             sendJsonResponse(response, true, "Campaña guardada correctamente.");
-
         } catch (Exception e) {
-            logger.error("Error al guardar campaña {}", campanaId, e);
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Rollback fallido", ex); }
-            sendJsonResponse(response, false, "Error al guardar la campaña: " + e.getMessage());
-        } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
+            sendJsonResponse(response, false, "Error al guardar: " + e.getMessage());
+        }
+    }
+
+    private void syncWithSharePoint(String id, String den, String f1, String f2, int tpd, String com, boolean isUpdate) throws Exception {
+        String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_NAME);
+        if (listId == null) return;
+
+        Map<String, Object> spData = new HashMap<>();
+        spData.put(SP_UUID_FIELD, id);
+        spData.put("denominacion", den);
+        spData.put("fecha1", f1);
+        spData.put("fecha2", f2);
+        spData.put("turnospordia", tpd);
+        spData.put("Comentarios", com);
+
+        String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listId, SP_UUID_FIELD, id);
+        FieldValueSet fields = new FieldValueSet();
+        fields.setAdditionalData(spData);
+
+        if (itemId != null) {
+            SharePointUtil.updateListItem(SharePointUtil.SITE_ID, listId, itemId, fields);
+        } else {
+            spData.put("estado", "N");
+            SharePointUtil.createListItem(SharePointUtil.SITE_ID, listId, fields);
         }
     }
 
@@ -251,124 +213,65 @@ public class AdminCampanasServlet extends HttpServlet {
         String campanaId = request.getParameter("campanaId");
         String adminUser = getUsuario(request);
 
-        Connection conn = null;
-        try {
-            conn = DatabaseUtil.getConnection();
+        try (Connection conn = DatabaseUtil.getConnection()) {
             conn.setAutoCommit(false);
-
-            String sql = "DELETE FROM campanas WHERE Campana = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            try (PreparedStatement stmt = conn.prepareStatement("DELETE FROM campanas WHERE Campana = ?")) {
                 stmt.setString(1, campanaId);
                 stmt.executeUpdate();
             }
             
-            // Sincronización SharePoint
+            // Borrar en SharePoint
             try {
-                String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
-                if (listId != null) {
-                    String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
-                    if (itemId != null) {
-                        SharepointUtil.deleteListItem(SharepointUtil.SITE_ID, listId, itemId);
-                    } else {
-                        logger.warn("Intento de borrar campaña {} en SP fallido: ítem no encontrado.", campanaId);
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Error borrando campaña {} de SharePoint", campanaId, e);
-                LogUtil.logOperation(conn, "SP_CAMP_DEL_ERROR", adminUser, "Error sync SP delete: " + e.getMessage());
-            }
-            
-            LogUtil.logOperation(conn, "ADMIN_DELETE_CAMP", adminUser, "Eliminada campaña: " + campanaId);
-            conn.commit();
-            logger.info("Campaña {} eliminada exitosamente.", campanaId);
-            sendJsonResponse(response, true, "Campaña eliminada correctamente.");
+                String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_NAME);
+                String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
+                if (itemId != null) SharePointUtil.deleteListItem(SharePointUtil.SITE_ID, listId, itemId);
+            } catch (Exception e) { logger.warn("SharePoint delete failed"); }
 
+            LogUtil.logOperation(conn, "ADMIN_DELETE_CAMP", adminUser, "Eliminada: " + campanaId);
+            conn.commit();
+            sendJsonResponse(response, true, "Campaña eliminada correctamente.");
         } catch (Exception e) {
-            logger.error("Error al eliminar campaña {}", campanaId, e);
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Rollback fallido", ex); }
-            sendJsonResponse(response, false, "Error al eliminar la campaña (¿Tiene asignaciones?).");
-        } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
+            sendJsonResponse(response, false, "Error al eliminar (puede tener datos asociados).");
         }
     }
 
     private void handleActivate(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        changeCampaignStatus(request, response, "S");
+        updateStatus(request, response, "S");
     }
 
     private void handleDeactivate(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        changeCampaignStatus(request, response, "N");
+        updateStatus(request, response, "N");
     }
-    
-    // Método auxiliar unificado para activar/desactivar
-    private void changeCampaignStatus(HttpServletRequest request, HttpServletResponse response, String newStatus) throws IOException {
+
+    private void updateStatus(HttpServletRequest request, HttpServletResponse response, String status) throws IOException {
         String campanaId = request.getParameter("campanaId");
         String adminUser = getUsuario(request);
-        boolean isActivating = "S".equals(newStatus);
-        String actionName = isActivating ? "activar" : "desactivar";
 
-        Connection conn = null;
-        try {
-            conn = DatabaseUtil.getConnection();
+        try (Connection conn = DatabaseUtil.getConnection()) {
             conn.setAutoCommit(false);
-
-            if (isActivating) {
-                // Desactivar cualquier otra activa primero
-                String sqlDeactivateAll = "UPDATE campanas SET estado = 'N', notificar = 'S' WHERE estado = 'S'";
-                try (PreparedStatement stmt = conn.prepareStatement(sqlDeactivateAll)) {
+            if ("S".equals(status)) {
+                try (PreparedStatement stmt = conn.prepareStatement("UPDATE campanas SET estado = 'N' WHERE estado = 'S'")) {
                     stmt.executeUpdate();
                 }
             }
-
-            String sqlUpdate = "UPDATE campanas SET estado = ?, notificar = 'S' WHERE Campana = ?";
-            try (PreparedStatement stmt = conn.prepareStatement(sqlUpdate)) {
-                stmt.setString(1, newStatus);
+            try (PreparedStatement stmt = conn.prepareStatement("UPDATE campanas SET estado = ?, notificar = 'S' WHERE Campana = ?")) {
+                stmt.setString(1, status);
                 stmt.setString(2, campanaId);
                 stmt.executeUpdate();
             }
             
-            // Sincronización SharePoint
-            try {
-                String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SP_LIST_NAME);
-                if (listId != null) {
-                    String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listId, SP_UUID_FIELD, campanaId);
-                    if (itemId != null) {
-                        Map<String, Object> spData = new HashMap<>();
-                        spData.put("estado", newStatus);
-                        FieldValueSet fields = new FieldValueSet();
-                        fields.setAdditionalData(spData);
-                        SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listId, itemId, fields);
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Error sincronizando estado campaña {} en SharePoint", campanaId, e);
-                LogUtil.logOperation(conn, "SP_CAMP_STATUS_ERROR", adminUser, "Error sync status SP: " + e.getMessage());
-            }
-
-            String opCode = isActivating ? "ADMIN_ACTIVATE_CAMP" : "ADMIN_DEACTIVATE_CAMP";
-            LogUtil.logOperation(conn, opCode, adminUser, (isActivating ? "Activada" : "Desactivada") + " campaña: " + campanaId);
-            
+            LogUtil.logOperation(conn, "ADMIN_STATUS_CAMP", adminUser, "Estado " + status + " para: " + campanaId);
             conn.commit();
-            logger.info("Campaña {} {} exitosamente.", campanaId, isActivating ? "activada" : "desactivada");
-            sendJsonResponse(response, true, "Campaña " + (isActivating ? "activada" : "desactivada") + " correctamente.");
-
+            sendJsonResponse(response, true, "Estado actualizado.");
         } catch (Exception e) {
-            logger.error("Error al {} campaña {}", actionName, campanaId, e);
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Rollback fallido", ex); }
-            sendJsonResponse(response, false, "Error al " + actionName + " la campaña.");
-        } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
+            sendJsonResponse(response, false, "Error al cambiar estado.");
         }
     }
-    
+
     private void sendJsonResponse(HttpServletResponse response, boolean success, String message) throws IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-        
-        Map<String, Object> jsonMap = new HashMap<>();
-        jsonMap.put("success", success);
-        jsonMap.put("message", message);
-        
-        objectMapper.writeValue(response.getWriter(), jsonMap);
+        Map<String, Object> res = new HashMap<>();
+        res.put("success", success);
+        res.put("message", message);
+        objectMapper.writeValue(response.getWriter(), res);
     }
 }

@@ -23,7 +23,7 @@ import jakarta.servlet.http.HttpSession;
 
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/guardar-turnos")
 public class GuardarTurnosServlet extends HttpServlet {
@@ -171,9 +171,9 @@ public class GuardarTurnosServlet extends HttpServlet {
         String listNameVoluntarios = "Voluntarios";
         String listNameTiendas = "Tiendas";
 
-        String listIdAsignaciones = SharepointUtil.getListId(SharepointUtil.SITE_ID, listNameAsignaciones);
-        String listIdVoluntarios = SharepointUtil.getListId(SharepointUtil.SITE_ID, listNameVoluntarios);
-        String listIdTiendas = SharepointUtil.getListId(SharepointUtil.SITE_ID, listNameTiendas);
+        String listIdAsignaciones = SharePointUtil.getListId(SharePointUtil.SITE_ID, listNameAsignaciones);
+        String listIdVoluntarios = SharePointUtil.getListId(SharePointUtil.SITE_ID, listNameVoluntarios);
+        String listIdTiendas = SharePointUtil.getListId(SharePointUtil.SITE_ID, listNameTiendas);
 
         if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) {
             throw new Exception("Error de configuración SharePoint: No se encontraron una o más listas requeridas.");
@@ -185,7 +185,7 @@ public class GuardarTurnosServlet extends HttpServlet {
              return;
         }
         
-        String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+        String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
         if (spVoluntarioId == null) {
             throw new Exception("Voluntario UUID " + voluntarioUuid + " no encontrado en lista SharePoint.");
         }
@@ -215,7 +215,7 @@ public class GuardarTurnosServlet extends HttpServlet {
                         tieneTurnos = true;
                         String tiendaUuid = getSqlRowUuidForTienda(conn, idTiendaDb);
                         if (tiendaUuid != null) {
-                            String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                            String spTiendaId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                             if (spTiendaId != null) {
                                 fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
                             } else {
@@ -227,19 +227,19 @@ public class GuardarTurnosServlet extends HttpServlet {
             }
         }
 
-        String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
+        String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
 
         if (itemId != null) { 
             if (tieneTurnos) {
-                SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
+                SharePointUtil.updateListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
                 logger.debug("Asignación actualizada en SharePoint: {}", assignmentUuid);
             } else {
-                SharepointUtil.deleteListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId);
+                SharePointUtil.deleteListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId);
                 logger.debug("Asignación eliminada de SharePoint (sin turnos): {}", assignmentUuid);
             }
         } else { 
             if (tieneTurnos) {
-                SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
+                SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
                 logger.debug("Nueva asignación creada en SharePoint: {}", assignmentUuid);
             }
         }

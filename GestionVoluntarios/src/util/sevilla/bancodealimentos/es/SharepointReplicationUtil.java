@@ -33,7 +33,7 @@ public final class SharepointReplicationUtil {
     public static void replicate(Connection conn, String targetSiteId, String listName, Map<String, Object> data, Operation operation, String rowUuid) {
         String listId = null;
         try {
-            listId = SharepointUtil.getListId(targetSiteId, listName);
+            listId = SharePointUtil.getListId(targetSiteId, listName);
             if (listId == null) {
                 throw new Exception("La lista '" + listName + "' no se encontró en el sitio de SharePoint.");
             }
@@ -72,7 +72,7 @@ public final class SharepointReplicationUtil {
         data.put(SQL_UUID_FIELD, rowUuid);
         fields.setAdditionalData(data);
         
-        SharepointUtil.createListItem(targetSiteId, listId, fields);
+        SharePointUtil.createListItem(targetSiteId, listId, fields);
         logSuccess(conn, "INSERT", listName, rowUuid);
     }
 
@@ -82,7 +82,7 @@ public final class SharepointReplicationUtil {
             return;
         }
 
-        String itemId = SharepointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+        String itemId = SharePointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
 
         if (itemId == null) {
             logReplicationWarning(conn, listName, rowUuid, "UPDATE fallido: No se encontró item con el UUID. Se intentará un INSERT como alternativa.");
@@ -92,18 +92,18 @@ public final class SharepointReplicationUtil {
 
         FieldValueSet fields = new FieldValueSet();
         fields.setAdditionalData(data);
-        SharepointUtil.updateListItem(targetSiteId, listId, itemId, fields);
+        SharePointUtil.updateListItem(targetSiteId, listId, itemId, fields);
         logSuccess(conn, "UPDATE", listName, rowUuid);
     }
 
     private static void handleDelete(Connection conn, String targetSiteId, String listId, String listName, String rowUuid) throws Exception {
-        String itemId = SharepointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+        String itemId = SharePointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
 
         if (itemId == null) {
             logReplicationWarning(conn, listName, rowUuid, "DELETE fallido: No se encontró item con el UUID correspondiente.");
             return;
         }
-        SharepointUtil.deleteListItem(targetSiteId, listId, itemId);
+        SharePointUtil.deleteListItem(targetSiteId, listId, itemId);
         logSuccess(conn, "DELETE", listName, rowUuid);
     }
 

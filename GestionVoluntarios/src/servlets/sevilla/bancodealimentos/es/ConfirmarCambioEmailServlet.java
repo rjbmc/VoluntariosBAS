@@ -22,7 +22,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/confirmar-cambio-email")
 public class ConfirmarCambioEmailServlet extends HttpServlet {
@@ -87,13 +87,13 @@ public class ConfirmarCambioEmailServlet extends HttpServlet {
                 // Replicación a SharePoint
                 if (sqlRowUuid != null) {
                     try {
-                        String listId = SharepointUtil.getListId(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
+                        String listId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
                         
                         if (listId == null) {
                             logger.error("Lista SharePoint '{}' no encontrada.", SP_LIST_NAME);
                             // No lanzamos excepción para no revertir el cambio local, solo logueamos el fallo de sync
                         } else {
-                            String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
+                            String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
                             
                             if (itemId != null) {
                                 Map<String, Object> spData = new HashMap<>();
@@ -102,7 +102,7 @@ public class ConfirmarCambioEmailServlet extends HttpServlet {
                                 FieldValueSet fieldsToUpdate = new FieldValueSet();
                                 fieldsToUpdate.setAdditionalData(spData);
 
-                                SharepointUtil.updateListItem(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fieldsToUpdate);
+                                SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fieldsToUpdate);
                                 LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_OK", usuario, "Email replicado a SharePoint: " + nuevoEmail);
                             } else {
                                 logger.warn("No se encontró item en SharePoint para el voluntario {} (UUID: {})", usuario, sqlRowUuid);

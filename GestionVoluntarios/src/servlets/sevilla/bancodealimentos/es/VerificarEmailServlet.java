@@ -22,7 +22,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/verificar-email")
 public class VerificarEmailServlet extends HttpServlet {
@@ -91,13 +91,13 @@ public class VerificarEmailServlet extends HttpServlet {
 
                 // Replicar a SharePoint (Best effort)
                 try {
-                    String listId = SharepointUtil.getListId(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
+                    String listId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
                     if (listId != null) {
                         String itemId = null;
                         
                         // Si ya tenía UUID, intentamos buscarlo por UUID
                         if (!uuidGeneradoAhora) {
-                            itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
+                            itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
                         }
                         
                         // Si no lo encontramos por UUID (o acabamos de generarlo), intentamos buscar por Title (Nombre) o Email como fallback, 
@@ -112,7 +112,7 @@ public class VerificarEmailServlet extends HttpServlet {
                             FieldValueSet fields = new FieldValueSet();
                             fields.setAdditionalData(spData);
                             
-                            SharepointUtil.updateListItem(SharepointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
+                            SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
                             logger.info("Estado de verificación replicado a SharePoint para usuario {}", usuario);
                         } else {
                             logger.warn("Usuario {} verificado localmente, pero no encontrado en SharePoint (UUID: {}). Se sincronizará en el próximo barrido.", usuario, sqlRowUuid);

@@ -29,7 +29,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/sync-tiendas")
 public class SyncTiendasServlet extends HttpServlet {
@@ -123,7 +123,7 @@ public class SyncTiendasServlet extends HttpServlet {
         Connection logConn = null;
         try {
             // Obtener ID de la lista en SharePoint
-            String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
+            String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
             if (listId == null) {
                 logger.error("La lista '{}' no existe en el sitio de SharePoint.", SHAREPOINT_LIST_NAME);
                 throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada.");
@@ -131,7 +131,7 @@ public class SyncTiendasServlet extends HttpServlet {
 
             // Borrado previo de la lista
             logger.info("Limpiando lista de SharePoint (ID: {})...", listId);
-            SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listId);
+            SharePointUtil.deleteAllListItems(SharePointUtil.SITE_ID, listId);
 
             // Recreación de ítems
             logger.info("Iniciando creación de {} elementos en SharePoint...", tiendasEnMemoria.size());
@@ -155,7 +155,7 @@ public class SyncTiendasServlet extends HttpServlet {
                 fields.getAdditionalData().put("huecosTurno4", tienda.huecos4);
                 fields.getAdditionalData().put("SqlRowUUID", tienda.sqlRowUUID);
                 
-                SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
+                SharePointUtil.createListItem(SharePointUtil.SITE_ID, listId, fields);
                 
                 // Pausa para evitar Throttling de Microsoft Graph (Error 429)
                 Thread.sleep(PAUSA_ENTRE_PETICIONES_MS);
@@ -171,7 +171,7 @@ public class SyncTiendasServlet extends HttpServlet {
 
             // Paso 3: Verificación post-sincronización
             Set<String> uuidsReales = new HashSet<>();
-            ListItemCollectionResponse itemsPostSync = SharepointUtil.getListItems(SharepointUtil.SITE_ID, listId);
+            ListItemCollectionResponse itemsPostSync = SharePointUtil.getListItems(SharePointUtil.SITE_ID, listId);
             if (itemsPostSync != null && itemsPostSync.getValue() != null) {
                 for (ListItem item : itemsPostSync.getValue()) {
                     Map<String, Object> fields = item.getFields().getAdditionalData();

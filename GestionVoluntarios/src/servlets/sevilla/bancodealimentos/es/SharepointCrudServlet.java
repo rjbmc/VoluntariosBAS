@@ -16,7 +16,7 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/crud-sharepoint")
 public class SharepointCrudServlet extends HttpServlet {
@@ -72,7 +72,7 @@ public class SharepointCrudServlet extends HttpServlet {
             return;
         }
         try {
-            SharepointUtil.deleteListItem(siteId, listName, itemId);
+            SharePointUtil.deleteListItem(siteId, listName, itemId);
             logger.info("Elemento eliminado correctamente. ID: {}", itemId);
             sendJsonResponse(res, HttpServletResponse.SC_OK, Map.of("success", "Elemento borrado correctamente."));
         } catch (Exception e) {
@@ -92,7 +92,7 @@ public class SharepointCrudServlet extends HttpServlet {
             FieldValueSet newFields = new FieldValueSet();
             newFields.setAdditionalData(fields);
             
-            SharepointUtil.createListItem(siteId, listName, newFields);
+            SharePointUtil.createListItem(siteId, listName, newFields);
             logger.info("Elemento creado correctamente en lista '{}'", listName);
 
             sendJsonResponse(res, HttpServletResponse.SC_CREATED, Map.of("success", "Elemento creado correctamente."));
@@ -117,7 +117,7 @@ public class SharepointCrudServlet extends HttpServlet {
             FieldValueSet fieldsToUpdate = new FieldValueSet();
             fieldsToUpdate.setAdditionalData(fields);
 
-            SharepointUtil.updateListItem(siteId, listName, itemId, fieldsToUpdate);
+            SharePointUtil.updateListItem(siteId, listName, itemId, fieldsToUpdate);
             logger.info("Elemento actualizado correctamente. ID: {}", itemId);
 
             sendJsonResponse(res, HttpServletResponse.SC_OK, Map.of("success", "Elemento actualizado correctamente."));

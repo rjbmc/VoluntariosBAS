@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -8,119 +8,92 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
-    <script src="/VoluntariosBAS/js/config.js"></script>
+    
+    <style>
+        body { font-family: 'Montserrat', sans-serif; background-color: #f0f4f8; }
+        .card-shadow { box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); }
+        .btn-orange { background-color: #f97316; transition: background-color 0.2s; }
+        .btn-orange:hover { background-color: #ea580c; }
+        .btn-secondary { background-color: #4b5563; transition: background-color 0.2s; }
+        .btn-secondary:hover { background-color: #374151; }
+    </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
 
     <div class="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl card-shadow m-4">
         <div class="flex justify-center">
-            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="w-48">
         </div>
         
         <h2 class="text-2xl font-bold text-center text-gray-800">Acceso de Voluntarios</h2>
         
         <form id="loginForm" class="mt-8 space-y-6" onsubmit="handleLogin(event)">
-            <div class="space-y-4 rounded-md">
-                <div>
-                    <label for="usuario" class="sr-only">Usuario</label>
-                    <input id="usuario" name="usuario" type="text" required class="relative block w-full px-3 py-3 text-gray-900 placeholder-gray-500 border rounded-md appearance-none form-input focus:z-10 sm:text-sm" placeholder="Nombre de usuario">
-                </div>
-                <div>
-                    <label for="clave" class="sr-only">Contraseña</label>
-                    <input id="clave" name="clave" type="password" required class="relative block w-full px-3 py-3 text-gray-900 placeholder-gray-500 border rounded-md appearance-none form-input focus:z-10 sm:text-sm" placeholder="Contraseña">
-                </div>
+            <div class="space-y-4">
+                <input id="usuario" name="usuario" type="text" required class="block w-full px-3 py-3 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 sm:text-sm" placeholder="Usuario">
+                <input id="clave" name="clave" type="password" required class="block w-full px-3 py-3 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 sm:text-sm" placeholder="Contraseña">
             </div>
 
-            <div>
-                <button type="submit" class="relative flex justify-center w-full px-4 py-3 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
-                    Iniciar Sesión
-                </button>
-            </div>
+            <button type="submit" id="submit-button" class="w-full flex justify-center py-3 px-4 text-sm font-medium text-white rounded-md btn-orange shadow-md">
+                Iniciar Sesión
+            </button>
         </form>
         
-        <div class="text-center">
-            <p class="text-sm text-gray-600">¿Aun no te has registrado con acceso de voluntario?</p>
-            <button onclick="window.location.href='mapa-almacenes.html'" class="w-full px-4 py-3 mt-2 text-sm font-medium text-white border border-transparent rounded-md btn-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                Crear cuenta de Voluntario
+        <div class="text-center pt-4 border-t">
+            <button onclick="window.location.href='mapa-almacenes.html'" class="w-full px-4 py-3 text-sm font-medium text-white rounded-md btn-secondary">
+                Registrarme como Voluntario
             </button>
         </div>
 
-        <!-- CAMBIO: Añadidos los enlaces de recuperación y ayuda -->
-        <div class="text-center text-sm mt-6 pt-4 border-t">
-            <a href="recuperar-clave.html" class="font-medium text-gray-600 hover:text-orange-500">
-                He olvidado mi contraseña
-            </a>
-            <span class="text-gray-300 mx-2">|</span>
-            <a href="ayuda-admin.html" class="font-medium text-gray-600 hover:text-orange-500">
-                ¿Problemas para acceder?
-            </a>
-        </div>
-        
         <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
-
     </div>
     
+    <script src="/VoluntariosBAS/js/config.js"></script>
     <script>
         async function handleLogin(event) {
             event.preventDefault(); 
-
             const form = event.target;
             const formData = new FormData(form);
             const messageDiv = document.getElementById('message');
-            const usuario = formData.get('usuario'); // Esto obtiene el string del valor.
+            const submitBtn = document.getElementById('submit-button');
 
             messageDiv.textContent = 'Verificando...';
             messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
             messageDiv.classList.remove('hidden');
+            submitBtn.disabled = true;
 
             try {
-                // *** LLAMADA ORIGINAL RESTAURADA AL FETCH REAL ***
+                // Usamos URLSearchParams para asegurar que el Servlet reciba los parámetros correctamente
                 const response = await fetch(AppConfig.getUrl('LOGIN'), {
                     method: 'POST',
                     body: new URLSearchParams(formData)
                 });
                 
-                // Aquí se verifica el éxito del HTTP (200)
-                if (!response.ok) {
-                    throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
-                }
-                
                 const result = await response.json();
 
                 if (result.success) {
-                    // Éxito
-                    messageDiv.textContent = '¡Login correcto! Redirigiendo...';
+                    messageDiv.textContent = 'Acceso correcto. Redirigiendo...';
                     messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
                     
+                    // REDIRECCIÓN TOTALMENTE LIMPIA
+                    // La sesión ya está guardada en el servidor bajo la Cookie JSESSIONID
                     setTimeout(() => {
-                        // Construir el parámetro de usuario
-                        const redirectParam = `?usuario=${encodeURIComponent(usuario)}`;
-                        
-                        // RESTAURACIÓN DE LA LÓGICA CONDICIONAL ORIGINAL + PARÁMETRO
                         if (result.isAdmin) {
-                            window.location.href = 'admin.html' + redirectParam; // Redirección con parámetro
+                            window.location.href = 'admin.html';
                         } else {
-                            window.location.href = 'asignar-turnos.html' + redirectParam; // Redirección con parámetro
+                            window.location.href = 'asignar-turnos.html';
                         }
-                    }, 1500);
+                    }, 800);
 
                 } else {
-                    // Fallo (Mensaje desde el Servlet)
-                    messageDiv.textContent = result.message || 'Error desconocido.';
+                    messageDiv.textContent = result.message || 'Usuario o contraseña incorrectos.';
                     messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                    submitBtn.disabled = false;
                 }
-
             } catch (error) {
-                // Captura el error de conexión o de parseo JSON.
-                console.error('Error al conectar con el servidor:', error);
-                messageDiv.textContent = 'Error de conexión o servidor no disponible. (Compruebe que el Servlet esté activo).';
+                messageDiv.textContent = 'Error de conexión con el servidor.';
                 messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
-            } finally {
                 submitBtn.disabled = false;
             }
-            
-            messageDiv.classList.remove('hidden');
         }
     </script>
 </body>

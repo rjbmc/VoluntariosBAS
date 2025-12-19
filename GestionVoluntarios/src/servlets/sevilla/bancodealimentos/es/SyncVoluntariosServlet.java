@@ -23,7 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/sync-voluntarios")
 public class SyncVoluntariosServlet extends HttpServlet {
@@ -66,7 +66,7 @@ public class SyncVoluntariosServlet extends HttpServlet {
             conn = DatabaseUtil.getConnection();
             
             // Usamos SITE_ID o SP_SITE_ID_VOLUNTARIOS según configuración (aquí usamos el estándar SITE_ID)
-            String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
+            String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
             
             if (listId == null) {
                 logger.error("Lista SharePoint '{}' no encontrada.", SHAREPOINT_LIST_NAME);
@@ -74,7 +74,7 @@ public class SyncVoluntariosServlet extends HttpServlet {
             }
 
             logger.info("Limpiando lista '{}' en SharePoint...", SHAREPOINT_LIST_NAME);
-            SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listId);
+            SharePointUtil.deleteAllListItems(SharePointUtil.SITE_ID, listId);
 
             String sql = "SELECT Nombre, Apellidos, `DNI NIF`, tiendaReferencia, Email, telefono, fechaNacimiento, cp, administrador, verificado, SqlRowUUID FROM voluntarios";
             
@@ -123,7 +123,7 @@ public class SyncVoluntariosServlet extends HttpServlet {
                     fields.getAdditionalData().put("Verificado", "S".equalsIgnoreCase(rs.getString("verificado")));
                     fields.getAdditionalData().put("SqlRowUUID", rs.getString("SqlRowUUID"));
 
-                    SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
+                    SharePointUtil.createListItem(SharePointUtil.SITE_ID, listId, fields);
                     procesados++;
                     
                     // Pausa leve para evitar throttling en cargas masivas

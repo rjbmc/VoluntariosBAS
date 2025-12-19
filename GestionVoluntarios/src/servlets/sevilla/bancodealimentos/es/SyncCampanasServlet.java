@@ -23,7 +23,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/sync-campanas")
 public class SyncCampanasServlet extends HttpServlet {
@@ -68,9 +68,9 @@ public class SyncCampanasServlet extends HttpServlet {
         try {
             conn = DatabaseUtil.getConnection();
             
-            // CORRECCIÓN: Usamos SharepointUtil.SITE_ID en lugar de SITE_ID_VOLUNTARIOS
+            // CORRECCIÓN: Usamos SharePointUtil.SITE_ID en lugar de SITE_ID_VOLUNTARIOS
             // Asumimos que SITE_ID apunta al sitio correcto donde está la lista "Campanas"
-            String listId = SharepointUtil.getListId(SharepointUtil.SITE_ID, SHAREPOINT_LIST_NAME); 
+            String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SHAREPOINT_LIST_NAME); 
             
             if (listId == null) {
                 logger.error("No se encontró la lista '{}' en el sitio de SharePoint.", SHAREPOINT_LIST_NAME);
@@ -78,7 +78,7 @@ public class SyncCampanasServlet extends HttpServlet {
             }
 
             logger.debug("Limpiando lista de SharePoint (ID: {})...", listId);
-            SharepointUtil.deleteAllListItems(SharepointUtil.SITE_ID, listId);
+            SharePointUtil.deleteAllListItems(SharePointUtil.SITE_ID, listId);
 
             String sql = "SELECT SqlRowUUID, denominacion, Campana, fecha1, fecha2, estado, Comentarios, turnospordia FROM campanas";
             
@@ -117,7 +117,7 @@ public class SyncCampanasServlet extends HttpServlet {
                     }
 
                     // Creación del ítem en SharePoint usando SITE_ID
-                    SharepointUtil.createListItem(SharepointUtil.SITE_ID, listId, fields);
+                    SharePointUtil.createListItem(SharePointUtil.SITE_ID, listId, fields);
                     count++;
                 }
                 logger.info("Sincronización finalizada. {} campañas procesadas.", count);

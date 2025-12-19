@@ -24,7 +24,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 /**
  * Servlet para que los administradores consulten y modifiquen las asignaciones de turnos.
@@ -261,16 +261,16 @@ public class AdminAsignacionesServlet extends HttpServlet {
     
     // Método auxiliar para replicar a SP (Igual que en GuardarTurnosServlet)
     private void replicarAsignacionASharePoint(Connection conn, String campanaId, String usuario) throws Exception {
-        String listIdAsignaciones = SharepointUtil.getListId(SharepointUtil.SITE_ID, "Asignaciones");
-        String listIdVoluntarios = SharepointUtil.getListId(SharepointUtil.SITE_ID, "Voluntarios");
-        String listIdTiendas = SharepointUtil.getListId(SharepointUtil.SITE_ID, "Tiendas");
+        String listIdAsignaciones = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Asignaciones");
+        String listIdVoluntarios = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Voluntarios");
+        String listIdTiendas = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Tiendas");
 
         if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) return;
 
         String voluntarioUuid = getSqlRowUuid(conn, usuario);
         if (voluntarioUuid == null) return;
         
-        String spVoluntarioId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+        String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
         if (spVoluntarioId == null) return;
 
         String assignmentUuid = "AS-" + voluntarioUuid;
@@ -297,7 +297,7 @@ public class AdminAsignacionesServlet extends HttpServlet {
                         tieneTurnos = true;
                         String tiendaUuid = getSqlRowUuidForTienda(conn, idTiendaDb);
                         if (tiendaUuid != null) {
-                            String spTiendaId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                            String spTiendaId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                             if (spTiendaId != null) {
                                 fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
                             }
@@ -307,15 +307,15 @@ public class AdminAsignacionesServlet extends HttpServlet {
             }
         }
 
-        String itemId = SharepointUtil.findItemIdByFieldValue(SharepointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
+        String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
         if (itemId != null) {
             if (tieneTurnos) {
-                SharepointUtil.updateListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
+                SharePointUtil.updateListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
             } else {
-                SharepointUtil.deleteListItem(SharepointUtil.SITE_ID, listIdAsignaciones, itemId);
+                SharePointUtil.deleteListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId);
             }
         } else if (tieneTurnos) {
-            SharepointUtil.createListItem(SharepointUtil.SITE_ID, listIdAsignaciones, fields);
+            SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
         }
     }
     

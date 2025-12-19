@@ -7,44 +7,75 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- Enlace a la hoja de estilos común -->
-    <link rel="stylesheet" href="css/style.css">
-    <script src="/VoluntariosBAS/js/config.js"></script>
+    <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
+    <style>
+        body { font-family: 'Montserrat', sans-serif; }
+        .modal-content { max-height: 90vh; overflow-y: auto; }
+        
+        /* Estilo para el switch de administrador */
+        .switch { position: relative; display: inline-block; width: 50px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #f97316; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        
+        /* Marca de baja mejorada */
+        .badge-baja {
+            background-color: #ef4444;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Fila deshabilitada visualmente */
+        .row-baja {
+            background-color: #fef2f2 !important;
+        }
+    </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-gray-50">
 
     <!-- Cabecera -->
     <header class="bg-white shadow-md">
         <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
             <div class="flex items-center">
-                <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
+                <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
                 <span class="ml-4 text-xl font-bold text-gray-700">Gestión de Voluntarios</span>
             </div>
             <div>
-                <a href="admin.html" class="px-4 py-2 text-gray-600 hover:text-orange-600">Volver al Panel</a>
+                <a href="admin.html" class="px-4 py-2 text-gray-600 hover:text-orange-600 font-medium">Volver al Panel</a>
             </div>
         </nav>
     </header>
 
     <!-- Contenido Principal -->
     <main class="container mx-auto px-6 py-12">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Voluntarios</h1>
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Listado de Voluntarios</h1>
+            <div id="stats-container" class="text-sm text-gray-500 font-semibold">
+                <!-- Se llenará dinámicamente -->
+            </div>
         </div>
 
         <div id="message-container" class="mb-4"></div>
 
         <!-- Tabla de Voluntarios -->
-        <div class="bg-white shadow-md rounded-lg overflow-x-auto">
+        <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre Completo</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contacto</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Administrador</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Voluntario</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Contacto</th>
+                        <th class="px-6 py-4 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin</th>
+                        <th class="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
                 </thead>
-                <tbody id="voluntarios-table-body" class="bg-white divide-y divide-gray-200">
+                <tbody id="voluntarios-table-body" class="bg-white divide-y divide-gray-100">
                     <!-- Las filas se insertarán aquí dinámicamente -->
                 </tbody>
             </table>
@@ -53,49 +84,50 @@
 
     <!-- Modal para Editar Voluntario -->
     <div id="voluntario-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h3 id="modal-title" class="text-2xl font-bold mb-6">Editar Voluntario</h3>
+        <div class="modal-content !max-w-3xl bg-white p-8 rounded-2xl shadow-2xl">
+            <h3 id="modal-title" class="text-2xl font-bold text-gray-800 mb-6">Editar Voluntario</h3>
             <form id="voluntario-form" onsubmit="handleSave(event)">
                 <input type="hidden" id="usuario" name="usuario">
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div class="md:col-span-2">
-                        <label for="nombre" class="input-label">Nombre</label>
-                        <input type="text" id="nombre" name="nombre" class="form-input" required>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="nombre" class="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                        <input type="text" id="nombre" name="nombre" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
+                    </div>
+                    <div>
+                        <label for="apellidos" class="block text-sm font-semibold text-gray-700 mb-1">Apellidos</label>
+                        <input type="text" id="apellidos" name="apellidos" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
+                    </div>
+                    <div>
+                        <label for="dni" class="block text-sm font-semibold text-gray-700 mb-1">DNI / NIF</label>
+                        <input type="text" id="dni" name="dni" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
+                    </div>
+                    <div>
+                        <label for="telefono" class="block text-sm font-semibold text-gray-700 mb-1">Teléfono</label>
+                        <input type="tel" id="telefono" name="telefono" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
                     </div>
                     <div class="md:col-span-2">
-                        <label for="apellidos" class="input-label">Apellidos</label>
-                        <input type="text" id="apellidos" name="apellidos" class="form-input" required>
+                        <label for="email" class="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+                        <input type="email" id="email" name="email" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
                     </div>
-                    <div class="md:col-span-2">
-                        <label for="dni" class="input-label">DNI / NIF</label>
-                        <input type="text" id="dni" name="dni" class="form-input" required>
+                    <div>
+                        <label for="fechaNacimiento" class="block text-sm font-semibold text-gray-700 mb-1">Fecha Nacimiento</label>
+                        <input type="date" id="fechaNacimiento" name="fechaNacimiento" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
                     </div>
-                    <div class="md:col-span-2">
-                        <label for="telefono" class="input-label">Teléfono</label>
-                        <input type="tel" id="telefono" name="telefono" class="form-input" required>
-                    </div>
-                    <div class="md:col-span-3">
-                        <label for="email" class="input-label">Email</label>
-                        <input type="email" id="email" name="email" class="form-input w-full" required>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="fechaNacimiento" class="input-label">Fecha Nacimiento</label>
-                        <input type="date" id="fechaNacimiento" name="fechaNacimiento" class="form-input" required>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="cp" class="input-label">Código Postal</label>
-                        <input type="text" id="cp" name="cp" class="form-input" required>
+                    <div>
+                        <label for="cp" class="block text-sm font-semibold text-gray-700 mb-1">Código Postal</label>
+                        <input type="text" id="cp" name="cp" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
                     </div>
                 </div>
-                <div class="flex justify-end space-x-4 mt-8">
-                    <button type="button" onclick="closeModal()" class="btn btn-secondary">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                
+                <div class="flex justify-end space-x-4 mt-10">
+                    <button type="button" onclick="closeModal()" class="px-6 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors font-semibold">Cancelar</button>
+                    <button type="submit" class="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold shadow-md">Guardar Cambios</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <script src="js/config.js"></script>
+    <script src="/VoluntariosBAS/js/config.js"></script>
     <script>
         let voluntariosData = {};
 
@@ -114,7 +146,7 @@
                 voluntariosData = {};
 
                 if (voluntarios.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-4">No hay voluntarios registrados.</td></tr>';
+                    tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-gray-500 italic">No hay voluntarios registrados.</td></tr>';
                     return;
                 }
 
@@ -122,28 +154,53 @@
                     voluntariosData[v.usuario] = v;
                     const tr = document.createElement('tr');
                     const isAdminChecked = v.esAdmin === 'S' ? 'checked' : '';
+                    
+                    // Lógica robusta para detectar baja
+                    const esBaja = v.fechaBaja && String(v.fechaBaja).trim() !== "" && v.fechaBaja !== null;
+                    const marcaBaja = esBaja ? `<span class="badge-baja ml-3">Baja</span>` : "";
+                    
+                    // Clase para fila de baja
+                    if (esBaja) tr.classList.add("row-baja");
+
                     tr.innerHTML = `
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm font-medium text-gray-900">${v.apellidos}, ${v.nombre}</div>
-                            <div class="text-sm text-gray-500">Usuario: ${v.usuario} | DNI: ${v.dni}</div>
+                            <div class="flex items-center">
+                                <div>
+                                    <div class="text-sm font-bold text-gray-900 flex items-center">
+                                        ${v.apellidos}, ${v.nombre}
+                                        ${marcaBaja}
+                                    </div>
+                                    <div class="text-xs text-gray-500 font-medium">Usuario: ${v.usuario} | DNI: ${v.dni}</div>
+                                    ${esBaja ? `<div class="text-[10px] text-red-600 mt-1 font-bold italic">Fecha de baja: ${v.fechaBaja}</div>` : ''}
+                                </div>
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm text-gray-900">${v.email}</div>
-                            <div class="text-sm text-gray-500">${v.telefono}</div>
+                            <div class="text-sm text-gray-700 font-medium">${v.email}</div>
+                            <div class="text-xs text-gray-500">${v.telefono}</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-center">
                             <label class="switch">
-                                <input type="checkbox" onchange="handleToggleAdmin('${v.usuario}', this.checked)" ${isAdminChecked}>
-                                <span class="slider round"></span>
+                                <input type="checkbox" onchange="handleToggleAdmin('${v.usuario}', this.checked)" ${isAdminChecked} ${esBaja ? 'disabled' : ''}>
+                                <span class="slider ${esBaja ? 'opacity-40 cursor-not-allowed' : ''}"></span>
                             </label>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                            <button onclick="openModal('${v.usuario}')" class="btn btn-secondary">Editar</button>
-                            <a href="admin-asignar-turnos.html?usuario=${encodeURIComponent(v.usuario)}" class="btn btn-primary">Asignar Turnos</a>
+                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div class="flex justify-end items-center space-x-2">
+                                ${!esBaja ? `
+                                    <button onclick="openModal('${v.usuario}')" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors">Editar</button>
+                                    <a href="admin-asignar-turnos.html?usuario=${encodeURIComponent(v.usuario)}" class="px-3 py-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors shadow-sm">Turnos</a>
+                                ` : `
+                                    <span class="text-gray-400 italic text-xs py-1.5 pr-2">Cuenta inactiva</span>
+                                `}
+                            </div>
                         </td>
                     `;
                     tableBody.appendChild(tr);
                 });
+                
+                document.getElementById('stats-container').textContent = `Total: ${voluntarios.length} voluntarios`;
+
             } catch (error) {
                 displayMessage(error.message, 'error');
             }
@@ -167,12 +224,12 @@
             document.getElementById('fechaNacimiento').value = voluntario.fechaNacimiento;
             
             document.getElementById('voluntario-modal').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+            document.body.classList.add('modal-open');
         }
 
         function closeModal() {
             document.getElementById('voluntario-modal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
+            document.body.classList.remove('modal-open');
         }
 
         async function handleSave(event) {
@@ -187,7 +244,7 @@
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    displayMessage(result.message, 'success');
+                    displayMessage(result.message || 'Cambios guardados correctamente', 'success');
                     closeModal();
                     loadVoluntarios();
                 } else {
@@ -213,9 +270,9 @@
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    displayMessage(result.message, 'success');
+                    displayMessage(result.message || 'Privilegios actualizados', 'success');
                 } else {
-                    throw new Error(result.message || 'Error desconocido');
+                    throw new Error(result.message || 'Error al actualizar permisos');
                 }
             } catch (error) {
                 displayMessage(error.message, 'error');
@@ -229,10 +286,10 @@
                 success: 'bg-green-100 border-green-400 text-green-700',
                 error: 'bg-red-100 border-red-400 text-red-700'
             };
-            container.innerHTML = `<div class="border px-4 py-3 rounded relative ${colors[type]}" role="alert">
-                                       <span class="block sm:inline">${msg}</span>
+            container.innerHTML = `<div class="border px-4 py-3 rounded-lg shadow-sm relative ${colors[type]}" role="alert">
+                                       <span class="block sm:inline font-medium">${msg}</span>
                                    </div>`;
-            setTimeout(() => container.innerHTML = '', 4000);
+            setTimeout(() => { if(container.innerHTML !== "") container.innerHTML = ''; }, 5000);
         }
     </script>
 </body>

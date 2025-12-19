@@ -6,7 +6,7 @@
     <title>Asignar Turnos - VoluntariosBAS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Leaflet CSS -->
+    <!-- Leaflet CSS para el mapa -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
     <!-- Leaflet JS -->
@@ -14,27 +14,25 @@
     <style>
         .map-container { height: 400px; width: 100%; }
         .modal-content { max-width: 900px; width: 90%; }
-        /* Estilos básicos para simular los botones */
-        .btn-primary { background-color: #f97316; color: white; border-radius: 0.375rem; transition: background-color 0.2s; }
+        .btn-primary { background-color: #f97316; color: white; border-radius: 0.375rem; transition: all 0.2s; }
         .btn-primary:hover { background-color: #ea580c; }
-        .btn-secondary { background-color: #4b5563; color: white; border-radius: 0.375rem; transition: background-color 0.2s; }
+        .btn-secondary { background-color: #4b5563; color: white; border-radius: 0.375rem; transition: all 0.2s; }
         .btn-secondary:hover { background-color: #374151; }
         .form-input { border-color: #d1d5db; border-radius: 0.375rem; padding: 0.5rem; }
     </style>
 </head>
-<body class="min-h-screen bg-gray-50 flex flex-col">
+<body class="min-h-screen bg-gray-50 flex flex-col font-['Montserrat']">
 
     <!-- Cabecera -->
     <header class="bg-white shadow-md">
         <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
             <div class="flex items-center">
                 <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
-                <span class="ml-4 text-xl font-bold text-gray-700">Selección de turnos</span>
+                <span class="ml-4 text-xl font-bold text-gray-700 uppercase tracking-tight">Gestión de Turnos</span>
             </div>
             <div class="flex items-center space-x-4">
-                <!-- DISPLAY del usuario actual -->
-                <span id="user-display" class="font-semibold text-gray-700">Usuario: Cargando...</span>
-                <a href="login.html" class="px-4 py-2 text-gray-600 hover:text-orange-600 transition-colors">Volver a Login</a>
+                <span id="user-display" class="hidden md:inline text-sm font-semibold text-gray-500 bg-gray-100 px-4 py-2 rounded-full border border-gray-200">Verificando sesión...</span>
+                <a href="login.html" id="link-volver" class="px-4 py-2 text-gray-600 hover:text-orange-600 transition-colors font-bold text-sm">Volver</a>
             </div>
         </nav>
     </header>
@@ -42,416 +40,250 @@
     <!-- Contenido -->
     <main class="flex-grow container mx-auto px-4 py-8">
         
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-8 border-t-4 border-blue-600">
-            <div class="flex justify-between items-start mb-6">
+        <!-- Bloque de Error de Sesión (Oculto por defecto) -->
+        <div id="session-error-block" class="hidden bg-red-100 border-l-4 border-red-500 p-6 rounded-lg mb-8 shadow-md">
+            <div class="flex items-center">
+                <svg class="h-6 w-6 text-red-600 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 <div>
-                    <h1 class="text-2xl font-bold text-gray-800">Selección Manual de Turnos</h1>
+                    <h2 class="font-bold text-red-800">Error de Autenticación</h2>
+                    <p class="text-red-700 text-sm">No se ha podido validar tu sesión de usuario. Por seguridad, debes volver a entrar.</p>
                 </div>
             </div>
+            <button onclick="window.location.href='login.html'" class="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg font-bold text-sm">Ir al Login ahora</button>
+        </div>
+
+        <div id="main-content-block" class="bg-white rounded-xl shadow-lg p-8 mb-8 border-t-4 border-orange-500 opacity-50 pointer-events-none">
+            <div class="mb-8">
+                <h1 class="text-2xl font-bold text-gray-800">Selección de Puntos de Recogida</h1>
+                <p class="text-gray-500 text-sm mt-1">
+                    Gestionando la inscripción para: <span id="display-usuario-fuerte" class="font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">...</span>
+                </p>
+            </div>
             
-            <div id="campana-info" class="bg-orange-50 border-l-4 border-orange-500 p-4 mb-6 hidden">
-                <p class="font-bold text-orange-700" id="campana-nombre">Cargando campaña...</p>
-                <p class="text-sm text-orange-600" id="campana-fechas"></p>
+            <div id="campana-info" class="bg-blue-50 border-l-4 border-blue-500 p-5 mb-8 hidden rounded-r-lg">
+                <p class="font-bold text-blue-800 text-lg" id="campana-nombre">Cargando campaña...</p>
+                <p class="text-xs text-blue-600 font-bold uppercase tracking-widest mt-1" id="campana-fechas"></p>
             </div>
 
             <form id="turnosForm" onsubmit="handleGuardar(event)">
                 <input type="hidden" id="campanaId" name="campanaId">
-                <input type="hidden" id="targetUsuario" name="usuario"> <!-- Aquí se guarda el usuario -->
+                <input type="hidden" id="targetUsuario" name="usuario">
 
-                <div class="space-y-6">
-                    <!-- Turno 1 -->
-                    <div class="border rounded-lg p-4 bg-gray-50">
-                        <h3 class="font-bold text-lg text-gray-700 mb-3">Turno 1 (Mañana Viernes)</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Tienda</label>
-                                <!-- Interfaz de selección de tienda con mapa -->
-                                <div class="bg-white p-2 border rounded-md shadow-sm mb-2 min-h-[42px] flex items-center">
-                                    <span id="tienda_nombre_1" class="text-sm text-gray-700 italic">Ninguna tienda seleccionada</span>
-                                </div>
-                                <input type="hidden" id="tienda_1" name="tienda_1">
-                                <div class="flex space-x-2">
-                                    <button type="button" onclick="openMapModal(1)" class="btn btn-secondary text-xs px-3 py-1">Elegir/Cambiar Tienda</button>
-                                    <button type="button" onclick="clearTienda(1)" class="text-red-600 hover:text-red-800 text-xs font-medium underline">Quitar Asignación</button>
-                                </div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Acompañantes</label>
-                                <input type="number" id="acompanantes_1" name="acompanantes_1" class="form-input w-full" min="0" placeholder="0">
-                            </div>
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Comentarios</label>
-                                <input type="text" id="comentario_1" name="comentario_1" class="form-input w-full">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Turno 2 -->
-                    <div class="border rounded-lg p-4 bg-gray-50">
-                        <h3 class="font-bold text-lg text-gray-700 mb-3">Turno 2 (Tarde Viernes)</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Tienda</label>
-                                <div class="bg-white p-2 border rounded-md shadow-sm mb-2 min-h-[42px] flex items-center">
-                                    <span id="tienda_nombre_2" class="text-sm text-gray-700 italic">Ninguna tienda seleccionada</span>
-                                </div>
-                                <input type="hidden" id="tienda_2" name="tienda_2">
-                                <div class="flex space-x-2">
-                                    <button type="button" onclick="openMapModal(2)" class="btn btn-secondary text-xs px-3 py-1">Elegir/Cambiar Tienda</button>
-                                    <button type="button" onclick="clearTienda(2)" class="text-red-600 hover:text-red-800 text-xs font-medium underline">Quitar Asignación</button>
-                                </div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Acompañantes</label>
-                                <input type="number" id="acompanantes_2" name="acompanantes_2" class="form-input w-full" min="0" placeholder="0">
-                            </div>
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Comentarios</label>
-                                <input type="text" id="comentario_2" name="comentario_2" class="form-input w-full">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Turno 3 -->
-                    <div class="border rounded-lg p-4 bg-gray-50">
-                        <h3 class="font-bold text-lg text-gray-700 mb-3">Turno 3 (Mañana Sábado)</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Tienda</label>
-                                <div class="bg-white p-2 border rounded-md shadow-sm mb-2 min-h-[42px] flex items-center">
-                                    <span id="tienda_nombre_3" class="text-sm text-gray-700 italic">Ninguna tienda seleccionada</span>
-                                </div>
-                                <input type="hidden" id="tienda_3" name="tienda_3">
-                                <div class="flex space-x-2">
-                                    <button type="button" onclick="openMapModal(3)" class="btn btn-secondary text-xs px-3 py-1">Elegir/Cambiar Tienda</button>
-                                    <button type="button" onclick="clearTienda(3)" class="text-red-600 hover:text-red-800 text-xs font-medium underline">Quitar Asignación</button>
-                                </div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Acompañantes</label>
-                                <input type="number" id="acompanantes_3" name="acompanantes_3" class="form-input w-full" min="0" placeholder="0">
-                            </div>
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Comentarios</label>
-                                <input type="text" id="comentario_3" name="comentario_3" class="form-input w-full">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Turno 4 -->
-                    <div class="border rounded-lg p-4 bg-gray-50">
-                        <h3 class="font-bold text-lg text-gray-700 mb-3">Turno 4 (Tarde Sábado)</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Tienda</label>
-                                <div class="bg-white p-2 border rounded-md shadow-sm mb-2 min-h-[42px] flex items-center">
-                                    <span id="tienda_nombre_4" class="text-sm text-gray-700 italic">Ninguna tienda seleccionada</span>
-                                </div>
-                                <input type="hidden" id="tienda_4" name="tienda_4">
-                                <div class="flex space-x-2">
-                                    <button type="button" onclick="openMapModal(4)" class="btn btn-secondary text-xs px-3 py-1">Elegir/Cambiar Tienda</button>
-                                    <button type="button" onclick="clearTienda(4)" class="text-red-600 hover:text-red-800 text-xs font-medium underline">Quitar Asignación</button>
-                                </div>
-                            </div>
-                            <div class="md:col-span-2">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Acompañantes</label>
-                                <input type="number" id="acompanantes_4" name="acompanantes_4" class="form-input w-full" min="0" placeholder="0">
-                            </div>
-                            <div class="md:col-span-5">
-                                <label class="block text-xs font-medium text-gray-500 mb-1">Comentarios</label>
-                                <input type="text" id="comentario_4" name="comentario_4" class="form-input w-full">
-                            </div>
-                        </div>
-                    </div>
+                <div id="turnos-container" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Los bloques de turnos se generarán dinámicamente -->
                 </div>
 
-                <div class="mt-8 flex justify-end space-x-4">
-                    <a href="admin-voluntarios.html" class="btn btn-secondary px-6 py-3">Cancelar</a>
-                    <button type="submit" class="btn btn-primary px-8 py-3 shadow-lg">
-                        Guardar Turnos
+                <div class="mt-12 flex flex-col md:flex-row justify-end items-center space-y-4 md:space-y-0 md:space-x-4 border-t pt-8 border-gray-100">
+                    <button type="submit" id="save-btn" class="w-full md:w-auto btn btn-primary px-12 py-5 shadow-xl shadow-orange-100 text-lg uppercase tracking-widest font-bold">
+                        Guardar cambios
                     </button>
                 </div>
             </form>
         </div>
     </main>
     
-    <!-- Modal del Mapa -->
-    <div id="map-modal" class="modal-overlay hidden z-50">
-        <div class="modal-content bg-white rounded-lg shadow-xl overflow-hidden">
-            <div class="flex justify-between items-center p-4 border-b">
-                <h3 class="text-lg font-bold text-gray-800">Seleccionar Tienda</h3>
-                <button onclick="closeMapModal()" class="text-gray-500 hover:text-gray-700">
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+    <!-- Modal del Mapa y Toasts omitidos para brevedad, pero mantenidos en el JS -->
+    <div id="map-modal" class="modal-overlay hidden z-50 p-4">
+        <div class="modal-content bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
+            <div class="flex justify-between items-center p-6 border-b border-gray-50">
+                <h3 class="text-xl font-bold text-gray-800">Ubicaciones Disponibles</h3>
+                <button onclick="closeMapModal()" class="text-gray-400 hover:text-gray-600"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
-            <div class="relative">
-                <div id="map" class="map-container bg-gray-100"></div>
-                <!-- Leyenda flotante -->
-                <div class="absolute top-2 right-2 bg-white p-2 rounded shadow text-xs z-[400]">
-                    <div class="flex items-center mb-1"><span class="w-3 h-3 rounded-full bg-blue-500 mr-2"></span> Disponible</div>
-                </div>
-            </div>
-            <div class="p-4 bg-gray-50 text-right">
-                <button onclick="closeMapModal()" class="btn btn-secondary text-sm">Cancelar</button>
-            </div>
+            <div id="map" class="map-container bg-gray-50"></div>
+            <div class="p-4 text-right bg-gray-50"><button onclick="closeMapModal()" class="btn btn-secondary text-xs px-4 py-2">Cerrar</button></div>
         </div>
     </div>
-    
-    <div id="message-toast" class="fixed bottom-4 right-4 hidden bg-gray-800 text-white px-6 py-3 rounded-lg shadow-xl z-50"></div>
+    <div id="message-toast" class="fixed bottom-8 right-8 hidden px-8 py-5 rounded-2xl shadow-2xl z-50 text-white font-bold"></div>
 
     <script src="/VoluntariosBAS/js/config.js"></script>
     <script>
-        console.log("!!! ADMIN SCRIPT INICIADO (CON MAPA) !!!");
-        
+        const turnosLabels = ["Viernes Mañana", "Viernes Tarde", "Sábado Mañana", "Sábado Tarde"];
         let targetUsuario = "";
+        let sessionUser = null;
         let mapInstance = null;
-        let tiendasCache = []; // Almacenamos todas las tiendas para no recargar
-        let currentTurnoSelection = 0; // Turno que estamos editando actualmente
+        let tiendasCache = []; 
+        let currentTurnoSelection = 0;
 
-        
-        document.addEventListener('DOMContentLoaded', async () => {
-            const params = new URLSearchParams(window.location.search);
-            // targetUsuario recibe el string del parámetro 'usuario'
-            targetUsuario = params.get('usuario');
-            
-            // Si targetUsuario no es un string válido, asumimos error
-            if (!targetUsuario || typeof targetUsuario !== 'string') {
-                showToast("Error: No se especificó ningún usuario. Redirigiendo...", 'error');
-                setTimeout(() => { window.location.href = "admin-voluntarios.html"; }, 1500);
-                return;
-            }
-
-            // CORREGIDO: Mostrar el nombre de usuario en la cabecera. targetUsuario es el string.
-            const userDisplayEl = document.getElementById('user-display');
-            if (userDisplayEl) {
-                 userDisplayEl.textContent = `Usuario: ${targetUsuario}`;
-            }
-
-            // Se pasa el string al input hidden del formulario
-            document.getElementById('targetUsuario').value = targetUsuario;
-            
-            await loadCampanaActiva();
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTurnosUI();
+            initializePage();
         });
+
+        function renderTurnosUI() {
+            const container = document.getElementById('turnos-container');
+            let html = '';
+            for(let i=1; i<=4; i++) {
+                html += `
+                    <div class="border border-gray-200 rounded-2xl p-6 bg-white hover:shadow-md transition-shadow relative overflow-hidden group">
+                        <div class="absolute top-0 left-0 w-1 h-full bg-gray-100 group-hover:bg-orange-400 transition-colors"></div>
+                        <h3 class="font-bold text-gray-800 mb-5 flex items-center">
+                            <span class="bg-orange-100 text-orange-600 w-8 h-8 rounded-lg inline-flex items-center justify-center mr-3 text-sm font-bold shadow-sm">${i}</span>
+                            Turno ${i}: ${turnosLabels[i-1]}
+                        </h3>
+                        <div class="space-y-5">
+                            <div>
+                                <div class="bg-gray-50 p-4 border border-gray-200 rounded-xl min-h-[60px] flex items-center justify-between">
+                                    <span id="tienda_nombre_${i}" class="text-sm text-gray-500 italic">No hay asignación activa</span>
+                                    <button type="button" onclick="clearTienda(${i})" class="text-gray-300 hover:text-red-500 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                                </div>
+                                <input type="hidden" id="tienda_${i}" name="tienda_${i}">
+                                <button type="button" onclick="openMapModal(${i})" class="mt-3 w-full py-3 bg-gray-800 text-white text-[10px] font-bold rounded-xl hover:bg-orange-600 transition-colors uppercase tracking-widest shadow-sm">BUSCAR EN MAPA</button>
+                            </div>
+                            <div class="grid grid-cols-4 gap-4">
+                                <div class="col-span-1">
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Personas</label>
+                                    <input type="number" id="acompanantes_${i}" name="acompanantes_${i}" class="form-input w-full text-center font-bold text-gray-700 bg-white" min="0" value="0">
+                                </div>
+                                <div class="col-span-3">
+                                    <label class="block text-[10px] font-bold text-gray-400 uppercase mb-2">Comentarios</label>
+                                    <input type="text" id="comentario_${i}" name="comentario_${i}" class="form-input w-full bg-white" placeholder="...">
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+            container.innerHTML = html;
+        }
+
+        async function initializePage() {
+            console.log("Comprobando sesión en USUARIO_ACTUAL...");
+            try {
+                const resp = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
+                
+                if (!resp.ok) {
+                    console.error("Respuesta no válida del servidor. Código:", resp.status);
+                    document.getElementById('session-error-block').classList.remove('hidden');
+                    document.getElementById('user-display').textContent = "Sesión no válida";
+                    return;
+                }
+
+                sessionUser = await resp.json();
+                console.log("Sesión activa:", sessionUser.usuario);
+
+                // Activar UI
+                document.getElementById('main-content-block').classList.remove('opacity-50', 'pointer-events-none');
+                document.getElementById('user-display').textContent = `Conectado: ${sessionUser.usuario}`;
+                
+                const params = new URLSearchParams(window.location.search);
+                const urlUser = params.get('usuario');
+                targetUsuario = (urlUser && sessionUser.isAdmin) ? urlUser : sessionUser.usuario;
+                
+                document.getElementById('display-usuario-fuerte').textContent = targetUsuario;
+                document.getElementById('targetUsuario').value = targetUsuario;
+
+                const linkVolver = document.getElementById('link-volver');
+                if (sessionUser.isAdmin) {
+                    linkVolver.href = "admin-voluntarios.html";
+                    linkVolver.textContent = "Volver al Listado";
+                } else {
+                    linkVolver.href = "login.html";
+                    linkVolver.textContent = "Cerrar Sesión";
+                }
+
+                await loadCampanaActiva();
+            } catch (e) {
+                console.error("Error de conexión:", e);
+                document.getElementById('session-error-block').classList.remove('hidden');
+            }
+        }
 
         async function loadCampanaActiva() {
             try {
                 const response = await fetch(AppConfig.getUrl('CAMPANA_ACTIVA'));
-                if (!response.ok) throw new Error("Error cargando campaña");
-                
                 const campana = await response.json();
                 document.getElementById('campanaId').value = campana.campana;
                 document.getElementById('campana-nombre').textContent = campana.denominacion;
-                document.getElementById('campana-fechas').textContent = `Del ${campana.fecha1} al ${campana.fecha2}`;
+                document.getElementById('campana-fechas').textContent = `Periodo: ${campana.fecha1} — ${campana.fecha2}`;
                 document.getElementById('campana-info').classList.remove('hidden');
-
-                // 1. Cargar la lista completa de tiendas UNA VEZ
                 await loadTodasLasTiendas();
-                
-                // 2. Cargar los turnos del usuario
                 await loadTurnosUsuario(campana.campana);
-
-            } catch (error) {
-                console.error(error);
-                showToast('Error cargando datos iniciales.', 'error');
-            }
+            } catch (error) { console.error("Error cargando campaña:", error); }
         }
 
         async function loadTodasLasTiendas() {
             try {
-                // Usamos el endpoint que devuelve TODAS las tiendas
                 const response = await fetch(AppConfig.getUrl('TODAS_LAS_TIENDAS')); 
-                if (response.ok) {
-                    tiendasCache = await response.json();
-                    console.log(`Cargadas ${tiendasCache.length} tiendas en caché.`);
-                }
-            } catch (e) { console.error("Error cargando lista de tiendas", e); }
+                if (response.ok) tiendasCache = await response.json();
+            } catch (e) {}
         }
 
         async function loadTurnosUsuario(campanaId) {
             try {
-                // targetUsuario ya es el string, se usa directamente
                 const url = `${AppConfig.getUrl('MIS_TURNOS')}?campana=${campanaId}&usuario=${encodeURIComponent(targetUsuario)}`;
-                console.log("Cargando turnos de usuario:", url);
-                
                 const response = await fetch(url);
                 if (response.ok) {
                     const data = await response.json();
-                    console.log("Datos recibidos:", data);
-
                     for (let i = 1; i <= 4; i++) {
-                        let turnoId = data['Turno' + i];
-                        let comentario = data['Comentario' + i] || '';
-                        
-                        let acompanantes = data['Acompanantes' + i]
-                                                 || data['acompanantes' + i]
-                                                 || data['Acompañantes' + i];
-                        
-                        // Fallback Legacy
-                        if ((acompanantes === undefined || acompanantes === null) && comentario) {
-                             const lowerComentario = comentario.toLowerCase();
-                             if (lowerComentario.startsWith('voluntarios:')) {
-                                 const match = comentario.match(/^Voluntarios:\s*(\d+)(\.\s*)?(.*)/i);
-                                 if (match) {
-                                     acompanantes = match[1];
-                                     comentario = match[3] || '';
-                                 }
-                             }
-                        }
-
-                        // Pintar la tienda seleccionada
-                        if (turnoId && turnoId > 0) {
-                            updateTiendaDisplay(i, turnoId);
-                        } else {
-                            clearTienda(i);
-                        }
-                        
-                        document.getElementById(`comentario_${i}`).value = comentario;
-                        
-                        if (acompanantes !== undefined && acompanantes !== null) {
-                            document.getElementById(`acompanantes_${i}`).value = acompanantes;
-                        }
+                        let tiendaId = data['Turno' + i];
+                        if (tiendaId && tiendaId > 0) updateTiendaDisplay(i, tiendaId);
+                        document.getElementById(`comentario_${i}`).value = data['Comentario' + i] || '';
+                        document.getElementById(`acompanantes_${i}`).value = data['Acompanantes' + i] || 0;
                     }
-                } else if (response.status === 403 || response.status === 401) {
-                    window.location.href = 'login.html';
                 }
-            } catch (error) {
-                console.error("Error cargando turnos:", error);
-            }
+            } catch (error) {}
         }
-        
-        // --- FUNCIONES DEL MAPA ---
 
         window.openMapModal = function(turno) {
             currentTurnoSelection = turno;
             document.getElementById('map-modal').classList.remove('hidden');
-            
-            // Inicializar mapa si no existe, o invalidar tamaño si ya existe
-            // (Necesario porque estaba oculto)
             setTimeout(() => {
                 if (!mapInstance) {
-                    initMap();
-                } else {
-                    mapInstance.invalidateSize();
-                }
-                renderMarkers(); // Pintar marcadores
-            }, 100);
+                    mapInstance = L.map('map').setView([37.3891, -5.9845], 12);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);
+                } else { mapInstance.invalidateSize(); }
+                renderMarkers();
+            }, 200);
         }
 
-        window.closeMapModal = function() {
-            document.getElementById('map-modal').classList.add('hidden');
-        }
-
-        function initMap() {
-            // Centro en Sevilla por defecto
-            mapInstance = L.map('map').setView([37.3891, -5.9845], 12);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap contributors'
-            }).addTo(mapInstance);
-        }
+        window.closeMapModal = () => document.getElementById('map-modal').classList.add('hidden');
 
         function renderMarkers() {
-            // Limpiar marcadores anteriores
-            mapInstance.eachLayer((layer) => {
-                if (layer instanceof L.Marker) {
-                    mapInstance.removeLayer(layer);
-                }
-            });
-
-            // Filtrar tiendas disponibles (asumiendo que las tiendasCache son todas las disponibles para el turno)
-            // NOTA: En su versión original, aquí se hace una llamada a PUNTOS_DISPONIBLES.
-            // Para simplificar aquí, usamos todas las tiendas en caché.
+            mapInstance.eachLayer((layer) => { if (layer instanceof L.Marker) mapInstance.removeLayer(layer); });
             tiendasCache.forEach(tienda => {
                 if (tienda.lat && tienda.lon) {
                     const marker = L.marker([tienda.lat, tienda.lon]).addTo(mapInstance);
-                    
-                    const popupContent = `
-                        <div class="text-sm">
-                            <h3 class="font-bold text-gray-800">${tienda.nombre}</h3>
-                            <p class="text-gray-600">${tienda.direccion}</p>
-                            <button onclick="selectTienda(${tienda.id})" class="mt-2 w-full btn btn-primary text-xs py-1">
-                                Seleccionar esta Tienda
-                            </button>
-                        </div>
-                    `;
-                    marker.bindPopup(popupContent);
+                    marker.bindPopup(`<div class='p-2 text-center'><h4 class='font-bold text-sm'>${tienda.nombre}</h4><button onclick='selectTienda(${tienda.id})' class='mt-2 py-1 px-3 bg-orange-500 text-white text-[10px] font-bold rounded'>SELECCIONAR</button></div>`);
                 }
             });
         }
 
-        // Llamada desde el popup del marcador
-        window.selectTienda = function(tiendaId) {
-            updateTiendaDisplay(currentTurnoSelection, tiendaId);
-            closeMapModal();
-        };
+        window.selectTienda = (id) => { updateTiendaDisplay(currentTurnoSelection, id); closeMapModal(); };
 
-        function updateTiendaDisplay(turno, tiendaId) {
-            // Actualizar input oculto
-            document.getElementById(`tienda_${turno}`).value = tiendaId;
-            
-            // Actualizar texto visual
-            const tienda = tiendasCache.find(t => t.id == tiendaId);
-            const displayEl = document.getElementById(`tienda_nombre_${turno}`);
-            
-            if (tienda) {
-                displayEl.textContent = `${tienda.nombre} (${tienda.direccion})`;
-                displayEl.classList.remove('italic', 'text-gray-500');
-                displayEl.classList.add('font-medium', 'text-blue-800');
-            } else {
-                displayEl.textContent = `Tienda ID: ${tiendaId} (No encontrada en lista)`;
-            }
+        function updateTiendaDisplay(turno, id) {
+            document.getElementById(`tienda_${turno}`).value = id;
+            const t = tiendasCache.find(x => x.id == id);
+            const el = document.getElementById(`tienda_nombre_${turno}`);
+            if (t) { el.textContent = t.nombre; el.classList.remove('italic', 'text-gray-500'); el.classList.add('font-bold', 'text-orange-600'); }
         }
 
-        window.clearTienda = function(turno) {
+        window.clearTienda = (turno) => {
             document.getElementById(`tienda_${turno}`).value = "";
-            const displayEl = document.getElementById(`tienda_nombre_${turno}`);
-            displayEl.textContent = "Ninguna tienda seleccionada";
-            displayEl.classList.add('italic', 'text-gray-500');
-            displayEl.classList.remove('font-medium', 'text-blue-800');
+            const el = document.getElementById(`tienda_nombre_${turno}`);
+            el.textContent = "No hay asignación activa"; el.classList.add('italic', 'text-gray-500'); el.classList.remove('font-bold', 'text-orange-600');
         };
 
         async function handleGuardar(event) {
             event.preventDefault(); 
-            const formData = new FormData(event.target);
-            const submitBtn = event.submitter;
-            
+            const submitBtn = document.getElementById('save-btn');
             submitBtn.disabled = true;
-            submitBtn.textContent = 'Guardando...';
-
+            submitBtn.textContent = 'PROCESANDO...';
             try {
                 const response = await fetch(AppConfig.getUrl('GUARDAR_TURNOS'), {
                     method: 'POST',
-                    body: new URLSearchParams(formData)
+                    body: new URLSearchParams(new FormData(event.target))
                 });
-                
                 const result = await response.json();
-                
-                if (result.success) {
-                    showToast('Turnos actualizados correctamente.', 'success');
-                    // Recargar
-                    const campanaId = document.getElementById('campanaId').value;
-                    if(campanaId) await loadTurnosUsuario(campanaId);
-                } else {
-                    showToast(result.message || 'Error al guardar.', 'error');
-                }
-
-            } catch (error) {
-                console.error("Error al guardar:", error);
-                showToast('Error de conexión.', 'error');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = 'Guardar Turnos';
-            }
+                showToast(result.success ? 'Guardado correctamente.' : 'Error al guardar.', result.success ? 'success' : 'error');
+            } catch (error) { showToast('Error de conexión.', 'error'); }
+            finally { submitBtn.disabled = false; submitBtn.textContent = 'GUARDAR CAMBIOS'; }
         }
 
-        function showToast(message, type) {
+        function showToast(msg, type) {
             const toast = document.getElementById('message-toast');
-            const colors = { success: 'bg-green-600', error: 'bg-red-600', info: 'bg-blue-600' };
-            toast.textContent = message;
-            toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-xl z-50 transition-opacity duration-300 ${colors[type]} text-white`;
+            toast.textContent = msg;
+            toast.className = `fixed bottom-8 right-8 px-10 py-5 rounded-2xl shadow-2xl z-50 text-white font-bold ${type === 'success' ? 'bg-green-600' : 'bg-red-600'}`;
             toast.classList.remove('hidden');
-            setTimeout(() => { toast.classList.add('hidden'); }, 3000);
+            setTimeout(() => toast.classList.add('hidden'), 4000);
         }
     </script>
 </body>

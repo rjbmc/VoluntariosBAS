@@ -33,7 +33,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.PasswordUtils;
 import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/modificar-datos")
 public class ModificarDatosServlet extends HttpServlet {
@@ -117,7 +117,7 @@ public class ModificarDatosServlet extends HttpServlet {
                         
                         // Nota: El email NO se actualiza en SP hasta que se confirme
                         
-                        SharepointReplicationUtil.replicate(conn, SharepointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
+                        SharepointReplicationUtil.replicate(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, "voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
 
                     } catch (Exception e) {
                         logger.error("Fallo al replicar a SharePoint para el usuario {} (UUID: {})", usuario, sqlRowUuid, e);

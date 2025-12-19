@@ -24,7 +24,7 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/lista-sharepoint")
 public class SharepointListServlet extends HttpServlet {
@@ -49,12 +49,12 @@ public class SharepointListServlet extends HttpServlet {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         
-        String siteId = SharepointUtil.SITE_ID; // Por defecto
+        String siteId = SharePointUtil.SITE_ID; // Por defecto
 
         if ("voluntarios".equalsIgnoreCase(siteSelection)) {
-            siteId = SharepointUtil.SP_SITE_ID_VOLUNTARIOS;
+            siteId = SharePointUtil.SP_SITE_ID_VOLUNTARIOS;
         } else if ("informatica".equalsIgnoreCase(siteSelection)) {
-            siteId = SharepointUtil.SP_SITE_ID_INFORMATICA;
+            siteId = SharePointUtil.SP_SITE_ID_INFORMATICA;
         }
 
         try {
@@ -63,7 +63,7 @@ public class SharepointListServlet extends HttpServlet {
                 
                 // --- OBTENER COLUMNAS E ITEMS DE UNA LISTA ESPECÍFICA ---
 
-                ColumnDefinitionCollectionResponse columnsResponse = SharepointUtil.getListColumns(siteId, listIdOrName);
+                ColumnDefinitionCollectionResponse columnsResponse = SharePointUtil.getListColumns(siteId, listIdOrName);
                 List<ColumnDefinition> columns = columnsResponse.getValue();
 
                 List<Map<String, Object>> columnDetails = columns.stream()
@@ -80,7 +80,7 @@ public class SharepointListServlet extends HttpServlet {
                     })
                     .collect(Collectors.toList());
 
-                ListItemCollectionResponse itemsResponse = SharepointUtil.getListItems(siteId, listIdOrName);
+                ListItemCollectionResponse itemsResponse = SharePointUtil.getListItems(siteId, listIdOrName);
                 List<ListItem> listItems = itemsResponse.getValue();
                 
                 List<Map<String, Object>> itemDetails = new ArrayList<>();
@@ -104,7 +104,7 @@ public class SharepointListServlet extends HttpServlet {
                 logger.info("Solicitando todas las listas del sitio '{}'...", siteSelection);
                 
                 // --- OBTENER TODAS LAS LISTAS DEL SITIO ---
-                ListCollectionResponse allLists = SharepointUtil.getAllLists(siteId);
+                ListCollectionResponse allLists = SharePointUtil.getAllLists(siteId);
                 List<Map<String, String>> listDetails = new ArrayList<>();
                 
                 if (allLists != null && allLists.getValue() != null) {

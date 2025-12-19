@@ -3,161 +3,258 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestión de Tiendas- Banco de Alimentos de Sevilla</title>
+    <title>Gestión de Tiendas - Banco de Alimentos de Sevilla</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
     <style>
-        /* Estilos adicionales para mejorar la apariencia del modal y los botones */
-        .modal-content { max-height: 90vh; overflow-y: auto; }
+        body { font-family: 'Montserrat', sans-serif; }
+        .modal-content { max-height: 95vh; overflow-y: auto; }
         .btn-edit {
             padding: 0.25rem 0.75rem;
-            font-size: 0.875rem; /* 14px */
+            font-size: 0.875rem;
             font-weight: 600;
         }
         body.modal-open {
             overflow: hidden;
         }
+        /* Asegurar que los inputs ocupen todo el ancho disponible */
+        .form-input {
+            width: 100% !important;
+            display: block;
+        }
+        /* Estilo para campos protegidos */
+        .input-readonly {
+            background-color: #f3f4f6 !important;
+            color: #6b7280 !important;
+            cursor: not-allowed;
+            border-color: #e5e7eb !important;
+        }
+        /* Marco para zona identificativa (No modificable) */
+        .fixed-zone {
+            border: 1px solid #e5e7eb;
+            background-color: #fcfcfc;
+            border-radius: 0.75rem;
+        }
+        /* Marco para zona modificable */
+        .editable-zone {
+            border: 2px solid #fdba74; /* orange-300 */
+            background-color: #fffaf5;
+            border-radius: 0.75rem;
+        }
+        /* Estilo específico para el botón de refrescar */
+        .btn-refresh-row {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+        /* Ajuste para evitar que la columna de acciones se pierda */
+        .actions-column {
+            min-width: 220px;
+        }
+        /* Truncado de denominación para ahorrar espacio */
+        .truncate-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-gray-50">
 
     <!-- Cabecera -->
     <header class="bg-white shadow-md">
         <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
             <div class="flex items-center">
                 <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
-                <span class="ml-4 text-xl font-bold text-gray-700">Gestión de Tiendas</span>
+                <div class="flex flex-col ml-4">
+                    <span class="text-xl font-bold text-gray-700">Gestión de Tiendas</span>
+                    <span id="debug-user-info" class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Usuario: verificando sesión...</span>
+                </div>
             </div>
             <div>
-                <a href="admin.html" class="px-4 py-2 text-gray-600 hover:text-orange-600">Volver al Panel</a>
+                <a href="admin.html" id="link-volver" class="px-4 py-2 text-gray-600 hover:text-orange-600 font-bold transition-colors">Volver al Panel</a>
             </div>
         </nav>
     </header>
 
     <!-- Contenido Principal -->
     <main class="container mx-auto px-6 py-12">
-        <div class="flex justify-between items-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Tiendas</h1>
-            <button onclick="openModal()" class="btn btn-primary">Crear Nueva Tienda</button>
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 space-y-4 md:space-y-0">
+            <h1 class="text-3xl font-bold text-gray-800 tracking-tight">Puntos de Recogida</h1>
+            <div class="flex flex-wrap gap-2">
+                <!-- Botón de Refrescar Todo: Con Tooltip descriptivo -->
+                <button onclick="refreshAllTiendas()" 
+                        class="btn bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-100 px-4 py-2 text-sm font-bold flex items-center transition-all"
+                        title="Sincronización global: Crea tiendas nuevas desde SharePoint, actualiza datos de las existentes y desactiva las tiendas locales que ya no figuren en la nube.">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    REFRESCAR DESDE SHAREPOINT
+                </button>
+                
+                <!-- Botón de Reparación: OCULTO por defecto -->
+                <button id="btn-repair-uuids" onclick="repairUUIDs()" 
+                        class="btn btn-secondary px-4 py-2 text-sm flex items-center hidden"
+                        title="Copia los identificacores SQL de las todas tiendas a Sharepoint.">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    REPARAR UUIDs
+                </button>
+                
+                <!-- Botón Nueva Tienda: OCULTO por defecto -->
+                <button id="btn-nueva-tienda" 
+                        onclick="openModal()" 
+                        class="btn btn-primary shadow-lg shadow-orange-100 hidden"
+                        title="Crea nueva tienda en la Base de Datos.">NUEVA TIENDA</button>
+            </div>
         </div>
 
         <!-- Filtros -->
-        <div class="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 items-center">
+        <div class="bg-white p-6 rounded-xl shadow-sm mb-8 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-6 items-center border border-gray-100">
             <div class="w-full md:w-1/3">
-                <label for="filtro-supervisor" class="input-label">Filtrar por Supervisor:</label>
-                <select id="filtro-supervisor" onchange="loadTiendas()" class="form-input">
+                <label for="filtro-supervisor" class="block text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Filtrar por Supervisor</label>
+                <select id="filtro-supervisor" onchange="loadTiendas()" class="form-input bg-gray-50 border-gray-200">
                     <option value="">Todos los supervisores</option>
                 </select>
             </div>
             <div class="w-full md:w-1/3">
-                <label for="filtro-zona" class="input-label">Filtrar por Zona:</label>
-                <select id="filtro-zona" onchange="loadTiendas()" class="form-input">
+                <label for="filtro-zona" class="block text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-wider">Filtrar por Zona</label>
+                <select id="filtro-zona" onchange="loadTiendas()" class="form-input bg-gray-50 border-gray-200">
                     <option value="">Todas las zonas</option>
                 </select>
             </div>
         </div>
 
-        <div id="message-container" class="mb-4"></div>
+        <div id="message-container" class="mb-6 transition-all duration-300"></div>
 
         <!-- Tabla de Tiendas -->
-        <div class="bg-white shadow-md rounded-lg overflow-x-auto">
+        <div class="bg-white shadow-xl rounded-2xl overflow-x-auto border border-gray-100">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Código</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Denominación</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supervisor</th>
-                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Disponible</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Código</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Denominación</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Supervisor</th>
+                        <th class="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">Estado</th>
+                        <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest actions-column">Acciones</th>
                     </tr>
                 </thead>
-                <tbody id="tiendas-table-body" class="bg-white divide-y divide-gray-200">
-                    <!-- Las filas se insertarán aquí dinámicamente -->
+                <tbody id="tiendas-table-body" class="bg-white divide-y divide-gray-100">
+                    <!-- Filas dinámicas -->
                 </tbody>
             </table>
         </div>
     </main>
 
-    <!-- Modal para Crear/Editar Tienda -->
-    <div id="tienda-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h3 id="modal-title" class="text-2xl font-bold mb-6">Nueva Tienda</h3>
+    <!-- Modal para Crear/Editar -->
+    <div id="tienda-modal" class="modal-overlay hidden z-40 p-4">
+        <div class="modal-content !max-w-3xl bg-white p-8 rounded-3xl shadow-2xl">
+            <h3 id="modal-title" class="text-2xl font-bold text-gray-800 mb-8">Información de Tienda</h3>
             <form id="tienda-form" onsubmit="handleSave(event)">
                 <input type="hidden" id="isUpdate" name="isUpdate" value="false">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="codigo" class="input-label">Código</label>
-                        <input type="number" id="codigo" name="codigo" class="form-input" required>
+                
+                <div class="space-y-8">
+                    <!-- BLOQUE 1: DATOS FIJOS / NO MODIFICABLES -->
+                    <div id="section-fixed-data" class="fixed-zone p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="w-full">
+                            <label for="codigo" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Código Interno</label>
+                            <input type="number" id="codigo" name="codigo" class="form-input" required>
+                        </div>
+                        <div class="hidden md:block"></div>
+                        
+                        <div class="md:col-span-2 w-full">
+                            <label for="denominacion" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nombre Comercial / Denominación</label>
+                            <input type="text" id="denominacion" name="denominacion" class="form-input" required>
+                        </div>
+                        <div class="md:col-span-2 w-full">
+                            <label for="direccion" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Dirección Completa</label>
+                            <input type="text" id="direccion" name="direccion" class="form-input" required>
+                        </div>
+                        <div class="md:col-span-2 w-full">
+                            <label for="poblacion" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Población / Localidad</label>
+                            <input type="text" id="poblacion" name="poblacion" class="form-input">
+                        </div>
+                        
+                        <div class="w-full">
+                            <label for="cp" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">C.P.</label>
+                            <input type="text" id="cp" name="cp" class="form-input">
+                        </div>
+                        <div class="w-full">
+                            <label for="cadena" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Cadena / Grupo</label>
+                            <input type="text" id="cadena" name="cadena" class="form-input" required>
+                        </div>
+                        <div class="w-full">
+                            <label for="lat" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Coordenada Latitud</label>
+                            <input type="text" id="lat" name="lat" class="form-input" required>
+                        </div>
+                        <div class="w-full">
+                            <label for="lon" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Coordenada Longitud</label>
+                            <input type="text" id="lon" name="lon" class="form-input" required>
+                        </div>
+                        <div class="w-full">
+                            <label for="prioridad" class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nivel de Prioridad</label>
+                            <select id="prioridad" name="prioridad" class="form-input">
+                                <option value="1">1 (Alta)</option>
+                                <option value="2">2 (Media)</option>
+                                <option value="3">3 (Baja)</option>
+                            </select>
+                        </div>
                     </div>
-                    <div>
-                        <label for="denominacion" class="input-label">Denominación</label>
-                        <input type="text" id="denominacion" name="denominacion" class="form-input" required>
-                    </div>
-                    <div class="md:col-span-2">
-                        <label for="direccion" class="input-label">Dirección</label>
-                        <input type="text" id="direccion" name="direccion" class="form-input" required>
-                    </div>
-                    <div>
-                        <label for="lat" class="input-label">Latitud</label>
-                        <input type="text" id="lat" name="lat" class="form-input" required>
-                    </div>
-                    <div>
-                        <label for="lon" class="input-label">Longitud</label>
-                        <input type="text" id="lon" name="lon" class="form-input" required>
-                    </div>
-                     <div>
-                        <label for="cp" class="input-label">Código Postal</label>
-                        <input type="text" id="cp" name="cp" class="form-input">
-                    </div>
-                    <div>
-                        <label for="poblacion" class="input-label">Población</label>
-                        <input type="text" id="poblacion" name="poblacion" class="form-input">
-                    </div>
-                    <div>
-                        <label for="cadena" class="input-label">Cadena</label>
-                        <input type="text" id="cadena" name="cadena" class="form-input" required>
-                    </div>
-                     <div>
-                        <label for="prioridad" class="input-label">Prioridad</label>
-                        <select id="prioridad" name="prioridad" class="form-input">
-                            <option value="1">1 (Alta)</option>
-                            <option value="2">2 (Media)</option>
-                            <option value="3">3 (Baja)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label for="disponible" class="input-label">Disponible</label>
-                        <select id="disponible" name="disponible" class="form-input">
-                            <option value="S">Sí</option>
-                            <option value="N">No</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-2">
-                        <p class="input-label mb-2">Huecos por Turno</p>
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                             <div>
-                                <label for="huecosTurno1" class="input-label text-sm">Turno 1</label>
-                                <input type="number" id="huecosTurno1" name="huecosTurno1" class="form-input" min="0" value="0">
+
+                    <!-- BLOQUE 2: DATOS MODIFICABLES -->
+                    <div id="section-editable-data" class="editable-zone p-8 shadow-inner">
+                        <div class="flex items-center mb-6">
+                            <div class="bg-orange-500 text-white p-1.5 rounded-lg mr-4 shadow-md shadow-orange-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                             </div>
                             <div>
-                                <label for="huecosTurno2" class="input-label text-sm">Turno 2</label>
-                                <input type="number" id="huecosTurno2" name="huecosTurno2" class="form-input" min="0" value="0">
+                                <p class="text-xs font-black text-orange-600 uppercase tracking-widest">Disponibilidad de la Tienda</p>
+                                <p class="text-[10px] text-orange-400 font-medium italic">Parámetros variables para la campaña actual</p>
                             </div>
-                            <div>
-                                <label for="huecosTurno3" class="input-label text-sm">Turno 3</label>
-                                <input type="number" id="huecosTurno3" name="huecosTurno3" class="form-input" min="0" value="0">
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div class="w-full">
+                                <label for="disponible" class="block text-[10px] font-bold text-gray-500 uppercase mb-2">Estado de Inscripción</label>
+                                <select id="disponible" name="disponible" class="form-input !border-orange-200 focus:!ring-orange-500 font-bold text-orange-700">
+                                    <option value="S">ACTIVA: Admitir voluntarios</option>
+                                    <option value="N">INACTIVA: Cerrada / Sin cupo</option>
+                                </select>
                             </div>
-                            <div>
-                                <label for="huecosTurno4" class="input-label text-sm">Turno 4</label>
-                                <input type="number" id="huecosTurno4" name="huecosTurno4" class="form-input" min="0" value="0">
+                            
+                            <div class="md:col-span-2">
+                                <p class="block text-[10px] font-bold text-gray-500 uppercase mb-4 tracking-wider">Capacidad de voluntarios por turno</p>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                     <div class="bg-white p-3 rounded-xl border border-orange-100">
+                                        <label for="huecosTurno1" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Viernes Mañ.</label>
+                                        <input type="number" id="huecosTurno1" name="huecosTurno1" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                    </div>
+                                    <div class="bg-white p-3 rounded-xl border border-orange-100">
+                                        <label for="huecosTurno2" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Viernes Tarde</label>
+                                        <input type="number" id="huecosTurno2" name="huecosTurno2" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                    </div>
+                                    <div class="bg-white p-3 rounded-xl border border-orange-100">
+                                        <label for="huecosTurno3" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Sábado Mañ.</label>
+                                        <input type="number" id="huecosTurno3" name="huecosTurno3" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                    </div>
+                                    <div class="bg-white p-3 rounded-xl border border-orange-100">
+                                        <label for="huecosTurno4" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Sábado Tarde</label>
+                                        <input type="number" id="huecosTurno4" name="huecosTurno4" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="flex justify-end space-x-4 mt-8">
-                    <button type="button" onclick="closeModal()" class="btn btn-secondary">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar Tienda</button>
+
+                <div class="flex justify-end space-x-4 mt-10">
+                    <button type="button" onclick="closeModal()" class="px-6 py-2 bg-gray-100 text-gray-500 font-bold rounded-xl hover:bg-gray-200 transition-colors">CANCELAR</button>
+                    <button type="submit" class="px-8 py-2 bg-orange-500 text-white font-bold rounded-xl hover:bg-orange-600 shadow-lg shadow-orange-100 transition-all">GUARDAR CAMBIOS</button>
                 </div>
             </form>
         </div>
@@ -165,123 +262,187 @@
 
     <script src="/VoluntariosBAS/js/config.js"></script>
     <script>
-        let tiendasCache = []; // Almacenar la lista completa de tiendas en memoria
+        let tiendasCache = []; 
+        let usuarioActual = "";
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkSession();
             loadFiltros();
             loadTiendas();
         });
 
+        async function checkSession() {
+            try {
+                const response = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
+                if (!response.ok) { window.location.href = 'login.html'; return; }
+                const user = await response.json();
+                
+                if (!user.isAdmin) { window.location.href = 'login.html'; return; }
+
+                usuarioActual = user.usuario || "";
+                document.getElementById('debug-user-info').textContent = `Usuario: ${usuarioActual}`;
+
+                const userSanitized = usuarioActual.trim().toUpperCase();
+                if (userSanitized === '28654139A') {
+                    document.getElementById('btn-repair-uuids').classList.remove('hidden');
+                    document.getElementById('btn-nueva-tienda').classList.remove('hidden');
+                }
+                
+            } catch (error) { window.location.href = 'login.html'; }
+        }
+
         async function loadFiltros() {
             try {
                 const response = await fetch(AppConfig.getUrl('ADMIN_FILTROS_TIENDAS'));
-                if (!response.ok) throw new Error('Error al cargar datos para filtros');
                 const data = await response.json();
                 
                 const supervisorSelect = document.getElementById('filtro-supervisor');
                 data.supervisores.forEach(s => {
-                    const option = document.createElement('option');
-                    option.value = s;
-                    option.textContent = s;
-                    supervisorSelect.appendChild(option);
+                    const opt = document.createElement('option');
+                    opt.value = s; opt.textContent = s;
+                    supervisorSelect.appendChild(opt);
                 });
 
                 const zonaSelect = document.getElementById('filtro-zona');
                 data.zonas.forEach(z => {
-                    const option = document.createElement('option');
-                    option.value = z;
-                    option.textContent = z;
-                    zonaSelect.appendChild(option);
+                    const opt = document.createElement('option');
+                    opt.value = z; opt.textContent = z;
+                    zonaSelect.appendChild(opt);
                 });
-            } catch(error) {
-                displayMessage('Error al cargar los filtros.', 'error');
-            }
+            } catch(e) {}
         }
 
         async function loadTiendas() {
             const supervisor = document.getElementById('filtro-supervisor').value;
             const zona = document.getElementById('filtro-zona').value;
-            
             const url = new URL(window.location.origin + AppConfig.getUrl('ADMIN_TIENDAS'));
             if (supervisor) url.searchParams.append('supervisor', supervisor);
             if (zona) url.searchParams.append('zona', zona);
 
             try {
                 const response = await fetch(url);
-                if (!response.ok) {
-                    if (response.status === 403) window.location.href = 'login.html';
-                    throw new Error('Error al cargar las tiendas.');
-                }
                 const tiendas = await response.json();
-                tiendasCache = tiendas; // Guardar en caché
+                tiendasCache = tiendas;
                 const tableBody = document.getElementById('tiendas-table-body');
                 tableBody.innerHTML = '';
 
-                if (tiendas.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="5" class="text-center py-4">No se encontraron tiendas con los filtros seleccionados.</td></tr>';
-                    return;
-                }
-
                 tiendas.forEach(t => {
                     const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50 transition-colors";
                     tr.innerHTML = `
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${t.codigo}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${t.denominacion}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t.supervisor}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-center">
-                            ${t.disponible === 'S' 
-                                ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Sí</span>' 
-                                : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">No</span>'}
+                        <td class="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-900">${t.codigo.toString().padStart(4, '0')}</td>
+                        <td class="px-6 py-5 text-sm font-medium text-gray-600 truncate-cell" title="${t.denominacion}">${t.denominacion}</td>
+                        <td class="px-6 py-5 whitespace-nowrap text-sm text-gray-400 font-medium">${t.supervisor || '-'}</td>
+                        <td class="px-6 py-5 whitespace-nowrap text-center">
+                            <span class="px-3 py-1 text-[10px] font-black uppercase rounded-full ${t.disponible === 'S' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'}">
+                                ${t.disponible === 'S' ? 'Disponible' : 'Cerrada'}
+                            </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button onclick='openModal(${t.codigo})' class="btn btn-secondary btn-edit">Editar</button>
+                        <td class="px-6 py-5 whitespace-nowrap text-right text-sm font-medium space-x-2 actions-column">
+                            <button onclick="refreshTienda(${t.codigo})" class="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg hover:bg-blue-600 hover:text-white transition-all btn-refresh-row" title="Actualizar esta tienda específica desde SharePoint">
+                                Refrescar
+                            </button>
+                            <button onclick='openModal(${t.codigo})' class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-800 hover:text-white transition-all font-bold text-[10px] uppercase">
+                                Editar
+                            </button>
                         </td>
                     `;
                     tableBody.appendChild(tr);
                 });
+            } catch (error) { displayMessage('No se han podido cargar las tiendas.', 'error'); }
+        }
+
+        async function refreshTienda(codigo) {
+            if (!confirm(`¿Deseas actualizar la tienda ${codigo} con los datos de SharePoint? Se sobrescribirán los datos locales.`)) return;
+            displayMessage(`Sincronizando tienda ${codigo}...`, 'info');
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_TIENDAS'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ 'action': 'refresh', 'codigo': codigo })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    displayMessage(result.message || 'Sincronización completada.', 'success');
+                    loadTiendas();
+                } else {
+                    displayMessage(result.message || 'Error en la sincronización.', 'error');
+                }
+            } catch (error) { displayMessage('Fallo en la comunicación con el servidor.', 'error'); }
+        }
+
+        async function refreshAllTiendas() {
+            const msg = "Esta acción sincronizará todas las tiendas desde SharePoint:\n\n" +
+                        "1. Creará tiendas nuevas encontradas en SharePoint.\n" +
+                        "2. Desactivará tiendas locales que no estén en SharePoint.\n" +
+                        "3. Actualizará los datos de las existentes.\n\n" +
+                        "¿Desea continuar?";
+            
+            if (!confirm(msg)) return;
+
+            displayMessage("Iniciando sincronización global... Esto puede tardar unos segundos.", "info");
+
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_TIENDAS'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ 'action': 'refreshAll' })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    displayMessage(result.message || "Sincronización masiva finalizada con éxito.", "success");
+                    loadTiendas(); 
+                } else {
+                    displayMessage(result.message || "Error durante la sincronización global.", "error");
+                }
             } catch (error) {
-                displayMessage(error.message, 'error');
+                displayMessage("Fallo crítico en la comunicación con el servidor.", "error");
             }
+        }
+
+        function setFieldsModifiable(modifiable) {
+            const fixedFields = ['codigo', 'denominacion', 'direccion', 'lat', 'lon', 'cp', 'poblacion', 'cadena', 'prioridad'];
+            fixedFields.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.readOnly = !modifiable;
+                    if (el.tagName === 'SELECT') el.disabled = !modifiable;
+                    modifiable ? el.classList.remove('input-readonly') : el.classList.add('input-readonly');
+                }
+            });
         }
 
         function openModal(tiendaCodigo = null) {
             const form = document.getElementById('tienda-form');
             form.reset();
-            const modalTitle = document.getElementById('modal-title');
-            const codigoInput = document.getElementById('codigo');
-            const isUpdateInput = document.getElementById('isUpdate');
-            
             document.body.classList.add('modal-open');
 
-            if (tiendaCodigo) { // Modo Edición
-                const tienda = tiendasCache.find(t => t.codigo === tiendaCodigo);
-                if (!tienda) {
-                    displayMessage('No se pudo encontrar la tienda para editar.', 'error');
-                    return;
-                }
-
-                modalTitle.textContent = 'Editar Tienda';
-                isUpdateInput.value = 'true';
-                codigoInput.value = tienda.codigo;
-                codigoInput.readOnly = true;
+            if (tiendaCodigo) {
+                const t = tiendasCache.find(x => x.codigo === tiendaCodigo);
+                if (!t) return;
+                document.getElementById('modal-title').textContent = `Ficha de Tienda: ${t.codigo}`;
+                document.getElementById('isUpdate').value = 'true';
+                setFieldsModifiable(false);
                 
-                document.getElementById('denominacion').value = tienda.denominacion;
-                document.getElementById('direccion').value = tienda.direccion;
-                document.getElementById('lat').value = tienda.lat;
-                document.getElementById('lon').value = tienda.lon;
-                document.getElementById('cp').value = tienda.cp;
-                document.getElementById('poblacion').value = tienda.poblacion;
-                document.getElementById('cadena').value = tienda.cadena;
-                document.getElementById('disponible').value = tienda.disponible;
-                document.getElementById('prioridad').value = tienda.prioridad;
-                document.getElementById('huecosTurno1').value = tienda.huecosTurno1;
-                document.getElementById('huecosTurno2').value = tienda.huecosTurno2;
-                document.getElementById('huecosTurno3').value = tienda.huecosTurno3;
-                document.getElementById('huecosTurno4').value = tienda.huecosTurno4;
-            } else { // Modo Creación
-                modalTitle.textContent = 'Nueva Tienda';
-                isUpdateInput.value = 'false';
-                codigoInput.readOnly = false;
+                document.getElementById('codigo').value = t.codigo;
+                document.getElementById('denominacion').value = t.denominacion;
+                document.getElementById('direccion').value = t.direccion;
+                document.getElementById('lat').value = t.lat;
+                document.getElementById('lon').value = t.lon;
+                document.getElementById('cp').value = t.cp;
+                document.getElementById('poblacion').value = t.poblacion;
+                document.getElementById('cadena').value = t.cadena;
+                document.getElementById('prioridad').value = t.prioridad;
+                document.getElementById('disponible').value = t.disponible;
+                document.getElementById('huecosTurno1').value = t.huecosTurno1;
+                document.getElementById('huecosTurno2').value = t.huecosTurno2;
+                document.getElementById('huecosTurno3').value = t.huecosTurno3;
+                document.getElementById('huecosTurno4').value = t.huecosTurno4;
+            } else {
+                document.getElementById('modal-title').textContent = 'Alta de Nueva Tienda';
+                document.getElementById('isUpdate').value = 'false';
+                setFieldsModifiable(true);
             }
             document.getElementById('tienda-modal').classList.remove('hidden');
         }
@@ -293,6 +454,7 @@
 
         async function handleSave(event) {
             event.preventDefault();
+            document.getElementById('prioridad').disabled = false;
             const formData = new FormData(event.target);
             formData.append('action', 'save');
 
@@ -302,24 +464,35 @@
                     body: new URLSearchParams(formData)
                 });
                 const result = await response.json();
-
                 if (result.success) {
-                    displayMessage('Tienda guardada correctamente.', 'success');
+                    displayMessage('Guardado correctamente.', 'success');
                     closeModal();
                     loadTiendas(); 
                 } else {
-                    displayMessage(result.message || 'Error desconocido al guardar la tienda.', 'error');
+                    displayMessage(result.message || 'Error al guardar.', 'error');
                 }
-            } catch (error) {
-                displayMessage('Error de conexión con el servidor.', 'error');
-            }
+            } catch (error) { displayMessage('Error de conexión.', 'error'); }
+        }
+
+        async function repairUUIDs() {
+            if (!confirm('¿Desea reparar los UUIDs en SharePoint?')) return;
+            displayMessage('Reparando...', 'info');
+            try {
+                const response = await fetch('/VoluntariosBAS/admin/repair-uuids', { method: 'POST' });
+                const res = await response.json();
+                displayMessage(res.message, res.success ? 'success' : 'error');
+            } catch (e) { displayMessage('Error crítico.', 'error'); }
         }
 
         function displayMessage(msg, type) {
             const container = document.getElementById('message-container');
-            const colors = { success: 'bg-green-100 text-green-700', error: 'bg-red-100 text-red-700', info: 'bg-blue-100 text-blue-700' };
-            container.innerHTML = `<div class="${colors[type]} p-4 rounded-md">${msg}</div>`;
-            setTimeout(() => { container.innerHTML = ''; }, 5000);
+            const colors = { 
+                success: 'bg-green-100 text-green-700 border-green-200', 
+                error: 'bg-red-100 text-red-700 border-red-200', 
+                info: 'bg-blue-100 text-blue-700 border-blue-200' 
+            };
+            container.innerHTML = `<div class="${colors[type]} p-4 rounded-xl border font-medium text-sm shadow-sm">${msg}</div>`;
+            if (type !== 'info') setTimeout(() => { container.innerHTML = ''; }, 5000);
         }
     </script>
 </body>

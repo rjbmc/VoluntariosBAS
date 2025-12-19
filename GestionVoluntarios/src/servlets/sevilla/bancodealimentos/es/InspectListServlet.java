@@ -19,7 +19,7 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import util.sevilla.bancodealimentos.es.SharepointUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 /**
  * Servlet de diagnóstico para inspeccionar las columnas de una lista de SharePoint.
@@ -42,7 +42,7 @@ public class InspectListServlet extends HttpServlet {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
-        String siteId = SharepointUtil.SITE_ID; // Usamos el SiteID por defecto
+        String siteId = SharePointUtil.SITE_ID; // Usamos el SiteID por defecto
         Map<String, Object> jsonResponse = new HashMap<>();
 
         try {
@@ -56,7 +56,7 @@ public class InspectListServlet extends HttpServlet {
 
             logger.info("Inspeccionando estructura de lista SharePoint: {}", listName);
 
-            String listId = SharepointUtil.getListId(siteId, listName);
+            String listId = SharePointUtil.getListId(siteId, listName);
 
             if (listId == null) {
                 logger.warn("Lista '{}' no encontrada en el sitio configurado.", listName);
@@ -66,7 +66,7 @@ public class InspectListServlet extends HttpServlet {
                 return;
             }
 
-            ColumnDefinitionCollectionResponse columnsResponse = SharepointUtil.getListColumns(siteId, listId);
+            ColumnDefinitionCollectionResponse columnsResponse = SharePointUtil.getListColumns(siteId, listId);
             List<ColumnDefinition> columns = columnsResponse.getValue();
 
             // Mapeamos a una lista de objetos simples para el JSON
