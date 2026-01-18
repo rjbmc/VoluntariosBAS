@@ -255,7 +255,7 @@ public class AdminTiendasServlet extends HttpServlet {
             }
 
             // REGISTRO EN EL LOG: Antes del commit para que se guarde en la misma transacción
-            String logMsg = String.format("Sincronización masiva SP finalizada. Creadas: %d, Actualizadas: %d, Desactivadas: %d", creadas, actualizadas, desactivadas);
+            String logMsg = String.format("Sincronización masiva de tiendas desde SP finalizada. Creadas: %d, Actualizadas: %d, Desactivadas: %d", creadas, actualizadas, desactivadas);
             LogUtil.logOperation(conn, "SYNC_ALL_T", adminUser, logMsg);
 
             conn.commit();

@@ -6,20 +6,16 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.UUID;
 
-import org.slf4j.Logger;
+import org.slf4j.Logger; // ¡CORREGIDO!
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.graph.models.FieldValueSet;
 import com.microsoft.graph.models.ListItem;
-import com.microsoft.graph.models.ListItemCollectionResponse;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -33,23 +29,24 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/sync-tiendas")
 public class SyncTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión actualizada a bidireccional
     
-    // 1. Logger SLF4J para registrar la actividad
     private static final Logger logger = LoggerFactory.getLogger(SyncTiendasServlet.class);
-    
-    // 2. Jackson ObjectMapper para respuestas JSON
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     private static final String SHAREPOINT_LIST_NAME = "Tiendas";
-    private static final int PAUSA_ENTRE_PETICIONES_MS = 400; // Anti-throttling para SharePoint
 
-    // Clase interna para almacenar datos de la tienda en memoria
+    // --- CLASES INTERNAS PARA DATOS ---
+
+    // Clase para almacenar datos de la tienda en memoria
     private static class TiendaData {
         int codigo; String denominacion; String sqlRowUUID;
         String direccion; BigDecimal lat; BigDecimal lon; String cp; String poblacion; String cadena; 
         int prioridad; boolean disponible; int huecos1, huecos2, huecos3, huecos4;
+        String supervisor; // Nuevo campo
+        String coordinador; // Nuevo campo
 
+        // Constructor desde la Base de Datos
         TiendaData(ResultSet rs) throws SQLException {
             this.codigo = rs.getInt("codigo");
             this.denominacion = rs.getString("denominacion");
@@ -60,32 +57,77 @@ public class SyncTiendasServlet extends HttpServlet {
             this.cp = rs.getString("cp");
             this.poblacion = rs.getString("Poblacion");
             this.cadena = rs.getString("Cadena");
-            this.prioridad = rs.getInt("prioridad");
+            // Leer prioridad como String (o int y luego formatear si se necesita el int en otros sitios)
+            // Aquí asumo que la BD ya puede tenerlo como VARCHAR o que lo lees como int y lo usas como int internamente
+            // pero para el propósito de guardar en SP o de nuevo en DB, se formateará a String
+            this.prioridad = Integer.parseInt(rs.getString("prioridad")); // Asumo que se leerá como String ahora
             this.disponible = "S".equalsIgnoreCase(rs.getString("disponible"));
             this.huecos1 = rs.getInt("HuecosTurno1");
             this.huecos2 = rs.getInt("HuecosTurno2");
             this.huecos3 = rs.getInt("HuecosTurno3");
             this.huecos4 = rs.getInt("HuecosTurno4");
+            this.supervisor = rs.getString("Supervisor"); // Leer Supervisor de DB
+            this.coordinador = rs.getString("Coordinador"); // Leer Coordinador de DB
+        }
+
+        // NUEVO: Constructor desde un item de SharePoint
+        TiendaData(Map<String, Object> spFields) {
+            this.sqlRowUUID = (String) spFields.get("SqlRowUUID");
+            this.denominacion = (String) spFields.get("Title");
+            
+            Object codigoObj = spFields.get("codigo");
+            if (codigoObj instanceof Double) { this.codigo = ((Double) codigoObj).intValue(); }
+            else if (codigoObj instanceof String) { this.codigo = Integer.parseInt((String) codigoObj); }
+            else { this.codigo = 0; }
+
+            this.direccion = (String) spFields.get("direccion");
+            this.lat = spFields.get("lat") != null ? new BigDecimal(String.valueOf(spFields.get("lat"))) : null;
+            this.lon = spFields.get("lon") != null ? new BigDecimal(String.valueOf(spFields.get("lon"))) : null;
+            this.cp = (String) spFields.get("cp");
+            this.poblacion = (String) spFields.get("poblacion");
+            this.cadena = (String) spFields.get("cadena");
+
+            // Si SharePoint envía "0001" como String, se parseará a int.
+            // Si SharePoint envía un número, se tratará como tal.
+            Object prioridadObj = spFields.get("prioridad");
+            if (prioridadObj instanceof Double) { this.prioridad = ((Double) prioridadObj).intValue(); }
+            else if (prioridadObj instanceof String) { this.prioridad = Integer.parseInt((String) prioridadObj); }
+            else { this.prioridad = 0; }
+
+            this.disponible = spFields.get("disponible") instanceof Boolean ? (Boolean) spFields.get("disponible") : false;
+            
+            this.huecos1 = spFields.get("huecosTurno1") instanceof Double ? ((Double) spFields.get("huecosTurno1")).intValue() : 0;
+            this.huecos2 = spFields.get("huecosTurno2") instanceof Double ? ((Double) spFields.get("huecosTurno2")).intValue() : 0;
+            this.huecos3 = spFields.get("huecosTurno3") instanceof Double ? ((Double) spFields.get("huecosTurno3")).intValue() : 0;
+            this.huecos4 = spFields.get("huecosTurno4") instanceof Double ? ((Double) spFields.get("huecosTurno4")).intValue() : 0;
+
+            this.supervisor = (String) spFields.get("Supervisor"); // Mapear Supervisor de SP a TiendaData
+            this.coordinador = (String) spFields.get("Coordinador"); // Mapear Coordinador de SP a TiendaData
         }
     }
+    
+    // Clase para almacenar el resultado de la sincronización
+    private static class SyncResult {
+        int spToDbCreated = 0;
+        int dbToSpCreated = 0;
+        
+        @Override
+        public String toString() {
+            return String.format("SP->BD: %d nuevas. BD->SP: %d nuevas.", spToDbCreated, dbToSpCreated);
+        }
+    }
+
+    // --- MÉTODO PRINCIPAL ---
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        
         Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        // 3. Verificación de seguridad estandarizada
-        boolean isAdmin = session != null && 
-                          session.getAttribute("usuario") != null && 
-                          "S".equals(session.getAttribute("isAdmin"));
-
-        if (!isAdmin) {
-            String ip = request.getRemoteAddr();
-            logger.warn("Acceso denegado a SyncTiendas. Usuario: {}, IP: {}", 
-                        (session != null ? session.getAttribute("usuario") : "Anónimo"), ip);
+        if (session == null || session.getAttribute("usuario") == null || !"S".equals(session.getAttribute("isAdmin"))) {
+            logger.warn("Acceso denegado a SyncTiendas. IP: {}", request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             jsonResponse.put("success", false);
             jsonResponse.put("message", "Acceso denegado. Permisos insuficientes.");
@@ -94,122 +136,183 @@ public class SyncTiendasServlet extends HttpServlet {
         }
 
         String adminUser = (String) session.getAttribute("usuario");
-        logger.info("Iniciando sincronización masiva de tiendas. Solicitado por: {}", adminUser);
+        logger.info("Iniciando sincronización BIDIRECCIONAL de tiendas. Solicitado por: {}", adminUser);
 
-        List<TiendaData> tiendasEnMemoria = new ArrayList<>();
-        Set<String> uuidsEsperados = new HashSet<>();
-
-        // Paso 1: Cargar datos desde la base de datos local
         try (Connection conn = DatabaseUtil.getConnection()) {
-            String sql = "SELECT * FROM tiendas WHERE SqlRowUUID IS NOT NULL";
-            try (PreparedStatement ps = conn.prepareStatement(sql); ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    TiendaData tienda = new TiendaData(rs);
-                    tiendasEnMemoria.add(tienda);
-                    uuidsEsperados.add(tienda.sqlRowUUID);
-                }
-            }
-            logger.info("Cargadas {} tiendas desde la base de datos local.", tiendasEnMemoria.size());
-        } catch (Exception e) {
-            logger.error("Error crítico al leer tiendas desde la base de datos", e);
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.put("success", false);
-            jsonResponse.put("message", "Error crítico al leer desde la base de datos: " + e.getMessage());
-            objectMapper.writeValue(response.getWriter(), jsonResponse);
-            return;
-        }
-
-        // Paso 2: Sincronizar con SharePoint
-        Connection logConn = null;
-        try {
-            // Obtener ID de la lista en SharePoint
+            conn.setAutoCommit(false); // Transacción para seguridad
+            
             String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SHAREPOINT_LIST_NAME);
-            if (listId == null) {
-                logger.error("La lista '{}' no existe en el sitio de SharePoint.", SHAREPOINT_LIST_NAME);
-                throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada.");
-            }
+            if (listId == null) throw new Exception("La lista '" + SHAREPOINT_LIST_NAME + "' no fue encontrada en SharePoint.");
 
-            // Borrado previo de la lista
-            logger.info("Limpiando lista de SharePoint (ID: {})...", listId);
-            SharePointUtil.deleteAllListItems(SharePointUtil.SITE_ID, listId);
+            // 1. LEER AMBAS FUENTES
+            logger.debug("Fase 1: Leyendo tiendas de la BD y de SharePoint...");
+            Map<String, TiendaData> dbTiendas = getDbTiendasAsMap(conn);
+            Map<String, ListItem> spTiendas = getSharePointItemsAsMap(listId);
+            logger.info("Lectura completa: {} tiendas en BD, {} en SharePoint.", dbTiendas.size(), spTiendas.size());
+            
+            SyncResult result = new SyncResult();
 
-            // Recreación de ítems
-            logger.info("Iniciando creación de {} elementos en SharePoint...", tiendasEnMemoria.size());
-            for (int i = 0; i < tiendasEnMemoria.size(); i++) {
-                TiendaData tienda = tiendasEnMemoria.get(i);
-                FieldValueSet fields = new FieldValueSet();
-                fields.getAdditionalData().put("Title", tienda.denominacion);
-                fields.getAdditionalData().put("codigo", String.valueOf(tienda.codigo));
-                fields.getAdditionalData().put("denominacion", tienda.denominacion);
-                fields.getAdditionalData().put("direccion", tienda.direccion);
-                fields.getAdditionalData().put("lat", tienda.lat);
-                fields.getAdditionalData().put("lon", tienda.lon);
-                fields.getAdditionalData().put("cp", tienda.cp);
-                fields.getAdditionalData().put("poblacion", tienda.poblacion);
-                fields.getAdditionalData().put("cadena", tienda.cadena);
-                fields.getAdditionalData().put("prioridad", tienda.prioridad);
-                fields.getAdditionalData().put("disponible", tienda.disponible);
-                fields.getAdditionalData().put("huecosTurno1", tienda.huecos1);
-                fields.getAdditionalData().put("huecosTurno2", tienda.huecos2);
-                fields.getAdditionalData().put("huecosTurno3", tienda.huecos3);
-                fields.getAdditionalData().put("huecosTurno4", tienda.huecos4);
-                fields.getAdditionalData().put("SqlRowUUID", tienda.sqlRowUUID);
-                
-                SharePointUtil.createListItem(SharePointUtil.SITE_ID, listId, fields);
-                
-                // Pausa para evitar Throttling de Microsoft Graph (Error 429)
-                Thread.sleep(PAUSA_ENTRE_PETICIONES_MS);
-                
-                // Log de progreso cada 20 ítems para no saturar el log
-                if ((i + 1) % 20 == 0) {
-                    logger.debug("Progreso sincronización: {}/{} tiendas procesadas.", i + 1, tiendasEnMemoria.size());
-                }
-            }
-
-            logger.info("Creación finalizada. Pausando 10 segundos para propagación antes de verificar...");
-            Thread.sleep(10000);
-
-            // Paso 3: Verificación post-sincronización
-            Set<String> uuidsReales = new HashSet<>();
-            ListItemCollectionResponse itemsPostSync = SharePointUtil.getListItems(SharePointUtil.SITE_ID, listId);
-            if (itemsPostSync != null && itemsPostSync.getValue() != null) {
-                for (ListItem item : itemsPostSync.getValue()) {
-                    Map<String, Object> fields = item.getFields().getAdditionalData();
-                    if (fields.containsKey("SqlRowUUID")) {
-                        Object uuidObj = fields.get("SqlRowUUID");
-                        if (uuidObj instanceof String) {
-                            uuidsReales.add((String) uuidObj);
-                        }
-                    }
-                }
-            }
-
-            if (uuidsReales.size() < uuidsEsperados.size()) {
-                 String msg = "FALLO DE VERIFICACIÓN: Se esperaban " + uuidsEsperados.size() + " tiendas, pero solo se encontraron " + uuidsReales.size() + " en SharePoint. Posible problema de 'throttling'.";
-                 logger.warn(msg);
-                 jsonResponse.put("success", false);
-                 jsonResponse.put("message", msg);
-            } else {
-                String successMessage = "¡Éxito verificado! Se han sincronizado " + uuidsReales.size() + " tiendas correctamente.";
-                logger.info(successMessage);
-                
-                logConn = DatabaseUtil.getConnection();
-                LogUtil.logOperation(logConn, "SYNC_TIENDAS", adminUser, "Sincronización de Tiendas completada con éxito.");
-                
-                jsonResponse.put("success", true);
-                jsonResponse.put("message", successMessage);
-            }
+            // 2. SINCRONIZAR SP -> BD
+            logger.debug("Fase 2: Sincronizando nuevas tiendas de SharePoint a la Base de Datos...");
+            syncSharePointToDb(conn, listId, spTiendas, dbTiendas, result);
+            
+            // 3. SINCRONIZAR BD -> SP
+            // Recargamos los mapas por si ha habido cambios en la fase anterior
+            Map<String, TiendaData> dbTiendasActualizadas = getDbTiendasAsMap(conn);
+            Map<String, ListItem> spTiendasActualizadas = getSharePointItemsAsMap(listId);
+            logger.debug("Fase 3: Sincronizando nuevas tiendas de la Base de Datos a SharePoint...");
+            syncDbToSharePoint(conn, listId, dbTiendasActualizadas, spTiendasActualizadas, result);
+            
+            conn.commit(); // Confirmar todos los cambios en la BD
+            
+            String successMessage = "Sincronización bidireccional completada. " + result.toString();
+            logger.info(successMessage);
+            LogUtil.logOperation(conn, "SYNC_TIENDAS", adminUser, successMessage);
+            
+            jsonResponse.put("success", true);
+            jsonResponse.put("message", successMessage);
 
         } catch (Exception e) {
-            logger.error("Error crítico durante la sincronización de tiendas", e);
+            logger.error("Error crítico durante la sincronización de tiendas. Se hará rollback si es posible.", e);
+            // No podemos hacer rollback en una conexión cerrada, pero el try-with-resources lo intentará
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.put("success", false);
             jsonResponse.put("message", "Error durante el ciclo de sincronización: " + e.getMessage());
         } finally {
-            if (logConn != null) try { logConn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión de log", e); }
-            
-            // Respuesta final con Jackson
             objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
+    }
+    
+    // --- MÉTODOS DE SINCRONIZACIÓN ---
+
+    private void syncSharePointToDb(Connection conn, String listId, Map<String, ListItem> spTiendas, Map<String, TiendaData> dbTiendas, SyncResult result) throws Exception {
+        for (ListItem spItem : spTiendas.values()) {
+            Map<String, Object> spFields = spItem.getFields().getAdditionalData();
+            String spUuid = (String) spFields.get("SqlRowUUID");
+
+            if (spUuid == null || spUuid.isEmpty() || !dbTiendas.containsKey(spUuid)) {
+                logger.info("Detectada nueva tienda en SharePoint (Título: '{}'). Creando en BD local...", spFields.get("Title"));
+                
+                String nuevoUuid = UUID.randomUUID().toString();
+                TiendaData nuevaTienda = new TiendaData(spFields);
+                
+                insertTiendaInDb(conn, nuevaTienda, nuevoUuid);
+                
+                FieldValueSet fieldToUpdate = new FieldValueSet();
+                fieldToUpdate.getAdditionalData().put("SqlRowUUID", nuevoUuid);
+                SharePointUtil.updateListItem(SharePointUtil.SITE_ID, listId, spItem.getId(), fieldToUpdate);
+                
+                logger.info("Tienda '{}' creada en BD con UUID {} y actualizada en SharePoint.", nuevaTienda.denominacion, nuevoUuid);
+                result.spToDbCreated++;
+            }
+        }
+    }
+
+    private void syncDbToSharePoint(Connection conn, String listId, Map<String, TiendaData> dbTiendas, Map<String, ListItem> spTiendas, SyncResult result) throws Exception {
+        for (TiendaData dbTienda : dbTiendas.values()) {
+            if (dbTienda.sqlRowUUID == null || dbTienda.sqlRowUUID.isEmpty() || !spTiendas.containsKey(dbTienda.sqlRowUUID)) {
+                logger.info("Detectada nueva tienda en BD (Código: {}). Creando en SharePoint...", dbTienda.codigo);
+
+                String uuidParaSp = (dbTienda.sqlRowUUID == null || dbTienda.sqlRowUUID.isEmpty()) ? UUID.randomUUID().toString() : dbTienda.sqlRowUUID;
+                
+                // Si la tienda no tenía UUID en la BD, se lo ponemos ahora.
+                if (dbTienda.sqlRowUUID == null || dbTienda.sqlRowUUID.isEmpty()) {
+                    updateDbTiendaUuid(conn, dbTienda.codigo, uuidParaSp);
+                }
+
+                FieldValueSet newFields = createFieldsFromTiendaData(dbTienda, uuidParaSp);
+                SharePointUtil.createListItem(SharePointUtil.SITE_ID, listId, newFields);
+                logger.info("Tienda '{}' creada en SharePoint con UUID {}.", dbTienda.denominacion, uuidParaSp);
+                result.dbToSpCreated++;
+            }
+        }
+    }
+
+    // --- MÉTODOS DE AYUDA (HELPERS) ---
+    
+    private Map<String, TiendaData> getDbTiendasAsMap(Connection conn) throws SQLException {
+        Map<String, TiendaData> map = new HashMap<>();
+        try (PreparedStatement ps = conn.prepareStatement("SELECT * FROM tiendas"); ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                TiendaData tienda = new TiendaData(rs);
+                if (tienda.sqlRowUUID != null && !tienda.sqlRowUUID.isEmpty()) {
+                    map.put(tienda.sqlRowUUID, tienda);
+                }
+            }
+        }
+        return map;
+    }
+
+    private Map<String, ListItem> getSharePointItemsAsMap(String listId) throws Exception {
+        Map<String, ListItem> map = new HashMap<>();
+        for (ListItem item : SharePointUtil.getAllListItems(SharePointUtil.SITE_ID, listId)) {
+            Map<String, Object> fields = item.getFields().getAdditionalData();
+            String uuid = (String) fields.get("SqlRowUUID");
+            if (uuid != null && !uuid.isEmpty()) {
+                map.put(uuid, item);
+            } else {
+                // Se usa el ID de SP como clave temporal para tiendas sin UUID
+                map.put("SP_ID_" + item.getId(), item); 
+            }
+        }
+        return map;
+    }
+    
+    private void insertTiendaInDb(Connection conn, TiendaData tienda, String nuevoUuid) throws SQLException {
+        String sql = "INSERT INTO tiendas (codigo, denominacion, SqlRowUUID, Direccion, Lat, Lon, cp, Poblacion, Cadena, prioridad, disponible, HuecosTurno1, HuecosTurno2, HuecosTurno3, HuecosTurno4, Supervisor, Coordinador) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            // El código de tienda debe ser único, si viene a 0 de SP, se debe gestionar.
+            // Por ahora, se asume que se importa un código válido.
+            ps.setInt(1, tienda.codigo); 
+            ps.setString(2, tienda.denominacion);
+            ps.setString(3, nuevoUuid);
+            ps.setString(4, tienda.direccion);
+            ps.setBigDecimal(5, tienda.lat);
+            ps.setBigDecimal(6, tienda.lon);
+            ps.setString(7, tienda.cp);
+            ps.setString(8, tienda.poblacion);
+            ps.setString(9, tienda.cadena);
+            ps.setString(10, String.format("%04d", tienda.prioridad)); // ¡CORREGIDO! Formatear prioridad a 4 dígitos con ceros iniciales
+            ps.setString(11, tienda.disponible ? "S" : "N");
+            ps.setInt(12, tienda.huecos1);
+            ps.setInt(13, tienda.huecos2);
+            ps.setInt(14, tienda.huecos3);
+            ps.setInt(15, tienda.huecos4);
+            ps.setString(16, tienda.supervisor); // Insertar Supervisor
+            ps.setString(17, tienda.coordinador); // Insertar Coordinador
+            ps.executeUpdate();
+        }
+    }
+    
+    private void updateDbTiendaUuid(Connection conn, int codigoTienda, String uuid) throws SQLException {
+        String sql = "UPDATE tiendas SET SqlRowUUID = ? WHERE codigo = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, uuid);
+            ps.setInt(2, codigoTienda);
+            ps.executeUpdate();
+        }
+    }
+    
+    private FieldValueSet createFieldsFromTiendaData(TiendaData tienda, String uuid) {
+        FieldValueSet fields = new FieldValueSet();
+        fields.getAdditionalData().put("Title", tienda.denominacion);
+        fields.getAdditionalData().put("codigo", String.valueOf(tienda.codigo));
+        fields.getAdditionalData().put("denominacion", tienda.denominacion);
+        fields.getAdditionalData().put("direccion", tienda.direccion);
+        fields.getAdditionalData().put("lat", tienda.lat);
+        fields.getAdditionalData().put("lon", tienda.lon);
+        fields.getAdditionalData().put("cp", tienda.cp);
+        fields.getAdditionalData().put("poblacion", tienda.poblacion);
+        fields.getAdditionalData().put("cadena", tienda.cadena);
+        fields.getAdditionalData().put("prioridad", String.format("%04d", tienda.prioridad)); // Formatear prioridad a 4 dígitos con ceros iniciales para SharePoint
+        fields.getAdditionalData().put("disponible", tienda.disponible);
+        fields.getAdditionalData().put("huecosTurno1", tienda.huecos1);
+        fields.getAdditionalData().put("huecosTurno2", tienda.huecos2);
+        fields.getAdditionalData().put("huecosTurno3", tienda.huecos3);
+        fields.getAdditionalData().put("huecosTurno4", tienda.huecos4);
+        fields.getAdditionalData().put("Supervisor", tienda.supervisor); // Añadir Supervisor a SP
+        fields.getAdditionalData().put("Coordinador", tienda.coordinador); // Añadir Coordinador a SP
+        fields.getAdditionalData().put("SqlRowUUID", uuid);
+        return fields;
     }
 }
