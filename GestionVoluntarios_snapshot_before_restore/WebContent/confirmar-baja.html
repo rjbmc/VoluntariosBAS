@@ -1,0 +1,73 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmar Baja- Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl card-shadow text-center">
+        <div>
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-40 mx-auto mb-4">
+            <h2 class="text-2xl font-bold text-gray-800">ConfirmaciÃ³n de Baja</h2>
+        </div>
+        
+        <div id="message-container" class="p-4 rounded-md text-white">
+            <p id="message-text">Procesando tu solicitud...</p>
+        </div>
+        
+        <div class="pt-4">
+            <a href="login.html" class="inline-block px-6 py-2 text-sm font-medium text-white rounded-md btn-primary">
+                Volver a la pÃ¡gina de inicio
+            </a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const messageContainer = document.getElementById('message-container');
+            const messageText = document.getElementById('message-text');
+            
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+
+            if (!token) {
+                messageContainer.classList.add('bg-red-500');
+                messageText.textContent = 'Error: No se ha proporcionado un token de confirmaciÃ³n.';
+                return;
+            }
+
+            try {
+                // Asumimos que crearemos un endpoint 'CONFIRMAR_BAJA' en config.js
+                // que apuntarÃ¡ a un nuevo 'ConfirmarBajaServlet'
+                const response = await fetch(AppConfig.getUrl('CONFIRMAR_BAJA'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `token=${encodeURIComponent(token)}`
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    messageContainer.classList.add('bg-green-500');
+                    messageText.textContent = result.message;
+                } else {
+                    messageContainer.classList.add('bg-red-500');
+                    messageText.textContent = result.message || 'Ha ocurrido un error al procesar tu solicitud.';
+                }
+
+            } catch (error) {
+                messageContainer.classList.add('bg-red-500');
+                messageText.textContent = 'No se pudo conectar con el servidor. IntÃ©ntalo mÃ¡s tarde.';
+                console.error('Error al confirmar la baja:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+

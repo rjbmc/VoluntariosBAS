@@ -36,7 +36,7 @@ public class VerificarEmailServlet extends HttpServlet {
     
     private static final String SP_LIST_NAME = "Voluntarios";
     private static final String SP_UUID_FIELD = "SqlRowUUID";
-    private static final String SP_VERIFIED_FIELD = "Verificado"; // Ajustado para coincidir con SyncVoluntarios
+    private static final String SP_VERIFIED_FIELD = "Verificado"; 
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -97,17 +97,13 @@ public class VerificarEmailServlet extends HttpServlet {
                         
                         // Si ya tenía UUID, intentamos buscarlo por UUID
                         if (!uuidGeneradoAhora) {
-                            itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
+                            // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+                            itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
                         }
-                        
-                        // Si no lo encontramos por UUID (o acabamos de generarlo), intentamos buscar por Title (Nombre) o Email como fallback, 
-                        // pero lo más seguro es asumir que si no está por UUID, quizás no se sincronizó.
-                        // En este caso, si no se encuentra, NO creamos uno nuevo automáticamente para evitar duplicados si la sync va con retraso.
-                        // Solo actualizamos si lo encontramos.
                         
                         if (itemId != null) {
                             Map<String, Object> spData = new HashMap<>();
-                            spData.put(SP_VERIFIED_FIELD, true); // Booleano para campo Yes/No en SP
+                            spData.put(SP_VERIFIED_FIELD, true); 
                             
                             FieldValueSet fields = new FieldValueSet();
                             fields.setAdditionalData(spData);
@@ -121,7 +117,6 @@ public class VerificarEmailServlet extends HttpServlet {
                         logger.error("Lista SharePoint '{}' no encontrada durante verificación.", SP_LIST_NAME);
                     }
                 } catch (Exception e) {
-                    // No bloqueamos el commit local por un fallo en SharePoint
                     logger.error("Error al replicar verificación de email a SharePoint para {}", usuario, e);
                     LogUtil.logOperation(conn, "SP_VERIFY_ERROR", usuario, "Error al replicar verificación: " + e.getMessage());
                 }
@@ -129,7 +124,6 @@ public class VerificarEmailServlet extends HttpServlet {
                 conn.commit();
                 logger.info("Cuenta verificada exitosamente: {}", usuario);
                 
-                // Redirigir o mostrar mensaje de éxito
                 sendJsonResponse(response, true, "¡Gracias por verificar tu correo electrónico! Ya puedes iniciar sesión.", HttpServletResponse.SC_OK);
 
             } else {

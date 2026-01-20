@@ -82,7 +82,8 @@ public final class SharepointReplicationUtil {
             return;
         }
 
-        String itemId = SharePointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+        // ¡CORREGIDO! Pasar 'conn' como primer argumento a findItemIdByFieldValue
+        String itemId = SharePointUtil.findItemIdByFieldValue(conn, targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
 
         if (itemId == null) {
             logReplicationWarning(conn, listName, rowUuid, "UPDATE fallido: No se encontró item con el UUID. Se intentará un INSERT como alternativa.");
@@ -97,7 +98,8 @@ public final class SharepointReplicationUtil {
     }
 
     private static void handleDelete(Connection conn, String targetSiteId, String listId, String listName, String rowUuid) throws Exception {
-        String itemId = SharePointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+        // ¡CORREGIDO! Pasar 'conn' como primer argumento a findItemIdByFieldValue
+        String itemId = SharePointUtil.findItemIdByFieldValue(conn, targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
 
         if (itemId == null) {
             logReplicationWarning(conn, listName, rowUuid, "DELETE fallido: No se encontró item con el UUID correspondiente.");

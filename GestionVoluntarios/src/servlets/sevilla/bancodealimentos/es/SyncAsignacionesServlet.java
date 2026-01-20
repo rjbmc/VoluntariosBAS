@@ -22,22 +22,20 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.SharePointUtil;
+import util.sevilla.bancodealimentos.es.LogUtil; // Importación añadida
 
 @WebServlet("/sync-asignaciones")
 public class SyncAsignacionesServlet extends HttpServlet {
     private static final long serialVersionUID = 2L;
     
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(SyncAsignacionesServlet.class);
     
-    // 2. Jackson ObjectMapper
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     private static final String SP_LIST_ASIGNACIONES = "Asignaciones";
     private static final String SP_LIST_VOLUNTARIOS = "Voluntarios";
     private static final String SP_LIST_TIENDAS = "Tiendas";
 
-    // 3. Verificación de seguridad estandarizada
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("usuario") == null) return false;
@@ -62,7 +60,6 @@ public class SyncAsignacionesServlet extends HttpServlet {
         logger.info("Iniciando sincronización masiva de asignaciones con SharePoint...");
 
         try (Connection conn = DatabaseUtil.getConnection()) {
-            // Validar existencia de listas en SharePoint
             String listIdAsignaciones = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_ASIGNACIONES);
             String listIdTiendas = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_TIENDAS);
             String listIdVoluntarios = SharePointUtil.getListId(SharePointUtil.SITE_ID, SP_LIST_VOLUNTARIOS);
@@ -71,10 +68,9 @@ public class SyncAsignacionesServlet extends HttpServlet {
             if (listIdTiendas == null) throw new Exception("Lista 'Tiendas' no encontrada en SP.");
             if (listIdVoluntarios == null) throw new Exception("Lista 'Voluntarios' no encontrada en SP.");
 
-            // Limpieza inicial
             logger.info("Eliminando asignaciones antiguas en SharePoint...");
             SharePointUtil.deleteAllListItems(SharePointUtil.SITE_ID, listIdAsignaciones);
-            Thread.sleep(1000); // Pausa técnica
+            Thread.sleep(1000); 
 
             String sql = "SELECT * FROM voluntarios_en_campana";
             try (PreparedStatement psVoluntariosCampana = conn.prepareStatement(sql);
@@ -82,26 +78,21 @@ public class SyncAsignacionesServlet extends HttpServlet {
 
                 while (rs.next()) {
                     totalProcesados++;
-                    String voluntarioRowUuid = rs.getString("SqlRowUUID"); // UUID de la tabla voluntarios_en_campana (si existe)
-                    // Si la tabla de asignaciones no tiene UUID propio, podríamos generarlo o usar el del voluntario.
-                    // Asumiremos que el código original usa el UUID de la tabla intermedia o lo genera.
-                    // Si rs.getString("SqlRowUUID") es null, deberíamos generar uno lógico.
+                    String voluntarioRowUuid = rs.getString("SqlRowUUID"); 
+                    
                     if (voluntarioRowUuid == null) voluntarioRowUuid = "AS-" + rs.getString("Usuario"); 
                     
                     String idVoluntarioDb = rs.getString("Usuario");
 
                     try {
                         FieldValueSet fields = new FieldValueSet();
-                        // Nota: El campo SqlRowUUID en la lista de Asignaciones es útil para futuras sincronizaciones
                         fields.getAdditionalData().put("SqlRowUUID", voluntarioRowUuid);
                         fields.getAdditionalData().put("Title", voluntarioRowUuid);
 
-                        // --- BUSCAR LOOKUP DEL VOLUNTARIO ---
-                        // Necesitamos el UUID de la tabla 'voluntarios' para buscarlo en la lista 'Voluntarios' de SP
                         String voluntarioUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM voluntarios WHERE usuario = ?", idVoluntarioDb);
                         
                         if (voluntarioUuid != null) {
-                            String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+                            String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
                             if (spVoluntarioId != null) {
                                 fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
                             } else {
@@ -114,36 +105,40 @@ public class SyncAsignacionesServlet extends HttpServlet {
                         fields.getAdditionalData().put("Campana", rs.getString("Campana"));
 
                         // --- PROCESAR TURNOS (Lookups de Tiendas) ---
-                        boolean tieneAlgunTurno = false;
+                        // La declaración de 'tieneAlgunoTurno' es correcta aquí para cada registro del ResultSet
+                        boolean tieneAlgunoTurno = false; 
                         for (int i = 1; i <= 4; i++) {
-                            int idTiendaDb = rs.getInt("Turno" + i);
+                            int idTiendaDb = rs.getInt("Turno" + i); // Esta es la línea 123 en el conteo actual
                             String comentario = rs.getString("Comentario" + i);
 
                             if (idTiendaDb > 0 && !rs.wasNull()) {
-                                tieneAlgunTurno = true;
+                                tieneAlgunoTurno = true;
                                 String tiendaUuid = getLookupUuid(conn, "SELECT SqlRowUUID FROM tiendas WHERE codigo = ?", idTiendaDb);
                                 
                                 if (tiendaUuid != null) {
-                                    String spTiendaId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                                    String spTiendaId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                                     if (spTiendaId != null) {
                                         fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
                                         fields.getAdditionalData().put("Comentario" + i, comentario);
                                     } else {
-                                        // Advertencia pero no fallo total del ítem
                                         logger.warn("Tienda UUID {} no encontrada en SP. Turno {} quedará vacío.", tiendaUuid, i);
                                         errorLog.append("WARN: Tienda UUID ").append(tiendaUuid).append(" no en SP (Turno ").append(i).append(").\n");
                                     }
                                 } else {
+                                    errorLog.append("WARN: Tienda ID ").append(idTiendaDb).append(" no encontrada en BD local (Turno ").append(i).append(").\n");
                                     throw new Exception("Tienda ID " + idTiendaDb + " no encontrada en BD local.");
                                 }
                             }
                         }
                         
-                        // Solo creamos el ítem si tiene al menos un turno o si es necesario registrar la asignación vacía
-                        // (Asumimos que siempre se crea si existe en la tabla voluntarios_en_campana)
-                        SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
+                        // Si se quisiera usar 'tieneAlgunoTurno', sería aquí:
+                        // if (tieneAlgunoTurno) {
+                        //    SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
+                        // } else {
+                        //    // Manejar caso sin turnos, si es necesario crear un ítem vacío o loggear
+                        // }
+                        SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields); // Asumiendo que siempre se crea
 
-                        // Pausa breve para evitar throttling
                         if (totalProcesados % 10 == 0) Thread.sleep(200);
 
                     } catch (Exception e) {

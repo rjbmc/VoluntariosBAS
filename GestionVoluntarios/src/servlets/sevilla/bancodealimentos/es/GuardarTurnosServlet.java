@@ -71,6 +71,7 @@ public class GuardarTurnosServlet extends HttpServlet {
             guardarTurnosEnDB(conn, request, campanaId, usuarioFinal, esAdmin, usuarioEnSesion);
             
             // 2. Replicar a SharePoint
+            // ¡CORREGIDO! Pasar 'conn' a replicarAsignacionASharePoint
             replicarAsignacionASharePoint(conn, campanaId, usuarioFinal);
 
             conn.commit();
@@ -176,17 +177,22 @@ public class GuardarTurnosServlet extends HttpServlet {
         String listIdTiendas = SharePointUtil.getListId(SharePointUtil.SITE_ID, listNameTiendas);
 
         if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) {
+            // Loguear más detalles si es posible antes de lanzar la excepción
+            logger.error("Error de configuración SharePoint: No se encontraron una o más listas requeridas. Asignaciones: {}, Voluntarios: {}, Tiendas: {}", listIdAsignaciones != null, listIdVoluntarios != null, listIdTiendas != null);
             throw new Exception("Error de configuración SharePoint: No se encontraron una o más listas requeridas.");
         }
 
         String voluntarioUuid = getSqlRowUuid(conn, usuario);
         if (voluntarioUuid == null) {
              logger.warn("El usuario {} no tiene SqlRowUUID. Se omite la replicación a SharePoint.", usuario);
+             // No lanzar excepción aquí, ya está logueado y es una advertencia.
              return;
         }
         
-        String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+        // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+        String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
         if (spVoluntarioId == null) {
+            logger.warn("Voluntario UUID {} no encontrado en lista SharePoint para {}. No se puede replicar la asignación.", voluntarioUuid, usuario);
             throw new Exception("Voluntario UUID " + voluntarioUuid + " no encontrado en lista SharePoint.");
         }
 
@@ -215,19 +221,25 @@ public class GuardarTurnosServlet extends HttpServlet {
                         tieneTurnos = true;
                         String tiendaUuid = getSqlRowUuidForTienda(conn, idTiendaDb);
                         if (tiendaUuid != null) {
-                            String spTiendaId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                            // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+                            String spTiendaId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                             if (spTiendaId != null) {
                                 fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
                             } else {
                                 logger.warn("Tienda UUID {} no encontrada en SharePoint. El turno {} quedará vacío en SP.", tiendaUuid, i);
+                                // No lanzar excepción, la asignación aún podría ser válida si otros turnos existen.
                             }
+                        } else {
+                            logger.warn("No se encontró SqlRowUUID para la tienda con código {}. El turno {} quedará vacío en SP.", idTiendaDb, i);
+                            // No lanzar excepción.
                         }
                     }
                 }
             }
         }
 
-        String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
+        // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
 
         if (itemId != null) { 
             if (tieneTurnos) {
@@ -241,6 +253,8 @@ public class GuardarTurnosServlet extends HttpServlet {
             if (tieneTurnos) {
                 SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
                 logger.debug("Nueva asignación creada en SharePoint: {}", assignmentUuid);
+            } else {
+                logger.info("No hay turnos para voluntario {} y no existe en SP. No se crea.", usuario);
             }
         }
         

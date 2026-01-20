@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +20,6 @@ import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharePointUtil;
@@ -76,51 +76,48 @@ public class ConfirmarCambioEmailServlet extends HttpServlet {
             if (usuario != null && nuevoEmail != null) {
                 // Actualizar DB local
                 String sqlUpdate = "UPDATE voluntarios SET Email = ?, nuevo_email = NULL, token_cambio_email = NULL, notificar = 'S' WHERE Usuario = ?";
-                try (PreparedStatement stmtUpdate = conn.prepareStatement(sqlUpdate)) {
-                    stmtUpdate.setString(1, nuevoEmail);
-                    stmtUpdate.setString(2, usuario);
-                    stmtUpdate.executeUpdate();
+                try (PreparedStatement updateStmt = conn.prepareStatement(sqlUpdate)) {
+                    updateStmt.setString(1, nuevoEmail);
+                    updateStmt.setString(2, usuario);
+                    updateStmt.executeUpdate();
                 }
                 
                 LogUtil.logOperation(conn, "CAMBIO_EMAIL_OK", usuario, "Email actualizado en BBDD a: " + nuevoEmail);
 
-                // Replicación a SharePoint
-                if (sqlRowUuid != null) {
-                    try {
-                        String listId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
+                // Replicar a SharePoint (Best effort)
+                try {
+                    String listId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, SP_LIST_NAME);
+                    
+                    if (listId == null) {
+                        logger.error("Lista SharePoint '{}' no encontrada.", SP_LIST_NAME);
+                        // No lanzamos excepción para no revertir el cambio local, solo logueamos el fallo de sync
+                    } else {
+                        // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+                        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
                         
-                        if (listId == null) {
-                            logger.error("Lista SharePoint '{}' no encontrada.", SP_LIST_NAME);
-                            // No lanzamos excepción para no revertir el cambio local, solo logueamos el fallo de sync
-                        } else {
-                            String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, SP_UUID_FIELD, sqlRowUuid);
+                        if (itemId != null) {
+                            Map<String, Object> spData = new HashMap<>();
+                            spData.put(SP_EMAIL_FIELD, nuevoEmail);
                             
-                            if (itemId != null) {
-                                Map<String, Object> spData = new HashMap<>();
-                                spData.put(SP_EMAIL_FIELD, nuevoEmail);
-                                
-                                FieldValueSet fieldsToUpdate = new FieldValueSet();
-                                fieldsToUpdate.setAdditionalData(spData);
+                            FieldValueSet fieldsToUpdate = new FieldValueSet();
+                            fieldsToUpdate.setAdditionalData(spData);
 
-                                SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fieldsToUpdate);
-                                LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_OK", usuario, "Email replicado a SharePoint: " + nuevoEmail);
-                            } else {
-                                logger.warn("No se encontró item en SharePoint para el voluntario {} (UUID: {})", usuario, sqlRowUuid);
-                                LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_WARN", usuario, "No se encontró item en SP para UUID: " + sqlRowUuid);
-                            }
+                            SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fieldsToUpdate);
+                            LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_OK", usuario, "Email replicado a SharePoint: " + nuevoEmail);
+                        } else {
+                            logger.warn("No se encontró item en SharePoint para el voluntario {} (UUID: {}).", usuario, sqlRowUuid);
+                            LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_WARN", usuario, "No se encontró item en SP para UUID: " + sqlRowUuid);
                         }
-                    } catch (Exception e) {
-                        logger.error("Fallo al replicar cambio de email a SharePoint para {}", usuario, e);
-                        LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_ERROR", usuario, "Fallo al replicar cambio de email a SharePoint: " + e.getMessage());
                     }
-                } else {
-                    logger.warn("Usuario {} no tiene SqlRowUUID, se omite replicación a SharePoint.", usuario);
-                    LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_WARN", usuario, "No se encontró SqlRowUUID para replicar el cambio de email a SharePoint.");
+                } catch (Exception e) {
+                    logger.error("Fallo al replicar cambio de email a SharePoint para {}", usuario, e);
+                    LogUtil.logOperation(conn, "SP_EMAIL_UPDATE_ERROR", usuario, "Fallo al replicar cambio de email a SharePoint: " + e.getMessage());
                 }
 
                 conn.commit();
                 logger.info("Cambio de email confirmado exitosamente para {}", usuario);
                 sendJsonResponse(response, true, "Tu dirección de correo ha sido actualizada con éxito.", HttpServletResponse.SC_OK);
+
             } else {
                 conn.rollback();
                 logger.warn("Intento de confirmación con token inválido: {}", token);

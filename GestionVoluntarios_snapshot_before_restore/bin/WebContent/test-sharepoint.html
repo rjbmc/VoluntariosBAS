@@ -1,0 +1,103 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de ConexiÃ³n con SharePoint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="js/config.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="bg-gray-100">
+
+    <div class="container mx-auto mt-10 p-8 bg-white max-w-2xl rounded-lg shadow-md">
+        
+        <div class="flex justify-center mb-6">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+        </div>
+
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">Test de SharePoint List Servlet</h1>
+            <p class="text-md text-gray-600 mt-1">Introduce el ID o nombre de una lista de SharePoint para ver su contenido.</p>
+        </div>
+
+        <form id="sharepointForm">
+            <div>
+                <label for="listaNombre" class="block text-sm font-medium text-gray-700">Nombre o ID de la Lista:</label>
+                <input type="text" id="listaNombre" name="lista" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" placeholder="Ej: Voluntarios, Tiendas, etc." required>
+            </div>
+            <div class="mt-4">
+                <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white btn-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                    Consultar Lista
+                </button>
+            </div>
+        </form>
+
+        <!-- Contenedor para mostrar resultados o errores -->
+        <div id="resultContainer" class="mt-6">
+            <h2 class="text-xl font-semibold text-gray-800">Resultados:</h2>
+            <div id="messageDiv" class="p-4 mt-2 text-sm text-center rounded-md hidden"></div>
+            <ul id="resultList" class="list-disc list-inside mt-2 text-gray-700">
+                <!-- Los resultados se insertarÃ¡n aquÃ­ -->
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('sharepointForm').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const listaNombre = document.getElementById('listaNombre').value;
+            const resultList = document.getElementById('resultList');
+            const messageDiv = document.getElementById('messageDiv');
+
+            resultList.innerHTML = '';
+            messageDiv.className = 'p-4 mt-2 text-sm text-center rounded-md hidden';
+            messageDiv.textContent = '';
+
+            try {
+                const response = await fetch(AppConfig.getUrl('SHAREPOINT_LIST'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `lista=${encodeURIComponent(listaNombre)}`
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.error) {
+                        messageDiv.textContent = data.error;
+                        messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-red-500';
+                    } else if (Array.isArray(data) && data.length > 0) {
+                        data.forEach(item => {
+                            const li = document.createElement('li');
+                            li.textContent = item;
+                            resultList.appendChild(li);
+                        });
+                        messageDiv.textContent = `Se encontraron ${data.length} elementos.`;
+                        messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-green-500';
+                    } else {
+                        messageDiv.textContent = 'La lista existe pero no contiene elementos.';
+                        messageDiv.className = 'p-4 mt-2 text-sm text-center text-black rounded-md bg-yellow-300';
+                    }
+                } else {
+                    // Si el servidor devuelve un error (ej. 404, 500) pero con un cuerpo JSON
+                    messageDiv.textContent = data.error || `Error del servidor: ${response.status}`;
+                    messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-red-500';
+                }
+
+            } catch (error) {
+                console.error('Error al llamar al servlet:', error);
+                messageDiv.textContent = 'No se pudo conectar con el servidor. Revisa la consola para mÃ¡s detalles.';
+                messageDiv.className = 'p-4 mt-2 text-sm text-center text-white rounded-md bg-red-500';
+            }
+            
+            messageDiv.classList.remove('hidden');
+        });
+    </script>
+
+</body>
+</html>
+

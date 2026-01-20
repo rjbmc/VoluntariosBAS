@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Actividad - VoluntariosBAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
+    <style>
+        /* Colores específicos para tipos de log */
+        .log-error { color: #dc2626; font-weight: 600; }
+        .log-warn { color: #d97706; font-weight: 600; }
+        .log-info { color: #059669; }
+        .log-auth { color: #2563eb; }
+        
+        /* Estilos para cabeceras ordenables */
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { background-color: #f3f4f6; }
+        .sort-icon { display: inline-block; margin-left: 4px; font-size: 0.8em; color: #9ca3af; }
+        th.sort-asc .sort-icon::after { content: '▲'; color: #4b5563; }
+        th.sort-desc .sort-icon::after { content: '▼'; color: #4b5563; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-50">
+
+    <!-- Cabecera -->
+    <header class="bg-white shadow-md">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-12 w-auto">
+                <span class="ml-4 text-xl font-bold text-gray-700">Registro de Actividad</span>
+            </div>
+            <div>
+                <a href="admin.html" class="px-4 py-2 text-gray-600 hover:text-orange-600 transition-colors">Volver al Panel</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="container mx-auto px-6 py-8">
+        
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-4 md:space-y-0">
+            <h1 class="text-2xl font-bold text-gray-800">Historial del Sistema (Últimos 100)</h1>
+            
+            <div class="flex flex-col md:flex-row items-center space-y-2 md:space-y-0 md:space-x-4 w-full md:w-auto">
+                <!-- Filtro Tipo Operación (Server-side) -->
+                <div class="flex items-center space-x-2 w-full md:w-auto">
+                    <label for="filtro-operacion" class="text-sm font-medium text-gray-700 whitespace-nowrap">Tipo:</label>
+                    <select id="filtro-operacion" onchange="loadLogs()" class="form-input py-2 px-3 rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring focus:ring-orange-200 w-full text-sm">
+                        <option value="TODOS">Todas</option>
+                        <!-- Se llenará dinámicamente -->
+                    </select>
+                </div>
+
+                <!-- Filtro Operador (Client-side) -->
+                <div class="flex items-center space-x-2 w-full md:w-auto">
+                    <label for="filtro-operador" class="text-sm font-medium text-gray-700 whitespace-nowrap">Operador:</label>
+                    <input type="text" id="filtro-operador" oninput="applyFilters()" placeholder="Buscar usuario..." class="form-input py-2 px-3 rounded-md border-gray-300 shadow-sm focus:border-orange-500 focus:ring focus:ring-orange-200 w-full text-sm">
+                </div>
+
+                <button onclick="loadLogs()" class="btn btn-secondary p-2 rounded-full hidden md:block" title="Refrescar datos">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div id="message-container" class="mb-4 hidden"></div>
+
+        <!-- Tabla de Logs -->
+        <div class="bg-white shadow-lg rounded-lg overflow-hidden border border-gray-200">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th onclick="sortTable('fecha')" class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider sortable group">
+                                Fecha / Hora <span id="sort-fecha" class="sort-icon"></span>
+                            </th>
+                            <th onclick="sortTable('operacion')" class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider sortable group">
+                                Operación <span id="sort-operacion" class="sort-icon"></span>
+                            </th>
+                            <th onclick="sortTable('operador')" class="px-6 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider sortable group">
+                                Operador <span id="sort-operador" class="sort-icon"></span>
+                            </th>
+                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-1/2">
+                                Detalle
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body" class="bg-white divide-y divide-gray-200 text-sm">
+                        <tr><td colspan="4" class="text-center py-8 text-gray-500">Cargando registros...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-2 text-right">* Se muestran los últimos 100 registros. Filtra por tipo para ver más antiguos.</p>
+    </main>
+
+    <script src="/VoluntariosBAS/js/config.js"></script>
+    <script>
+        let isFirstLoad = true;
+        let rawLogs = []; // Almacena todos los logs traídos del servidor
+        let currentSort = { column: 'fecha', direction: 'desc' }; // Estado inicial de ordenación
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadLogs();
+        });
+
+        async function loadLogs() {
+            const filtroTipo = document.getElementById('filtro-operacion').value;
+            const tableBody = document.getElementById('logs-table-body');
+            
+            if(!isFirstLoad) {
+                tableBody.style.opacity = '0.5';
+            }
+
+            try {
+            	 const url = AppConfig.getUrl('ADMIN_LOGS');
+                 if (url.includes('undefined')) {
+                     throw new Error("La ruta ADMIN_LOGS no está definida en js/config.js");
+                 }
+
+                 const response = await fetch(url);
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    let errorDetails = response.statusText;
+                    try {
+                        const errorJson = await response.json();
+                        if (errorJson.message) errorDetails = errorJson.message;
+                    } catch (e) { }
+                    throw new Error(`Error del servidor (${response.status}): ${errorDetails}`);
+                }
+
+                const data = await response.json();
+                
+                // Guardamos los datos crudos
+                rawLogs = data.logs;
+                
+                // Si es la primera carga, llenamos el selector de tipos
+                if (isFirstLoad) {
+                    populateFilter(data.tipos);
+                    isFirstLoad = false;
+                }
+
+                // Aplicamos filtros locales (operador) y ordenación
+                applyFilters();
+
+            } catch (error) {
+                console.error("Error al cargar logs:", error);
+                tableBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-red-600 font-medium">
+                    ${error.message}<br>
+                    <span class="text-xs text-gray-500">Verifica que la tabla 'logs' existe en la base de datos.</span>
+                </td></tr>`;
+            } finally {
+                tableBody.style.opacity = '1';
+            }
+        }
+
+        // Aplica filtro de texto (Operador) y ordenación sobre rawLogs
+        function applyFilters() {
+            const filterText = document.getElementById('filtro-operador').value.toLowerCase();
+            
+            // 1. Filtrar
+            let filteredLogs = rawLogs.filter(log => {
+                const operador = (log.operador || '').toLowerCase();
+                return operador.includes(filterText);
+            });
+
+            // 2. Ordenar
+            filteredLogs.sort((a, b) => {
+                let valA = a[currentSort.column] || '';
+                let valB = b[currentSort.column] || '';
+
+                // Para fechas, intentamos comparar como cadenas ISO (dd/MM/yyyy HH:mm:ss)
+                // Nota: El formato español no ordena bien como string directo, 
+                // pero como vienen del servidor ya ordenados por fecha, 
+                // si la columna es fecha y es la carga inicial, respetamos.
+                // Para reordenar correctamente fechas en formato ES, habría que parsear.
+                if (currentSort.column === 'fecha') {
+                    valA = parseDate(valA);
+                    valB = parseDate(valB);
+                } else {
+                    valA = valA.toString().toLowerCase();
+                    valB = valB.toString().toLowerCase();
+                }
+
+                if (valA < valB) return currentSort.direction === 'asc' ? -1 : 1;
+                if (valA > valB) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            // 3. Actualizar UI de cabeceras
+            updateSortIcons();
+
+            // 4. Renderizar
+            renderTable(filteredLogs);
+        }
+
+        function sortTable(column) {
+            // Alternar dirección si es la misma columna
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc'; // Nueva columna empieza asc
+            }
+            applyFilters();
+        }
+
+        function updateSortIcons() {
+            // Limpiar todas las clases de cabecera
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+            });
+            
+            // Añadir clase a la columna activa (necesitamos buscar por el onclick o ID)
+            // Forma simple: buscamos el span hijo
+            const activeSpan = document.getElementById(`sort-${currentSort.column}`);
+            if (activeSpan) {
+                activeSpan.parentElement.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+            }
+        }
+
+        // Helper para convertir "dd/MM/yyyy HH:mm:ss" a timestamp ordenable
+        function parseDate(dateStr) {
+            if (!dateStr || dateStr === 'N/A') return 0;
+            // Asume formato "dd/MM/yyyy HH:mm:ss"
+            const parts = dateStr.split(' ');
+            const dateParts = parts[0].split('/');
+            const timeParts = parts[1] ? parts[1].split(':') : [0,0,0];
+            return new Date(dateParts[2], dateParts[1]-1, dateParts[0], timeParts[0], timeParts[1], timeParts[2]).getTime();
+        }
+
+        function renderTable(logs) {
+            const tableBody = document.getElementById('logs-table-body');
+            tableBody.innerHTML = '';
+
+            if (!logs || logs.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-500">No hay registros que coincidan con los filtros.</td></tr>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition-colors border-b border-gray-100";
+                
+                let opClass = "font-medium text-gray-700";
+                if (log.operacion.includes("ERROR") || log.operacion.includes("FAIL")) opClass = "log-error";
+                else if (log.operacion.includes("WARN")) opClass = "log-warn";
+                else if (log.operacion.includes("LOGIN") || log.operacion.includes("AUTH")) opClass = "log-auth";
+                else if (log.operacion.includes("OK") || log.operacion.includes("SUCCESS")) opClass = "log-info";
+
+                // Fecha formateada más visible
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-900 font-bold text-sm font-mono tracking-tight">${log.fecha}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm ${opClass}">${log.operacion}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800 font-semibold">${log.operador || 'Sistema'}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600 break-words">${log.comentario}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function populateFilter(tipos) {
+            const select = document.getElementById('filtro-operacion');
+            const currentVal = select.value;
+            while (select.options.length > 1) select.remove(1);
+            if (tipos) {
+                tipos.forEach(tipo => {
+                    const option = document.createElement('option');
+                    option.value = tipo;
+                    option.textContent = tipo;
+                    select.appendChild(option);
+                });
+            }
+            select.value = currentVal;
+        }
+    </script>
+</body>
+</html>

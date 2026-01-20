@@ -1,0 +1,79 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmar Cambio de Email- Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-2xl card-shadow m-4 text-center">
+        <div class="flex justify-center">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+        </div>
+        
+        <div>
+            <h2 id="status-title" class="text-2xl font-bold text-gray-800">Confirmando tu nuevo email...</h2>
+            <p id="status-message" class="mt-2 text-gray-600">Por favor, espera un momento.</p>
+        </div>
+        
+        <div id="action-button-container" class="hidden pt-4">
+            <a href="login.html" id="action-button" class="inline-block w-full px-4 py-3 text-sm font-medium text-white border border-transparent rounded-md btn-primary">
+                Ir a Iniciar SesiÃ³n
+            </a>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const token = params.get('token');
+
+            const titleEl = document.getElementById('status-title');
+            const messageEl = document.getElementById('status-message');
+            const buttonContainerEl = document.getElementById('action-button-container');
+
+            if (!token) {
+                titleEl.textContent = 'Error de ConfirmaciÃ³n';
+                messageEl.textContent = 'El enlace de confirmaciÃ³n no es vÃ¡lido o estÃ¡ incompleto. Por favor, utiliza el enlace exacto de tu correo electrÃ³nico.';
+                return;
+            }
+
+            try {
+                // Este es el nuevo servlet que debemos crear
+                const response = await fetch(AppConfig.getUrl('CONFIRMAR_CAMBIO_EMAIL'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `token=${encodeURIComponent(token)}`
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    titleEl.textContent = 'Â¡Email Confirmado!';
+                    titleEl.classList.add('text-green-600');
+                    messageEl.textContent = result.message;
+                    buttonContainerEl.classList.remove('hidden');
+                } else {
+                    titleEl.textContent = 'Error de ConfirmaciÃ³n';
+                    titleEl.classList.add('text-red-600');
+                    messageEl.textContent = result.message;
+                }
+
+            } catch (error) {
+                console.error('Error en la solicitud de confirmaciÃ³n:', error);
+                titleEl.textContent = 'Error de ConexiÃ³n';
+                messageEl.textContent = 'No se pudo conectar con el servidor para confirmar tu nuevo email. Por favor, intÃ©ntalo de nuevo mÃ¡s tarde.';
+            }
+        });
+    </script>
+</body>
+</html>
+

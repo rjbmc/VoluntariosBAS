@@ -7,52 +7,51 @@ const AppConfig = {
     CONTEXT_ROOT: '/VoluntariosBAS',
 
     // Endpoints de la API (Servlets)
-	API_ENDPOINTS: {
-	    LOGIN: '/login',
-	    LOGOUT: '/logout',
-	    NUEVO_VOLUNTARIO: '/nuevo-voluntario',
-	    MODIFICAR_DATOS: '/modificar-datos',
-		DARSE_DE_BAJA: '/darse-de-baja',
-	    
-	    RECUPERAR_CLAVE: '/recuperar-clave',
-	    RESTABLECER_CLAVE: '/restablecer-clave',
-	    VERIFICAR_EMAIL: '/verificar-email',
-	    CONFIRMAR_CAMBIO_EMAIL: '/confirmar-cambio-email',
-	    AYUDA_ADMIN: '/ayuda-admin',
+    API_ENDPOINTS: {
+        LOGIN: '/login',
+        LOGOUT: '/logout',
+        NUEVO_VOLUNTARIO: '/nuevo-voluntario',
+        MODIFICAR_DATOS: '/modificar-datos',
+        DARSE_DE_BAJA: '/darse-de-baja',
+        
+        RECUPERAR_CLAVE: '/recuperar-clave',
+        RESTABLECER_CLAVE: '/restablecer-clave',
+        VERIFICAR_EMAIL: '/verificar-email',
+        CONFIRMAR_CAMBIO_EMAIL: '/confirmar-cambio-email',
+        AYUDA_ADMIN: '/ayuda-admin',
 
-	    USUARIO_ACTUAL: '/usuario-actual',
-	    VOLUNTARIO_DETALLES: '/voluntario-detalles',
-	    MIS_TURNOS: '/mis-turnos',
-	    GUARDAR_TURNOS: '/guardar-turnos',
-	    CAMPANA_ACTIVA: '/campana-activa',
-	    
-	    TODAS_LAS_TIENDAS: '/todas-las-tiendas',
-	    PUNTOS_DISPONIBLES: '/puntos-disponibles',
-	    
-	    ADMIN_CAMPANAS: '/admin-campanas',
-	    ADMIN_TIENDAS: '/admin-tiendas',
-	    ADMIN_VOLUNTARIOS: '/admin-voluntarios',
-	    ADMIN_ASIGNACIONES: '/admin-asignaciones',
-	    ADMIN_RESUMEN: '/admin-resumen',
-	    EXPORTAR_RESUMEN: '/exportar-resumen',
-	    ADMIN_DETALLE_TURNO: '/admin-detalle-turno',
-	    ADMIN_FILTROS_TIENDAS: '/admin-filtros-tiendas',
-	    INFORME_CAMPANA: '/informe-campana',
-		SOLICITAR_BAJA: '/solicitar-baja',
-		
-	    // Endpoints de SharePoint
-	    REFRESCAR_SHAREPOINT: '/refrescar-sharepoint', 
-		ADMIN_CLEANUP_TIENDAS: '/cleanup-tiendas',
-		ADMIN_REBUILD_TIENDAS: '/rebuild-tiendas',
-	    VER_LOGS_ERROR: '/ver-logs-error',
-	    INSPECCIONAR_LISTA: '/inspeccionar-lista',
-		SYNC_TIENDAS: '/sync-tiendas',
-	    SYNC_VOLUNTARIOS: '/sync-voluntarios',
-	    SYNC_CAMPANAS: '/sync-campanas',
-	    SYNC_ASIGNACIONES: '/sync-asignaciones',
-		ADMIN_LOGS_DATA: '/admin-logs-data'
-	},
-
+        USUARIO_ACTUAL: '/usuario-actual',
+        VOLUNTARIO_DETALLES: '/voluntario-detalles',
+        MIS_TURNOS: '/mis-turnos',
+        GUARDAR_TURNOS: '/guardar-turnos',
+        CAMPANA_ACTIVA: '/campana-active',
+        
+        TODAS_LAS_TIENDAS: '/todas-las-tiendas',
+        PUNTOS_DISPONIBLES: '/puntos-disponibles',
+        
+        ADMIN_CAMPANAS: '/admin-campanas',
+        ADMIN_TIENDAS: '/admin-tiendas',
+        ADMIN_VOLUNTARIOS: '/admin-voluntarios',
+        ADMIN_ASIGNACIONES: '/admin-asignaciones',
+        ADMIN_RESUMEN: '/admin-resumen',
+        EXPORTAR_RESUMEN: '/exportar-resumen',
+        ADMIN_DETALLE_TURNO: '/admin-detalle-turno',
+        ADMIN_FILTROS_TIENDAS: '/admin-filtros-tiendas',
+        INFORME_CAMPANA: '/informe-campana',
+        SOLICITAR_BAJA: '/solicitar-baja',
+        
+        // Endpoints de SharePoint e Informática
+        REFRESCAR_SHAREPOINT: '/refrescar-sharepoint', 
+        ADMIN_CLEANUP_TIENDAS: '/cleanup-tiendas',
+        ADMIN_REBUILD_TIENDAS: '/rebuild-tiendas',
+        VER_LOGS_ERROR: '/ver-logs-error',
+        INSPECCIONAR_LISTA: '/inspeccionar-lista',
+        SYNC_TIENDAS: '/sync-tiendas',
+        SYNC_VOLUNTARIOS: '/sync-voluntarios',
+        SYNC_CAMPANAS: '/sync-campanas',
+        SYNC_ASIGNACIONES: '/sync-asignaciones',
+        ADMIN_LOGS: '/admin-logs'
+    },
 
     /**
      * Construye la URL completa para un endpoint específico.
@@ -60,6 +59,14 @@ const AppConfig = {
      * @returns {string} La URL completa.
      */
     getUrl: function(endpointKey) {
-        return this.CONTEXT_ROOT + this.API_ENDPOINTS[endpointKey];
+        const endpoint = this.API_ENDPOINTS[endpointKey];
+        if (endpoint === undefined) {
+            console.error(`ERROR CRÍTICO: La clave de endpoint '${endpointKey}' no existe en config.js`);
+            return this.CONTEXT_ROOT + "/ENDPOINT_NOT_FOUND";
+        }
+        return this.CONTEXT_ROOT + endpoint;
     }
 };
+
+// Evita modificaciones accidentales en el objeto de configuración
+Object.freeze(AppConfig);

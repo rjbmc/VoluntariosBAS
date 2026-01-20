@@ -1,0 +1,79 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recuperar ContraseÃ±a- Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl card-shadow m-4">
+        <div class="flex justify-center">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+        </div>
+        
+        <div class="text-center">
+            <h2 class="text-2xl font-bold text-gray-800">Recuperar ContraseÃ±a</h2>
+            <p class="mt-2 text-sm text-gray-600">Introduce tu correo electrÃ³nico y te enviaremos un enlace para restablecer tu contraseÃ±a.</p>
+        </div>
+        
+        <form id="recuperarForm" class="mt-8 space-y-6" onsubmit="handleRequest(event)">
+            <div>
+                <label for="email" class="sr-only">Correo ElectrÃ³nico</label>
+                <input id="email" name="email" type="email" autocomplete="email" required class="relative block w-full px-3 py-3 text-gray-900 placeholder-gray-500 border rounded-md appearance-none form-input focus:z-10 sm:text-sm" placeholder="tu@email.com">
+            </div>
+
+            <div>
+                <button type="submit" class="relative flex justify-center w-full px-4 py-3 text-sm font-medium text-white border border-transparent rounded-md btn-primary group">
+                    Enviar Enlace de RecuperaciÃ³n
+                </button>
+            </div>
+        </form>
+        
+        <div class="text-center">
+            <a href="login.html" class="text-sm font-medium text-gray-600 hover:text-orange-500">
+                &larr; Volver al inicio de sesiÃ³n
+            </a>
+        </div>
+
+        <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
+    </div>
+
+    <!-- CAMBIO: Incluir el fichero de configuraciÃ³n -->
+    <script src="js/config.js"></script>
+    <script>
+        async function handleRequest(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const messageDiv = document.getElementById('message');
+
+            messageDiv.textContent = 'Procesando tu solicitud...';
+            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
+            messageDiv.classList.remove('hidden');
+
+            try {
+                // CAMBIO: Usar la URL del fichero de configuraciÃ³n
+                const response = await fetch(AppConfig.getUrl('RECUPERAR_CLAVE'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+
+                messageDiv.textContent = 'Si tu correo electrÃ³nico estÃ¡ en nuestro sistema, recibirÃ¡s un enlace para restablecer tu contraseÃ±a en breve.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
+                form.reset();
+
+            } catch (error) {
+                console.error('Error en la solicitud:', error);
+                messageDiv.textContent = 'OcurriÃ³ un error al procesar tu solicitud. Por favor, intÃ©ntalo de nuevo mÃ¡s tarde.';
+                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+            }
+        }
+    </script>
+</body>
+</html>
+

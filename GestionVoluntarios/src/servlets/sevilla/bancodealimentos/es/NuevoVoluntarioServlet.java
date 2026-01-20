@@ -152,7 +152,8 @@ public class NuevoVoluntarioServlet extends HttpServlet {
             // SharePoint Sync (Opcional)
             if (sqlRowUuid != null) {
                 try {
-                    syncSharePoint(nombre, apellidos, dni, tiendaReferencia, email, telefono, fechaNacimientoStr, cp, sqlRowUuid, isReactivation || existingUser != null);
+                    // ¡CORREGIDO! Pasar 'conn' como primer argumento
+                    syncSharePoint(conn, nombre, apellidos, dni, tiendaReferencia, email, telefono, fechaNacimientoStr, cp, sqlRowUuid, isReactivation || existingUser != null);
                 } catch (Exception e) { logger.error("Error SharePoint: {}", e.getMessage()); }
             }
 
@@ -174,7 +175,8 @@ public class NuevoVoluntarioServlet extends HttpServlet {
         }
     }
 
-    private void syncSharePoint(String nom, String ape, String dni, int tr, String em, String tel, String fn, String cp, String uuid, boolean update) throws Exception {
+    // ¡CORREGIDO! Añadido 'Connection conn' como primer parámetro
+    private void syncSharePoint(Connection conn, String nom, String ape, String dni, int tr, String em, String tel, String fn, String cp, String uuid, boolean update) throws Exception {
         Map<String, Object> spData = new HashMap<>();
         spData.put("field_1", nom); spData.put("field_2", ape); spData.put("field_3", dni);
         spData.put("field_5", tr); spData.put("field_6", em); spData.put("field_7", tel);
@@ -185,7 +187,8 @@ public class NuevoVoluntarioServlet extends HttpServlet {
         if (listId == null) return;
 
         if (update) {
-            String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "SqlRowUUID", uuid);
+            // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+            String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "SqlRowUUID", uuid);
             if (itemId != null) {
                 spData.put("FechaBaja", null);
                 FieldValueSet f = new FieldValueSet(); f.setAdditionalData(spData);

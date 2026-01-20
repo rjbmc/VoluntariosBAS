@@ -1,0 +1,131 @@
+﻿package util.sevilla.bancodealimentos.es;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Map;
+import java.util.UUID;
+
+import com.microsoft.graph.models.FieldValueSet;
+
+// UTILIDAD PARA REPLICAR CAMBIOS DE UN ÃšNICO ELEMENTO (CRUD)
+public final class SharepointReplicationUtil {
+
+    public enum Operation {
+        INSERT,
+        UPDATE,
+        DELETE
+    }
+
+    private static final String SQL_UUID_FIELD = "SqlRowUUID";
+
+    private SharepointReplicationUtil() { }
+
+    public static String generateUuid() {
+        return UUID.randomUUID().toString();
+    }
+
+    public static void replicate(Connection conn, String targetSiteId, String listName, Map<String, Object> data, Operation operation, String rowUuid) {
+        String listId = null;
+        try {
+            listId = SharepointUtil.getListId(targetSiteId, listName);
+            if (listId == null) {
+                throw new Exception("La lista '" + listName + "' no se encontrÃ³ en el sitio de SharePoint.");
+            }
+        } catch (Exception e) {
+            logReplicationError(conn, listName, rowUuid, "No se pudo obtener el ID de la lista: " + e.getMessage());
+            return;
+        }
+
+        try {
+            switch (operation) {
+                case INSERT:
+                    handleInsert(conn, targetSiteId, listId, listName, data, rowUuid);
+                    break;
+                case UPDATE:
+                    handleUpdate(conn, targetSiteId, listId, listName, data, rowUuid);
+                    break;
+                case DELETE:
+                    handleDelete(conn, targetSiteId, listId, listName, rowUuid);
+                    break;
+            }
+        } catch (Exception e) {
+            logReplicationError(conn, listName, rowUuid, "Fallo genÃ©rico en la replicaciÃ³n: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    private static void handleInsert(Connection conn, String targetSiteId, String listId, String listName, Map<String, Object> data, String rowUuid) throws Exception {
+        if (data == null) {
+            logReplicationError(conn, listName, rowUuid, "El mapa 'data' no puede ser nulo para una operaciÃ³n INSERT.");
+            return;
+        }
+        
+        FieldValueSet fields = new FieldValueSet();
+        data.put(SQL_UUID_FIELD, rowUuid);
+        fields.setAdditionalData(data);
+        
+        SharepointUtil.createListItem(targetSiteId, listId, fields);
+        logSuccess(conn, "INSERT", listName, rowUuid);
+    }
+
+    private static void handleUpdate(Connection conn, String targetSiteId, String listId, String listName, Map<String, Object> data, String rowUuid) throws Exception {
+        if (data == null || data.isEmpty()) {
+            logReplicationWarning(conn, listName, rowUuid, "No hay datos para actualizar en operaciÃ³n UPDATE.");
+            return;
+        }
+
+        String itemId = SharepointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+
+        if (itemId == null) {
+            logReplicationWarning(conn, listName, rowUuid, "UPDATE fallido: No se encontrÃ³ item con el UUID. Se intentarÃ¡ un INSERT como alternativa.");
+            handleInsert(conn, targetSiteId, listId, listName, data, rowUuid); // Intenta crear el registro si no existe
+            return;
+        }
+
+        FieldValueSet fields = new FieldValueSet();
+        fields.setAdditionalData(data);
+        SharepointUtil.updateListItem(targetSiteId, listId, itemId, fields);
+        logSuccess(conn, "UPDATE", listName, rowUuid);
+    }
+
+    private static void handleDelete(Connection conn, String targetSiteId, String listId, String listName, String rowUuid) throws Exception {
+        String itemId = SharepointUtil.findItemIdByFieldValue(targetSiteId, listId, SQL_UUID_FIELD, rowUuid);
+
+        if (itemId == null) {
+            logReplicationWarning(conn, listName, rowUuid, "DELETE fallido: No se encontrÃ³ item con el UUID correspondiente.");
+            return;
+        }
+        SharepointUtil.deleteListItem(targetSiteId, listId, itemId);
+        logSuccess(conn, "DELETE", listName, rowUuid);
+    }
+
+    // --- MÃ‰TODOS DE LOGGING --- 
+
+    private static void logSuccess(Connection conn, String operation, String listName, String rowUuid) {
+        try {
+            LogUtil.logOperation(conn, "REPLICATE_SUCCESS", "SYSTEM",
+                "OperaciÃ³n " + operation + " replicada a SP en lista: " + listName + " para UUID: " + rowUuid);
+        } catch (SQLException e) {
+            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_SUCCESS: " + e.getMessage());
+        }
+    }
+    
+    private static void logReplicationError(Connection conn, String listName, String rowUuid, String details) {
+        try {
+            LogUtil.logOperation(conn, "REPLICATE_ERROR", "SYSTEM",
+                "Error de replicaciÃ³n en lista '" + listName + "' para UUID '" + rowUuid + "': " + details);
+        } catch (SQLException e) {
+            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_ERROR: " + e.getMessage());
+        }
+    }
+
+    private static void logReplicationWarning(Connection conn, String listName, String rowUuid, String details) {
+        try {
+            LogUtil.logOperation(conn, "REPLICATE_WARNING", "SYSTEM",
+                "Warning de replicaciÃ³n en lista '" + listName + "' para UUID '" + rowUuid + "': " + details);
+        } catch (SQLException e) {
+            System.err.println("CRITICAL: Fallo al registrar LOG de REPLICATE_WARNING: " + e.getMessage());
+        }
+    }
+}
+

@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID; // Importación necesaria para UUID si se usara aquí directamente
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -238,6 +239,7 @@ public class AdminAsignacionesServlet extends HttpServlet {
             LogUtil.logOperation(conn, "ADMIN_UPDATE_ASIG", adminUser, "Admin modificó asignaciones de " + usuarioTarget);
 
             // 2. Replicar a SharePoint
+            // ¡CORREGIDO! Pasar 'conn' a replicarAsignacionASharePoint
             replicarAsignacionASharePoint(conn, campanaId, usuarioTarget);
 
             conn.commit();
@@ -265,13 +267,23 @@ public class AdminAsignacionesServlet extends HttpServlet {
         String listIdVoluntarios = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Voluntarios");
         String listIdTiendas = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Tiendas");
 
-        if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) return;
+        if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) {
+             logger.warn("replicarAsignacionASharePoint: No se pudo obtener uno o más IDs de lista de SharePoint.");
+             return;
+        }
 
         String voluntarioUuid = getSqlRowUuid(conn, usuario);
-        if (voluntarioUuid == null) return;
+        if (voluntarioUuid == null) {
+            logger.warn("replicarAsignacionASharePoint: No se encontró SqlRowUUID para el voluntario {}. No se puede replicar a SharePoint.", usuario);
+            return;
+        }
         
-        String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
-        if (spVoluntarioId == null) return;
+        // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+        String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
+        if (spVoluntarioId == null) {
+            logger.warn("replicarAsignacionASharePoint: Voluntario {} con UUID {} no encontrado en la lista de SharePoint 'Voluntarios'.", usuario, voluntarioUuid);
+            return;
+        }
 
         String assignmentUuid = "AS-" + voluntarioUuid;
         FieldValueSet fields = new FieldValueSet();
@@ -297,25 +309,36 @@ public class AdminAsignacionesServlet extends HttpServlet {
                         tieneTurnos = true;
                         String tiendaUuid = getSqlRowUuidForTienda(conn, idTiendaDb);
                         if (tiendaUuid != null) {
-                            String spTiendaId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
+                            // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+                            String spTiendaId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
                             if (spTiendaId != null) {
                                 fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
+                            } else {
+                                logger.warn("replicarAsignacionASharePoint: Tienda con código {} y UUID {} no encontrada en la lista de SharePoint 'Tiendas'.", idTiendaDb, tiendaUuid);
                             }
+                        } else {
+                            logger.warn("replicarAsignacionASharePoint: No se encontró SqlRowUUID para la tienda con código {}.", idTiendaDb);
                         }
                     }
                 }
             }
         }
 
-        String itemId = SharePointUtil.findItemIdByFieldValue(SharePointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
+        // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
+        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
         if (itemId != null) {
             if (tieneTurnos) {
                 SharePointUtil.updateListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
+                logger.info("replicarAsignacionASharePoint: Asignación actualizada en SharePoint para voluntario {}", usuario);
             } else {
                 SharePointUtil.deleteListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId);
+                logger.info("replicarAsignacionASharePoint: Asignación eliminada de SharePoint (ya no tiene turnos) para voluntario {}", usuario);
             }
         } else if (tieneTurnos) {
             SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
+            logger.info("replicarAsignacionASharePoint: Nueva asignación creada en SharePoint para voluntario {}", usuario);
+        } else {
+            logger.info("replicarAsignacionASharePoint: No hay turnos para voluntario {} y no existe en SP. No se crea.", usuario);
         }
     }
     
