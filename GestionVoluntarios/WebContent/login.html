@@ -29,8 +29,14 @@
         
         <form id="loginForm" class="mt-8 space-y-6" onsubmit="handleLogin(event)">
             <div class="space-y-4">
-                <input id="usuario" name="usuario" type="text" required class="block w-full px-3 py-3 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 sm:text-sm" placeholder="Usuario">
+                <input id="usuario" name="usuario" type="text" required class="block w-full px-3 py-3 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 sm:text-sm" placeholder="DNI / NIE">
                 <input id="clave" name="clave" type="password" required class="block w-full px-3 py-3 border border-gray-300 rounded-md focus:ring-orange-500 focus:border-orange-500 sm:text-sm" placeholder="Contraseña">
+            </div>
+
+            <div class="flex items-center justify-end text-sm">
+                <a href="recuperar-clave.html" class="font-medium text-orange-600 hover:text-orange-500">
+                    ¿Has olvidado tu contraseña?
+                </a>
             </div>
 
             <button type="submit" id="submit-button" class="w-full flex justify-center py-3 px-4 text-sm font-medium text-white rounded-md btn-orange shadow-md">
@@ -62,7 +68,6 @@
             submitBtn.disabled = true;
 
             try {
-                // Usamos URLSearchParams para asegurar que el Servlet reciba los parámetros correctamente
                 const response = await fetch(AppConfig.getUrl('LOGIN'), {
                     method: 'POST',
                     body: new URLSearchParams(formData)
@@ -74,8 +79,6 @@
                     messageDiv.textContent = 'Acceso correcto. Redirigiendo...';
                     messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
                     
-                    // REDIRECCIÓN TOTALMENTE LIMPIA
-                    // La sesión ya está guardada en el servidor bajo la Cookie JSESSIONID
                     setTimeout(() => {
                         if (result.isAdmin) {
                             window.location.href = 'admin.html';

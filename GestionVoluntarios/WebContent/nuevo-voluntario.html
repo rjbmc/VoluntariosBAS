@@ -27,76 +27,90 @@
         <form id="registroForm" class="mt-8 space-y-6" onsubmit="handleRegister(event)">
             <input type="hidden" id="punto_id" name="punto_id">
 
-            <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
-                <div>
-                    <label for="nombre" class="input-label">Nombre</label>
-                    <input id="nombre" name="nombre" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tu nombre">
+            <div id="dni-step" class="space-y-4">
+                <div class="text-center">
+                    <label for="dni" class="input-label font-semibold">Introduce tu DNI / NIF</label>
+                    <p class="text-sm text-gray-500">Comprobaremos si ya figuras en nuestra base de datos de voluntarios.</p>
                 </div>
-                <div>
-                    <label for="apellidos" class="input-label">Apellidos</label>
-                    <input id="apellidos" name="apellidos" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tus apellidos">
-                </div>
-                <div>
-                    <label for="dni" class="input-label">DNI / NIF</label>
-                    <input id="dni" name="dni" type="text" maxlength="9" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A">
-                </div>
-                <div>
-                    <label for="fechaNacimiento" class="input-label">Fecha de Nacimiento</label>
-                    <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm">
-                </div>
-                <div>
-                    <label for="email" class="input-label">Correo Electrónico</label>
-                    <input id="email" name="email" type="email" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="tu@email.com">
-                </div>
-                <div>
-                    <label for="telefono" class="input-label">Teléfono</label>
-                    <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="600112233">
-                </div>
-                 <div>
-                    <label for="cp" class="input-label">Código Postal</label>
-                    <input id="cp" name="cp" type="text" maxlength="5" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="41001">
+                <div class="relative">
+                    <input id="dni" name="dni" type="text" maxlength="9" required class="form-input relative block w-full px-3 py-3 text-lg text-center text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A">
+                    <div id="dni-spinner" class="absolute inset-y-0 right-0 flex items-center pr-3 hidden">
+                        <svg class="animate-spin h-5 w-5 text-orange-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
                 </div>
             </div>
 
-            <hr class="my-6">
+            <div id="details-step" class="hidden">
+                <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+                    <div>
+                        <label for="nombre" class="input-label">Nombre</label>
+                        <input id="nombre" name="nombre" type="text" required class="form-input" placeholder="Tu nombre">
+                    </div>
+                    <div>
+                        <label for="apellidos" class="input-label">Apellidos</label>
+                        <input id="apellidos" name="apellidos" type="text" required class="form-input" placeholder="Tus apellidos">
+                    </div>
+                    <div>
+                        <label for="fechaNacimiento" class="input-label">Fecha de Nacimiento</label>
+                        <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input">
+                    </div>
+                    <div>
+                        <label for="email" class="input-label">Correo Electrónico</label>
+                        <input id="email" name="email" type="email" required class="form-input" placeholder="tu@email.com">
+                    </div>
+                    <div>
+                        <label for="telefono" class="input-label">Teléfono</label>
+                        <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input">
+                    </div>
+                    <div>
+                        <label for="cp" class="input-label">Código Postal</label>
+                        <input id="cp" name="cp" type="text" maxlength="5" required class="form-input" placeholder="41XXX">
+                    </div>
+                </div>
 
-            <div class="flex flex-col items-center gap-y-6">
-                <!-- Eliminado campo de usuario, se usará DNI/NIF como identificador -->
-                <input type="hidden" id="usuario" name="usuario">
-                <div class="w-full max-w-md">
-                    <label for="clave" class="input-label block text-center">Contraseña</label>
-                    <input id="clave" name="clave" type="password" required class="form-input mx-auto block w-full max-w-md px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Mínimo 8 caracteres">
+                <hr class="my-6">
+
+                <div class="flex flex-col items-center gap-y-6">
+                    <input type="hidden" id="usuario" name="usuario">
+                    <div class="w-full max-w-md">
+                        <label for="clave" class="input-label block text-center">Contraseña</label>
+                        <input id="clave" name="clave" type="password" required class="form-input mx-auto block w-full max-w-md" placeholder="Mínimo 8 caracteres">
+                    </div>
+                    <div class="w-full max-w-md">
+                        <label for="confirmar_clave" class="input-label block text-center">Confirmar Contraseña</label>
+                        <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input mx-auto block w-full max-w-md" placeholder="Repite la contraseña">
+                    </div>
                 </div>
-                <div class="w-full max-w-md">
-                    <label for="confirmar_clave" class="input-label block text-center">Confirmar Contraseña</label>
-                    <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input mx-auto block w-full max-w-md px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña">
+
+                <hr class="my-8">
+            
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-center text-gray-700">Compromiso y Tratamiento de Datos</h3>
+                    <a href="Acuerdo-Voluntarios-Grandes-Recogidas.pdf" target="_blank" id="link-compromisos" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Leer Acuerdo Voluntarios Grandes Recogidas
+                    </a>
+                    <a href="Politica-de-proteccion-de-datos-1.pdf" target="_blank" id="link-privacidad" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        Leer Política de Privacidad de Datos (PDF)
+                    </a>
                 </div>
-            </div>
-			<hr class="my-8">
-			
-			<div class="space-y-4">
-			    <h3 class="text-lg font-semibold text-center text-gray-700">Compromiso y Tratamiento de Datos</h3>
-			    <a href="Acuerdo-Voluntarios-Grandes-Recogidas.pdf" target="_blank" id="link-compromisos" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
-			        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-			        Leer Acuerdo Voluntarios Grandes Recogidas
-			    </a>
-			    <a href="Politica-de-proteccion-de-datos-1.pdf" target="_blank" id="link-privacidad" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
-			        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-			        Leer Política de Privacidad de Datos (PDF)
-			    </a>
-			</div>
-			
-			<div class="pt-4 mt-4">
-			    <label class="flex items-center" id="consent-label">
-			        <input type="checkbox" id="consent-checkbox" disabled class="h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500 disabled:opacity-50">
-			        <span class="ml-3 text-gray-700">He leído y acepto los compromisos y la política de tratamiento de datos.</span>
-			    </label>
-			</div>
-			
-            <div>
-                <button type="submit" id="submit-btn" disabled class="relative flex justify-center w-full px-4 py-3 mt-4 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
-                    Completar Registro
-                </button>
+                
+                <div class="pt-4 mt-4">
+                    <label class="flex items-center" id="consent-label">
+                        <input type="checkbox" id="consent-checkbox" disabled class="h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500 disabled:opacity-50">
+                        <span class="ml-3 text-gray-700">He leído y acepto los compromisos y la política de tratamiento de datos.</span>
+                    </label>
+                </div>
+                
+                <div>
+                    <button type="submit" id="submit-btn" disabled class="relative flex justify-center w-full px-4 py-3 mt-4 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                        Completar Registro
+                    </button>
+                </div>
             </div>
         </form>
         
@@ -111,6 +125,11 @@
     </div>
 
     <script>
+        const dniInput = document.getElementById('dni');
+        const detailsStep = document.getElementById('details-step');
+        const messageDiv = document.getElementById('message');
+        const dniSpinner = document.getElementById('dni-spinner');
+
         document.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
             const puntoId = params.get('tienda_id');
@@ -121,157 +140,216 @@
                 document.getElementById('nombre-tienda').textContent = puntoNombre;
                 document.getElementById('tienda-seleccionada-info').classList.remove('hidden');
             }
+            
+            setupMobileDateField();
+            setupDniCheck();
+            setupConsentCheck();
         }); 
-        
-        const linkCompromisos = document.getElementById('link-compromisos');
-        const linkPrivacidad = document.getElementById('link-privacidad');
-        const checkbox = document.getElementById('consent-checkbox');
-        const submitBtn = document.getElementById('submit-btn'); // El botón de registro
-        
-        let haLeidoCompromisos = false;
-        let haLeidoPrivacidad = false; // Lo ponemos en false para obligar a hacer clic
 
-        // Función para comprobar si se debe habilitar la casilla de aceptación
-        function checkEnableCheckbox() {
-            if (haLeidoCompromisos && haLeidoPrivacidad) {
-                checkbox.disabled = false;
-            }
+        function setupDniCheck() {
+            dniInput.addEventListener('blur', async () => {
+                const dni = dniInput.value;
+                if (!validarDniNie(dni)) {
+                    if (dni.length > 0) {
+                        showMessage('El DNI o NIE introducido no es válido.', 'error');
+                    }
+                    detailsStep.classList.add('hidden');
+                    return;
+                }
+                
+                hideMessage();
+                dniSpinner.classList.remove('hidden');
+                detailsStep.classList.add('hidden');
+
+                try {
+                    const response = await fetch(`${AppConfig.getUrl('CONSULTAR_VOLUNTARIO')}?dni=${dni}`);
+                    const result = await response.json();
+
+                    if (result.status === 'error') {
+                        showMessage(`${result.message} <a href="login.html" class="font-bold underline">Inicia sesión aquí.</a>`, 'error');
+                    } else if (result.status === 'success' && result.source === 'sharepoint') {
+                        showMessage('Hemos encontrado tus datos. Por favor, establece una contraseña para completar tu registro.', 'success');
+                        populateForm(result.data);
+                        detailsStep.classList.remove('hidden');
+                    } else {
+                        showMessage('No hemos encontrado tus datos. Por favor, completa el formulario para registrarte.', 'info');
+                        resetForm();
+                        detailsStep.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Error al consultar DNI:', error);
+                    showMessage('No se pudo conectar con el servidor para verificar el DNI. Inténtalo más tarde.', 'error');
+                } finally {
+                    dniSpinner.classList.add('hidden');
+                }
+            });
+        }
+        
+        function populateForm(data) {
+            const fieldsToFill = ['nombre', 'apellidos', 'email', 'telefono', 'cp'];
+            fieldsToFill.forEach(id => {
+                const input = document.getElementById(id);
+                input.value = data[id] || '';
+                input.disabled = true;
+                input.classList.add('bg-gray-100');
+            });
+            document.getElementById('fechaNacimiento').disabled = false;
         }
 
-        // Añadir listeners a los enlaces para saber si el usuario ha hecho clic
-        linkCompromisos.addEventListener('click', () => {
-            haLeidoCompromisos = true;
-            checkEnableCheckbox();
-        });
+        function resetForm() {
+            const formIds = ['nombre', 'apellidos', 'email', 'telefono', 'cp', 'fechaNacimiento'];
+            formIds.forEach(id => {
+                const input = document.getElementById(id);
+                input.value = '';
+                input.disabled = false;
+                input.classList.remove('bg-gray-100');
+            });
+        }
 
-        linkPrivacidad.addEventListener('click', () => {
-            haLeidoPrivacidad = true;
-            checkEnableCheckbox();
-        });
-
-        // Habilitar/deshabilitar el botón de REGISTRO cuando cambia la casilla
-        checkbox.addEventListener('change', () => {
-            submitBtn.disabled = !checkbox.checked;
-        });
-        
         async function handleRegister(event) {
             event.preventDefault();
-
             const form = event.target;
             const formData = new FormData(form);
-            const messageDiv = document.getElementById('message');
-            // Asignar el valor de usuario al DNI antes de enviar
             formData.set('usuario', formData.get('dni'));
 
+            if (document.getElementById('nombre').disabled) {
+                formData.set('nombre', document.getElementById('nombre').value);
+                formData.set('apellidos', document.getElementById('apellidos').value);
+                formData.set('email', document.getElementById('email').value);
+                formData.set('telefono', document.getElementById('telefono').value);
+                formData.set('cp', document.getElementById('cp').value);
+            }
+
             const clave = formData.get('clave');
-            const confirmarClave = formData.get('confirmar_clave');
-
-            if (clave !== confirmarClave) {
-                messageDiv.textContent = 'Las contraseñas no coinciden.';
-                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
-                messageDiv.classList.remove('hidden');
-                return;
-            }
-            
             if (clave.length < 8) {
-                messageDiv.textContent = 'La contraseña debe tener al menos 8 caracteres.';
-                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
-                messageDiv.classList.remove('hidden');
-                return;
+                return showMessage('La contraseña debe tener al menos 8 caracteres.', 'error');
             }
-           
+            if (clave !== formData.get('confirmar_clave')) {
+                return showMessage('Las contraseñas no coinciden.', 'error');
+            }
+
             const fechaNacimientoStr = formData.get('fechaNacimiento');
-            if (!fechaNacimientoStr) {
-                messageDiv.textContent = 'Por favor, introduce tu fecha de nacimiento.';
-                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
-                messageDiv.classList.remove('hidden');
-                return;
+            const { isValid, message, serverDate } = validateAndParseDate(fechaNacimientoStr);
+            if (!isValid) {
+                return showMessage(message, 'error');
             }
+            formData.set('fechaNacimiento', serverDate);
 
-            const fechaNacimiento = new Date(fechaNacimientoStr);
-            const hoy = new Date();
-            const edadMinima = 16;
-            
-            // Clonamos la fecha de hoy para no modificarla
-            let fechaMinima = new Date(hoy.getFullYear() - edadMinima, hoy.getMonth(), hoy.getDate());
-
-            if (fechaNacimiento > fechaMinima) {
-                messageDiv.textContent = 'Debes tener al menos 16 años para registrarte.';
-                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
-                messageDiv.classList.remove('hidden');
-                return; // Detiene el envío del formulario
-            }
-            const dni = formData.get('dni');
-            if (!validarDniNie(dni)) {
-                messageDiv.textContent = 'El DNI o NIE introducido no es válido.';
-                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
-                messageDiv.classList.remove('hidden');
-                return; // Detiene el envío del formulario si no es válido
-            }
-            messageDiv.textContent = 'Registrando...';
-            messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-blue-500';
-            messageDiv.classList.remove('hidden');
+            showMessage('Registrando...', 'info');
 
             try {
                 const response = await fetch(AppConfig.getUrl('NUEVO_VOLUNTARIO'), {
                     method: 'POST',
                     body: new URLSearchParams(formData)
                 });
-
                 const result = await response.json();
-
                 if (result.success) {
-                	const mensajeExito = `${result.message} <br>Email enviado a: <strong>${result.email}</strong>`;
-                	messageDiv.innerHTML = mensajeExito; 
-                	messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
-                    // form.reset();
-                    // La redirección al login se hará después de que el usuario vea el mensaje
+                    showMessage(`${result.message} <br>Email enviado a: <strong>${result.email}</strong>`, 'success');
+                    document.getElementById('registroForm').remove();
                 } else {
-                    messageDiv.textContent = result.message || 'Error desconocido.';
-                    messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                    showMessage(result.message || 'Error desconocido.', 'error');
                 }
-
             } catch (error) {
-                console.error('Error al conectar con el servidor:', error);
-                messageDiv.textContent = 'No se pudo conectar con el servidor. Inténtalo más tarde.';
-                messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-red-500';
+                console.error('Error al registrar:', error);
+                showMessage('No se pudo conectar con el servidor para registrarte. Inténtalo más tarde.', 'error');
             }
-            
+        }
+        
+        function showMessage(html, type) {
+            const colors = {
+                error: 'bg-red-500',
+                success: 'bg-green-500',
+                info: 'bg-blue-500'
+            };
+            messageDiv.innerHTML = html;
+            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colors[type] || 'bg-gray-500'}`;
             messageDiv.classList.remove('hidden');
         }
-        /**
-         * Valida si un DNI o NIE tiene el formato y la letra de control correctos.
-         * @param {string} valor - El DNI o NIE a validar.
-         * @returns {boolean} - Devuelve true si es válido, false en caso contrario.
-         */
-        function validarDniNie(valor) {
-            if (typeof valor !== 'string') {
-                return false;
+
+        function hideMessage() {
+            messageDiv.classList.add('hidden');
+            messageDiv.innerHTML = '';
+        }
+
+        function setupConsentCheck() {
+            const linkCompromisos = document.getElementById('link-compromisos');
+            const linkPrivacidad = document.getElementById('link-privacidad');
+            const checkbox = document.getElementById('consent-checkbox');
+            const submitBtn = document.getElementById('submit-btn');
+            
+            // Para hacer opcional la lectura, simplemente cambia estos valores a true.
+            let haLeidoCompromisos = true;
+            let haLeidoPrivacidad = true;
+
+            const checkEnableCheckbox = () => {
+                if (haLeidoCompromisos && haLeidoPrivacidad) checkbox.disabled = false;
+            };
+
+            linkCompromisos.addEventListener('click', () => { haLeidoCompromisos = true; checkEnableCheckbox(); });
+            linkPrivacidad.addEventListener('click', () => { haLeidoPrivacidad = true; checkEnableCheckbox(); });
+            checkbox.addEventListener('change', () => { submitBtn.disabled = !checkbox.checked; });
+
+            // Comprobar estado al cargar, para habilitar el checkbox si los valores ya son true.
+            checkEnableCheckbox();
+        }
+
+        function setupMobileDateField() {
+            const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent);
+            const fechaNacimientoInput = document.getElementById('fechaNacimiento');
+            if (isMobile) {
+                fechaNacimientoInput.type = 'text';
+                fechaNacimientoInput.placeholder = 'DD/MM/AAAA';
+                fechaNacimientoInput.inputMode = 'numeric';
+                fechaNacimientoInput.setAttribute('maxlength', '10');
+                fechaNacimientoInput.addEventListener('input', (e) => {
+                    let value = e.target.value.replace(/[^0-9]/g, '');
+                    let formattedValue = '';
+                    if (value.length > 0) formattedValue = value.substring(0, 2);
+                    if (value.length > 2) formattedValue += '/' + value.substring(2, 4);
+                    if (value.length > 4) formattedValue += '/' + value.substring(4, 8);
+                    e.target.value = formattedValue;
+                });
+            }
+        }
+
+        function validateAndParseDate(fechaStr) {
+            if (!fechaStr) return { isValid: false, message: 'Por favor, introduce tu fecha de nacimiento.' };
+            
+            let fechaNacimiento;
+            let serverDate = fechaStr;
+
+            if (fechaStr.includes('/')) {
+                const parts = fechaStr.split('/');
+                if (parts.length !== 3 || parts[0].length !== 2 || parts[1].length !== 2 || parts[2].length !== 4) {
+                    return { isValid: false, message: 'El formato de la fecha debe ser DD/MM/AAAA.' };
+                }
+                const [day, month, year] = parts.map(p => parseInt(p, 10));
+                fechaNacimiento = new Date(year, month - 1, day);
+                if (fechaNacimiento.getFullYear() !== year || fechaNacimiento.getMonth() !== month - 1 || fechaNacimiento.getDate() !== day) {
+                    return { isValid: false, message: 'La fecha de nacimiento introducida no es válida (ej: día o mes incorrecto).' };
+                }
+                serverDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            } else {
+                fechaNacimiento = new Date(fechaStr);
             }
 
-            const valorUpper = valor.toUpperCase().trim();
-            
-            // Expresión regular para validar el formato de DNI o NIE
-            // Acepta: 8 números + letra, o X/Y/Z + 7 números + letra
-            const nifRegex = /^([XYZ]?\d{7,8})([A-Z])$/;
-            
-            if (!nifRegex.test(valorUpper)) {
-                return false; // El formato no es válido
+            const hoy = new Date();
+            const fechaMinima = new Date(hoy.getFullYear() - 16, hoy.getMonth(), hoy.getDate());
+            if (fechaNacimiento > fechaMinima) {
+                return { isValid: false, message: 'Debes tener al menos 16 años para registrarte.' };
             }
-            
+            return { isValid: true, serverDate: serverDate };
+        }
+
+        function validarDniNie(valor) {
+            if (typeof valor !== 'string') return false;
+            const valorUpper = valor.toUpperCase().trim();
+            const nifRegex = /^([XYZ]?\d{7,8})([A-Z])$/;
+            if (!nifRegex.test(valorUpper)) return false;
             const match = valorUpper.match(nifRegex);
-            let numero = match[1];
+            let numero = match[1].replace('X', '0').replace('Y', '1').replace('Z', '2');
             const letra = match[2];
-            
-            // Si es un NIE (empieza por X, Y, Z), se reemplaza la letra inicial por un número
-            numero = numero.replace('X', '0').replace('Y', '1').replace('Z', '2');
-            
-            // Se calcula la letra de control
-            const resto = parseInt(numero, 10) % 23;
-            const letras = "TRWAGMYFPDXBNJZSQVHLCKE";
-            const letraCalculada = letras.charAt(resto);
-            
-            // Se compara la letra introducida con la calculada
+            const letraCalculada = "TRWAGMYFPDXBNJZSQVHLCKE".charAt(parseInt(numero, 10) % 23);
             return letra === letraCalculada;
         }
     </script>

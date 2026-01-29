@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -24,17 +25,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
-import util.sevilla.bancodealimentos.es.SharepointReplicationUtil;
 import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/confirmar-baja")
 public class ConfirmarBajaServlet extends HttpServlet {
-    private static final long serialVersionUID = 4L;
-    
-    // 1. Logger SLF4J
+    private static final long serialVersionUID = 5L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(ConfirmarBajaServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
@@ -43,94 +39,110 @@ public class ConfirmarBajaServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         String token = request.getParameter("token");
-        
         if (token == null || token.trim().isEmpty()) {
-            logger.warn("Intento de confirmación de baja sin token desde IP: {}", request.getRemoteAddr());
             sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "Token no proporcionado.");
             return;
         }
 
+        String context = "Token: " + token.substring(0, Math.min(token.length(), 8)) + "...";
         Connection conn = null;
+
         try {
             conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
 
-            String usuario = null;
-            String sqlRowUuid = null;
-            
-            // Buscar usuario por token válido y no expirado
-            String findUserSql = "SELECT Usuario, SqlRowUUID FROM voluntarios WHERE token_baja = ? AND token_baja_expiry > ?";
-            try (PreparedStatement psFind = conn.prepareStatement(findUserSql)) {
-                psFind.setString(1, token);
-                psFind.setTimestamp(2, Timestamp.from(Instant.now()));
-                
-                try (ResultSet rs = psFind.executeQuery()) {
-                    if (rs.next()) {
-                        usuario = rs.getString("Usuario");
-                        sqlRowUuid = rs.getString("SqlRowUUID");
-                    }
-                }
-            }
+            // 1. Encontrar usuario por token válido
+            UserInfo userInfo = findUserByToken(conn, token);
 
-            if (usuario != null) {
-                Timestamp bajaTimestamp = Timestamp.from(Instant.now());
-
-                // Actualizar usuario: establecer fecha baja y limpiar tokens
-                String updateUserSql = "UPDATE voluntarios SET fecha_baja = ?, token_baja = NULL, token_baja_expiry = NULL, notificar = 'S' WHERE Usuario = ?";
-                try (PreparedStatement psUpdate = conn.prepareStatement(updateUserSql)) {
-                    psUpdate.setTimestamp(1, bajaTimestamp);
-                    psUpdate.setString(2, usuario);
-                    psUpdate.executeUpdate();
-                }
-
-                LogUtil.logOperation(conn, "BAJA-CONFIRM", usuario, "El usuario ha confirmado su baja en la base de datos.");
-
-                // Intentar replicar a SharePoint (no bloqueante)
-                if (sqlRowUuid != null) {
-                    try {
-                        Map<String, Object> spData = new HashMap<>();
-                        String isoDate = bajaTimestamp.toInstant().atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-                        spData.put("field_21", isoDate); // Campo fecha de baja en SharePoint
-
-                        // Nota: "voluntarios" o "Voluntarios" debe coincidir con el nombre de la lista en SP
-                        SharepointReplicationUtil.replicate(conn, SharePointUtil.SITE_ID, "Voluntarios", spData, SharepointReplicationUtil.Operation.UPDATE, sqlRowUuid);
-
-                        LogUtil.logOperation(conn, "REPLICATE_SUCCESS", usuario, "Baja replicada a SharePoint (marcado como inactivo).");
-                    } catch (Exception e) {
-                        // Logueamos el error pero permitimos que la transacción de BD continúe
-                        logger.error("Fallo al replicar la baja a SharePoint para el UUID: {}", sqlRowUuid, e);
-                        LogUtil.logOperation(conn, "REPLICATE_ERROR", usuario, "Fallo al replicar la baja a SharePoint: " + e.getMessage());
-                    }
-                } else {
-                     logger.warn("Usuario {} dado de baja, pero no tenía SqlRowUUID. No se pudo replicar a SharePoint.", usuario);
-                     LogUtil.logOperation(conn, "REPLICATE_WARNING", usuario, "No se encontró SqlRowUUID para replicar la baja a SharePoint.");
-                }
-
-                conn.commit();
-                logger.info("Baja confirmada exitosamente para el usuario: {}", usuario);
-                sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Tu cuenta ha sido dada de baja correctamente.");
-
-            } else {
-                // Token no encontrado o expirado
+            if (userInfo == null) {
                 conn.rollback();
-                logger.warn("Intento de baja con token inválido o expirado: {}", token);
                 sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "El enlace de confirmación no es válido o ha caducado. Por favor, solicita la baja de nuevo.");
+                return;
             }
+            
+            context = String.format("Usuario: %s", userInfo.username);
+            Timestamp bajaTimestamp = Timestamp.from(Instant.now());
 
-        } catch (SQLException e) {
-            logger.error("Error SQL procesando baja con token: {}", token, e);
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Error en rollback", ex); }
-            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos. Inténtalo más tarde.");
+            // 2. Marcar como baja en la BD
+            deactivateUserInDb(conn, userInfo.username, bajaTimestamp);
+
+            // 3. Sincronizar baja con SharePoint
+            deactivateUserInSharePoint(conn, userInfo.sqlRowUuid, bajaTimestamp, userInfo.username);
+
+            // 4. Si todo tiene éxito, confirmar la transacción
+            conn.commit();
+            LogUtil.logOperation(conn, "UNSUBSCRIBE_SUCCESS", userInfo.username, "Baja confirmada y sincronizada.");
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Tu cuenta ha sido dada de baja correctamente.");
+
+        } catch (Exception e) {
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { LogUtil.logException(logger, ex, "CRITICAL: Rollback fallido en confirmación de baja", context); }
+            LogUtil.logException(logger, e, "Error en el proceso de confirmación de baja", context);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error interno al procesar la baja. El problema ha sido registrado.");
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
+            if (conn != null) try { conn.close(); } catch (SQLException e) { LogUtil.logException(logger, e, "Error cerrando conexión en ConfirmarBajaServlet", context); }
         }
     }
+
+    private UserInfo findUserByToken(Connection conn, String token) throws SQLException {
+        String sql = "SELECT Usuario, SqlRowUUID FROM voluntarios WHERE token_baja = ? AND token_baja_expiry > ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, token);
+            ps.setTimestamp(2, Timestamp.from(Instant.now()));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return new UserInfo(rs.getString("Usuario"), rs.getString("SqlRowUUID"));
+                }
+                return null;
+            }
+        }
+    }
+
+    private void deactivateUserInDb(Connection conn, String username, Timestamp bajaTimestamp) throws SQLException {
+        String sql = "UPDATE voluntarios SET fecha_baja = ?, token_baja = NULL, token_baja_expiry = NULL, notificar = 'S' WHERE Usuario = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setTimestamp(1, bajaTimestamp);
+            ps.setString(2, username);
+            if (ps.executeUpdate() == 0) {
+                throw new SQLException("No se actualizó ninguna fila para el usuario '" + username + "'. El token podría haber sido usado en una transacción paralela.");
+            }
+        }
+    }
+
+    private void deactivateUserInSharePoint(Connection conn, String sqlRowUuid, Timestamp bajaTimestamp, String username) throws Exception {
+        if (sqlRowUuid == null || sqlRowUuid.isEmpty()) {
+            throw new Exception("No se puede sincronizar la baja con SharePoint: el SqlRowUUID del usuario '" + username + "' es nulo. La transacción se revertirá.");
+        }
+
+        String listId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, "Voluntarios");
+        if (listId == null) {
+            throw new Exception("No se pudo encontrar la lista 'Voluntarios' en SharePoint. La transacción se revertirá.");
+        }
+
+        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "SqlRowUUID", sqlRowUuid);
+        if (itemId == null) {
+            logger.warn("El voluntario '{}' (UUID: {}) no fue encontrado en SharePoint durante la confirmación de su baja. La baja en la BD local se revertirá.", username, sqlRowUuid);
+            throw new Exception("El voluntario no fue encontrado en SharePoint. La baja ha sido cancelada para mantener la consistencia.");
+        }
+
+        FieldValueSet fieldsToUpdate = new FieldValueSet();
+        String isoDate = bajaTimestamp.toInstant().atZone(ZoneId.of("Europe/Madrid")).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        fieldsToUpdate.getAdditionalData().put("FechaBaja", isoDate);
+
+        SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fieldsToUpdate);
+    }
     
+    private static class UserInfo {
+        final String username, sqlRowUuid;
+        UserInfo(String u, String id) { this.username = u; this.sqlRowUuid = id; }
+    }
+
     private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
-        response.setStatus(status);
-        Map<String, Object> json = new HashMap<>();
-        json.put("success", success);
-        json.put("message", message);
-        mapper.writeValue(response.getWriter(), json);
+        if (!response.isCommitted()) {
+            response.setStatus(status);
+            Map<String, Object> json = new HashMap<>();
+            json.put("success", success);
+            json.put("message", message);
+            mapper.writeValue(response.getWriter(), json);
+        }
     }
 }

@@ -5,6 +5,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.graph.models.FieldValueSet;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -23,40 +28,29 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
+import util.sevilla.bancodealimentos.es.SharePointUtil;
 
-/**
- * Servlet para la gestión administrativa de voluntarios.
- * Corregido para coincidir con los nombres de columna reales de la tabla 'voluntarios'
- * y manejar fechas de baja inválidas (0000-00-00).
- */
 @WebServlet("/admin-voluntarios")
 public class AdminVoluntariosServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
-    
+    private static final long serialVersionUID = 2L;
     private static final Logger logger = LoggerFactory.getLogger(AdminVoluntariosServlet.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
-    /**
-     * DTO para representar al Voluntario.
-     */
     public static class Voluntario {
-        public String usuario;
-        public String nombre;
-        public String apellidos;
-        public String dni;
-        public String email;
-        public String telefono;
-        public String cp;
-        public String fechaNacimiento;
-        public String esAdmin;
-        public String fechaBaja; 
+        public String usuario, nombre, apellidos, dni, email, telefono, cp, fechaNacimiento, esAdmin, fechaBaja, verificado;
     }
 
     private boolean isAdmin(HttpSession session) {
-        if (session == null || session.getAttribute("usuario") == null) return false;
+        if (session == null || session.getAttribute("usuario") == null) {
+            return false;
+        }
         Object isAdminAttr = session.getAttribute("isAdmin");
-        if (isAdminAttr instanceof Boolean) return (Boolean) isAdminAttr;
-        if (isAdminAttr instanceof String) return "S".equals(isAdminAttr);
+        if (isAdminAttr instanceof Boolean) {
+            return (Boolean) isAdminAttr;
+        }
+        if (isAdminAttr instanceof String) {
+            return "S".equalsIgnoreCase((String) isAdminAttr);
+        }
         return false;
     }
 
@@ -67,47 +61,38 @@ public class AdminVoluntariosServlet extends HttpServlet {
         
         HttpSession session = request.getSession(false);
         if (!isAdmin(session)) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
 
         List<Voluntario> voluntarios = new ArrayList<>();
+        String sql = "SELECT Usuario, Nombre, Apellidos, `DNI NIF`, Email, telefono, cp, fechaNacimiento, administrador, fecha_baja, verificado FROM voluntarios ORDER BY Apellidos, Nombre";
         
-        // Ajustado a los nombres reales de la tabla con alias para mantener compatibilidad Java/Frontend
-        String sql = "SELECT Usuario AS usuario, Nombre AS nombre, Apellidos AS apellidos, `DNI NIF` AS dni, " +
-                     "Email AS email, telefono, cp, fechaNacimiento, administrador AS esAdmin, fecha_baja AS fechaBaja " +
-                     "FROM voluntarios ORDER BY Apellidos, Nombre";
-
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
+        try (Connection conn = DatabaseUtil.getConnection(); 
+             PreparedStatement stmt = conn.prepareStatement(sql); 
              ResultSet rs = stmt.executeQuery()) {
             
             while (rs.next()) {
                 Voluntario v = new Voluntario();
-                v.usuario = rs.getString("usuario");
-                v.nombre = rs.getString("nombre");
-                v.apellidos = rs.getString("apellidos");
-                v.dni = rs.getString("dni");
-                v.email = rs.getString("email");
+                v.usuario = rs.getString("Usuario");
+                v.nombre = rs.getString("Nombre");
+                v.apellidos = rs.getString("Apellidos");
+                v.dni = rs.getString("DNI NIF");
+                v.email = rs.getString("Email");
                 v.telefono = rs.getString("telefono");
                 v.cp = rs.getString("cp");
                 v.fechaNacimiento = rs.getString("fechaNacimiento");
-                v.esAdmin = rs.getString("esAdmin");
-                
-                // Normalización de la fecha de baja: 0000-00-00 se trata como null
-                String fb = rs.getString("fechaBaja");
-                if ("0000-00-00".equals(fb)) {
-                    v.fechaBaja = null;
-                } else {
-                    v.fechaBaja = fb;
-                }
-                
+                v.esAdmin = rs.getString("administrador");
+                v.verificado = rs.getString("verificado");
+                String fb = rs.getString("fecha_baja");
+                v.fechaBaja = (fb == null || fb.equals("0000-00-00 00:00:00")) ? null : fb;
                 voluntarios.add(v);
             }
             mapper.writeValue(response.getWriter(), voluntarios);
+
         } catch (SQLException e) {
-            logger.error("Error SQL al listar voluntarios", e);
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            LogUtil.logException(logger, e, "Error de BD al listar voluntarios", (String)session.getAttribute("usuario"));
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos. El error ha sido registrado.");
         }
     }
 
@@ -115,93 +100,146 @@ public class AdminVoluntariosServlet extends HttpServlet {
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        
-        Map<String, Object> jsonResponse = new HashMap<>();
-        HttpSession session = request.getSession(false);
 
+        HttpSession session = request.getSession(false);
         if (!isAdmin(session)) {
-            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-            jsonResponse.put("success", false);
-            jsonResponse.put("message", "Acceso denegado.");
-            mapper.writeValue(response.getWriter(), jsonResponse);
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
-        
+
         String adminUser = (String) session.getAttribute("usuario");
         String action = request.getParameter("action");
+        String voluntarioUsuario = request.getParameter("usuario");
+        String context = String.format("Admin: %s, Action: %s, Voluntario: %s", adminUser, action, voluntarioUsuario);
 
-        if ("save".equals(action)) {
-            actualizarDatosVoluntario(request, jsonResponse, adminUser);
-        } else if ("toggleAdmin".equals(action)) {
-            cambiarEstadoAdmin(request, jsonResponse, adminUser);
-        }
+        Connection conn = null;
+        try {
+            conn = DatabaseUtil.getConnection();
+            conn.setAutoCommit(false);
 
-        mapper.writeValue(response.getWriter(), jsonResponse);
-    }
+            String sqlRowUuid = findSqlRowUuid(conn, voluntarioUsuario);
 
-    private void actualizarDatosVoluntario(HttpServletRequest request, Map<String, Object> jsonResponse, String adminUser) {
-        String usuario = request.getParameter("usuario");
-        String nombre = request.getParameter("nombre");
-        String apellidos = request.getParameter("apellidos");
-        String dni = request.getParameter("dni");
-        String email = request.getParameter("email");
-        String telefono = request.getParameter("telefono");
-        String cp = request.getParameter("cp");
-        String fechaNacimiento = request.getParameter("fechaNacimiento");
-
-        // Ajustado a los nombres reales (Case sensitive y columnas con espacios)
-        String sql = "UPDATE voluntarios SET Nombre=?, Apellidos=?, `DNI NIF`=?, Email=?, telefono=?, cp=?, fechaNacimiento=? WHERE Usuario=?";
-        
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
-            stmt.setString(1, nombre);
-            stmt.setString(2, apellidos);
-            stmt.setString(3, dni);
-            stmt.setString(4, email);
-            stmt.setString(5, telefono);
-            stmt.setString(6, cp);
-            stmt.setString(7, fechaNacimiento);
-            stmt.setString(8, usuario);
-            
-            int rows = stmt.executeUpdate();
-            jsonResponse.put("success", rows > 0);
-            jsonResponse.put("message", rows > 0 ? "Datos actualizados correctamente." : "No se encontró el usuario.");
-            
-            if (rows > 0) {
-                LogUtil.logOperation(conn, "ADMIN_EDIT_VOL", adminUser, "Editado voluntario: " + usuario);
+            switch (action) {
+                case "save":
+                    updateVoluntario(conn, request, voluntarioUsuario);
+                    syncVoluntario(conn, sqlRowUuid, request, voluntarioUsuario);
+                    break;
+                case "toggleAdmin":
+                    toggleAdminStatus(conn, request.getParameter("esAdmin"), voluntarioUsuario);
+                    break;
+                case "toggleBaja":
+                    boolean reactivar = Boolean.parseBoolean(request.getParameter("reactivar"));
+                    toggleBajaStatus(conn, reactivar, voluntarioUsuario);
+                    syncBajaStatus(conn, sqlRowUuid, reactivar, voluntarioUsuario);
+                    break;
+                default:
+                    throw new ServletException("Acción no reconocida: " + action);
             }
-        } catch (SQLException e) {
-            logger.error("Error al actualizar voluntario", e);
-            jsonResponse.put("success", false);
-            jsonResponse.put("message", "Error en base de datos: " + e.getMessage());
+
+            conn.commit();
+            LogUtil.logOperation(conn, "ADMIN_ACTION_SUCCESS", adminUser, context);
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Operación completada con éxito.");
+
+        } catch (Exception e) {
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { LogUtil.logException(logger, ex, "CRITICAL: Rollback fallido en acción de admin", context); }
+            LogUtil.logException(logger, e, "Error en acción de admin", context);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error interno al procesar la operación. El problema ha sido registrado.");
+        } finally {
+            if (conn != null) try { conn.close(); } catch (SQLException e) { LogUtil.logException(logger, e, "Error cerrando conexión en AdminVoluntariosServlet (POST)", adminUser); }
         }
     }
 
-    private void cambiarEstadoAdmin(HttpServletRequest request, Map<String, Object> jsonResponse, String adminUser) {
-        String usuario = request.getParameter("usuario");
-        String esAdmin = request.getParameter("esAdmin");
+    private void updateVoluntario(Connection conn, HttpServletRequest request, String usuario) throws SQLException {
+        String sql = "UPDATE voluntarios SET Nombre=?, Apellidos=?, `DNI NIF`=?, Email=?, telefono=?, cp=?, fechaNacimiento=?, notificar='S' WHERE Usuario=?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, request.getParameter("nombre"));
+            stmt.setString(2, request.getParameter("apellidos"));
+            stmt.setString(3, request.getParameter("dni"));
+            stmt.setString(4, request.getParameter("email"));
+            stmt.setString(5, request.getParameter("telefono"));
+            stmt.setString(6, request.getParameter("cp"));
+            stmt.setString(7, request.getParameter("fechaNacimiento"));
+            stmt.setString(8, usuario);
+            stmt.executeUpdate();
+        }
+    }
 
-        // Ajustado a nombres reales: administrador y Usuario
-        String sql = "UPDATE voluntarios SET administrador=? WHERE Usuario=?";
+    private void syncVoluntario(Connection conn, String sqlRowUuid, HttpServletRequest request, String usuario) throws Exception {
+        if (sqlRowUuid == null) throw new Exception("No se puede sincronizar: SqlRowUUID es nulo para el usuario " + usuario);
         
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            
+        FieldValueSet fields = new FieldValueSet();
+        fields.getAdditionalData().put("field_1", request.getParameter("nombre"));
+        fields.getAdditionalData().put("field_2", request.getParameter("apellidos"));
+        fields.getAdditionalData().put("field_3", request.getParameter("dni"));
+        fields.getAdditionalData().put("field_6", request.getParameter("email"));
+        fields.getAdditionalData().put("field_7", request.getParameter("telefono"));
+        fields.getAdditionalData().put("field_9", request.getParameter("cp"));
+        fields.getAdditionalData().put("field_8", request.getParameter("fechaNacimiento"));
+
+        updateSharePointItem(conn, sqlRowUuid, fields, usuario);
+    }
+
+    private void toggleAdminStatus(Connection conn, String esAdmin, String usuario) throws SQLException {
+        String sql = "UPDATE voluntarios SET administrador=?, notificar='S' WHERE Usuario=?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, esAdmin);
             stmt.setString(2, usuario);
-            
-            int rows = stmt.executeUpdate();
-            jsonResponse.put("success", rows > 0);
-            jsonResponse.put("message", "Permisos actualizados.");
-            
-            if (rows > 0) {
-                LogUtil.logOperation(conn, "ADMIN_TOGGLE_ADMIN", adminUser, "Cambiado rol admin a " + esAdmin + " para: " + usuario);
+            stmt.executeUpdate();
+        }
+    }
+
+    private void toggleBajaStatus(Connection conn, boolean reactivar, String usuario) throws SQLException {
+        String sql = reactivar 
+            ? "UPDATE voluntarios SET fecha_baja = NULL, notificar='S' WHERE Usuario=?"
+            : "UPDATE voluntarios SET fecha_baja = ?, notificar='S' WHERE Usuario=?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            if (!reactivar) {
+                stmt.setTimestamp(1, Timestamp.from(Instant.now()));
+                stmt.setString(2, usuario);
+            } else {
+                stmt.setString(1, usuario);
             }
-        } catch (SQLException e) {
-            logger.error("Error al cambiar rol admin", e);
-            jsonResponse.put("success", false);
-            jsonResponse.put("message", "Error en base de datos.");
+            stmt.executeUpdate();
+        }
+    }
+
+    private void syncBajaStatus(Connection conn, String sqlRowUuid, boolean reactivar, String usuario) throws Exception {
+        if (sqlRowUuid == null) throw new Exception("No se puede sincronizar: SqlRowUUID es nulo para el usuario " + usuario);
+
+        FieldValueSet fields = new FieldValueSet();
+        String isoDate = reactivar ? null : Instant.now().atZone(ZoneId.of("Europe/Madrid")).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        fields.getAdditionalData().put("FechaBaja", isoDate);
+
+        updateSharePointItem(conn, sqlRowUuid, fields, usuario);
+    }
+
+    private String findSqlRowUuid(Connection conn, String usuario) throws SQLException {
+        String sql = "SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, usuario);
+            try (ResultSet rs = stmt.executeQuery()) {
+                return rs.next() ? rs.getString("SqlRowUUID") : null;
+            }
+        }
+    }
+
+    private void updateSharePointItem(Connection conn, String sqlRowUuid, FieldValueSet fields, String usuario) throws Exception {
+        String listId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, "Voluntarios");
+        if (listId == null) throw new Exception("La lista 'Voluntarios' de SharePoint no fue encontrada.");
+
+        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "SqlRowUUID", sqlRowUuid);
+        if (itemId == null) throw new Exception("El voluntario '" + usuario + "' no fue encontrado en SharePoint.");
+
+        SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
+    }
+
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(status);
+            Map<String, Object> res = new HashMap<>();
+            res.put("success", success);
+            res.put("message", message);
+            mapper.writeValue(response.getWriter(), res);
         }
     }
 }

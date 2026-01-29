@@ -40,16 +40,16 @@
     <!-- Contenido -->
     <main class="flex-grow container mx-auto px-4 py-8">
         
-        <!-- Bloque de Error de Sesión (Oculto por defecto) -->
+        <!-- Bloque de Error (Oculto por defecto) -->
         <div id="session-error-block" class="hidden bg-red-100 border-l-4 border-red-500 p-6 rounded-lg mb-8 shadow-md">
             <div class="flex items-center">
                 <svg class="h-6 w-6 text-red-600 mr-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 <div>
-                    <h2 class="font-bold text-red-800">Error de Autenticación</h2>
-                    <p class="text-red-700 text-sm">No se ha podido validar tu sesión de usuario. Por seguridad, debes volver a entrar.</p>
+                    <h2 class="font-bold text-red-800">Error de Carga</h2>
+                    <p class="text-red-700 text-sm">No se pudieron cargar los datos necesarios. Por favor, recarga la página o contacta con soporte.</p>
                 </div>
             </div>
-            <button onclick="window.location.href='login.html'" class="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg font-bold text-sm">Ir al Login ahora</button>
+            <button onclick="window.location.href='login.html'" class="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg font-bold text-sm">Ir al Login</button>
         </div>
 
         <div id="main-content-block" class="bg-white rounded-xl shadow-lg p-8 mb-8 border-t-4 border-orange-500 opacity-50 pointer-events-none">
@@ -82,7 +82,7 @@
         </div>
     </main>
     
-    <!-- Modal del Mapa y Toasts omitidos para brevedad, pero mantenidos en el JS -->
+    <!-- Modal del Mapa y Toasts -->
     <div id="map-modal" class="modal-overlay hidden z-50 p-4">
         <div class="modal-content bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
             <div class="flex justify-between items-center p-6 border-b border-gray-50">
@@ -146,31 +146,29 @@
         }
 
         async function initializePage() {
-            console.log("Comprobando sesión en USUARIO_ACTUAL...");
+            const mainContent = document.getElementById('main-content-block');
             try {
-                const resp = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
-                
-                if (!resp.ok) {
-                    console.error("Respuesta no válida del servidor. Código:", resp.status);
-                    document.getElementById('session-error-block').classList.remove('hidden');
-                    document.getElementById('user-display').textContent = "Sesión no válida";
-                    return;
-                }
+                const [sessionResponse, campanaResponse, tiendasResponse] = await Promise.all([
+                    fetch(AppConfig.getUrl('USUARIO_ACTUAL')),
+                    fetch(AppConfig.getUrl('CAMPANA_ACTIVA')),
+                    fetch(AppConfig.getUrl('TODAS_LAS_TIENDAS'))
+                ]);
 
-                sessionUser = await resp.json();
-                console.log("Sesión activa:", sessionUser.usuario);
+                if (!sessionResponse.ok) throw new Error(`Error de sesión: ${sessionResponse.statusText}`);
+                if (!campanaResponse.ok) throw new Error(`No se pudo cargar la campaña activa.`);
+                if (!tiendasResponse.ok) throw new Error(`No se pudieron cargar las tiendas.`);
 
-                // Activar UI
-                document.getElementById('main-content-block').classList.remove('opacity-50', 'pointer-events-none');
-                document.getElementById('user-display').textContent = `Conectado: ${sessionUser.usuario}`;
+                sessionUser = await sessionResponse.json();
+                const campana = await campanaResponse.json();
+                tiendasCache = await tiendasResponse.json();
                 
                 const params = new URLSearchParams(window.location.search);
                 const urlUser = params.get('usuario');
                 targetUsuario = (urlUser && sessionUser.isAdmin) ? urlUser : sessionUser.usuario;
-                
+                document.getElementById('user-display').textContent = `Conectado: ${sessionUser.usuario}`;
                 document.getElementById('display-usuario-fuerte').textContent = targetUsuario;
                 document.getElementById('targetUsuario').value = targetUsuario;
-
+                
                 const linkVolver = document.getElementById('link-volver');
                 if (sessionUser.isAdmin) {
                     linkVolver.href = "admin-voluntarios.html";
@@ -180,31 +178,23 @@
                     linkVolver.textContent = "Cerrar Sesión";
                 }
 
-                await loadCampanaActiva();
-            } catch (e) {
-                console.error("Error de conexión:", e);
-                document.getElementById('session-error-block').classList.remove('hidden');
-            }
-        }
-
-        async function loadCampanaActiva() {
-            try {
-                const response = await fetch(AppConfig.getUrl('CAMPANA_ACTIVA'));
-                const campana = await response.json();
                 document.getElementById('campanaId').value = campana.campana;
                 document.getElementById('campana-nombre').textContent = campana.denominacion;
                 document.getElementById('campana-fechas').textContent = `Periodo: ${campana.fecha1} — ${campana.fecha2}`;
                 document.getElementById('campana-info').classList.remove('hidden');
-                await loadTodasLasTiendas();
-                await loadTurnosUsuario(campana.campana);
-            } catch (error) { console.error("Error cargando campaña:", error); }
-        }
 
-        async function loadTodasLasTiendas() {
-            try {
-                const response = await fetch(AppConfig.getUrl('TODAS_LAS_TIENDAS')); 
-                if (response.ok) tiendasCache = await response.json();
-            } catch (e) {}
+                await loadTurnosUsuario(campana.campana);
+                
+                mainContent.classList.remove('opacity-50', 'pointer-events-none');
+                
+            } catch (error) {
+                console.error("Fallo en la inicialización de la página:", error);
+                const errorBlock = document.getElementById('session-error-block');
+                errorBlock.querySelector('h2').textContent = "Error al Cargar la Página";
+                errorBlock.querySelector('p').textContent = error.message || "No se pudieron cargar los datos necesarios. Por favor, recarga la página.";
+                errorBlock.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+            }
         }
 
         async function loadTurnosUsuario(campanaId) {
@@ -220,17 +210,57 @@
                         document.getElementById(`acompanantes_${i}`).value = data['Acompanantes' + i] || 0;
                     }
                 }
-            } catch (error) {}
+            } catch (error) {
+                 console.error("Error cargando los turnos del usuario:", error);
+            }
         }
 
         window.openMapModal = function(turno) {
             currentTurnoSelection = turno;
             document.getElementById('map-modal').classList.remove('hidden');
-            setTimeout(() => {
+
+            setTimeout(async () => {
+                let center = [37.3891, -5.9845]; // Default: Seville center
+                let zoom = 12; // Default: Wide zoom
+                let targetStore = null;
+
+                // 1. Check for a store already selected in the CURRENT turn being edited
+                const currentTiendaId = document.getElementById(`tienda_${turno}`).value;
+                if (currentTiendaId) {
+                    targetStore = tiendasCache.find(t => t.id == currentTiendaId);
+                }
+
+                // 2. If no store is selected, fetch volunteer details to get their reference store
+                if (!targetStore) {
+                    try {
+                        const url = `${AppConfig.getUrl('VOLUNTARIO_DETALLES')}?usuario=${encodeURIComponent(targetUsuario)}`;
+                        const response = await fetch(url);
+                        if (response.ok) {
+                            const voluntarioDetails = await response.json();
+                            if (voluntarioDetails && voluntarioDetails.tiendaReferencia) {
+                                targetStore = tiendasCache.find(t => t.id == voluntarioDetails.tiendaReferencia);
+                            }
+                        } else {
+                            console.error(`No se pudieron obtener los detalles para el voluntario: ${targetUsuario}`);
+                        }
+                    } catch (error) {
+                        console.error('Error al obtener los detalles del voluntario:', error);
+                    }
+                }
+                
+                // 3. If a target store was found (either from current turn or reference), update center and zoom
+                if (targetStore && targetStore.lat && targetStore.lon) {
+                    center = [targetStore.lat, targetStore.lon];
+                    zoom = 18; // Zoom 18 provides a very close view (approx. 1km side)
+                }
+
                 if (!mapInstance) {
-                    mapInstance = L.map('map').setView([37.3891, -5.9845], 12);
+                    mapInstance = L.map('map').setView(center, zoom);
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);
-                } else { mapInstance.invalidateSize(); }
+                } else {
+                    mapInstance.setView(center, zoom);
+                    mapInstance.invalidateSize();
+                }
                 renderMarkers();
             }, 200);
         }
@@ -239,6 +269,10 @@
 
         function renderMarkers() {
             mapInstance.eachLayer((layer) => { if (layer instanceof L.Marker) mapInstance.removeLayer(layer); });
+            if (!tiendasCache || tiendasCache.length === 0) {
+                console.error("No hay tiendas en la caché para mostrar en el mapa.");
+                return;
+            }
             tiendasCache.forEach(tienda => {
                 if (tienda.lat && tienda.lon) {
                     const marker = L.marker([tienda.lat, tienda.lon]).addTo(mapInstance);

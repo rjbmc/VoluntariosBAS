@@ -3,6 +3,7 @@ package util.sevilla.bancodealimentos.es;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException; // Importar SQLException
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -18,11 +19,12 @@ public class RepairTiendasData {
 
     /**
      * Ejecuta el proceso de sincronización total y reparación en SharePoint.
+     * @throws SQLException Si ocurre un error de base de datos al preparar la consulta.
+     * @throws Exception Si ocurre otro error crítico durante la configuración.
      */
-    public static void repairSharePointUUIDs() {
+    public static void repairSharePointUUIDs() throws SQLException, Exception {
         logger.info("Iniciando proceso de sincronización total y reparación en SharePoint...");
 
-        // Usamos SELECT * para asegurarnos de traer todos los campos nuevos (Supervisor, Marca, etc.)
         String sql = "SELECT * FROM tiendas";
         
         int procesados = 0;
@@ -45,13 +47,11 @@ public class RepairTiendasData {
                     storeData.put("poblacion", rs.getString("Poblacion"));
                     storeData.put("cadena", rs.getString("Cadena"));
                     storeData.put("disponible", rs.getString("disponible"));
-                    storeData.put("prioridad", rs.getString("prioridad")); // Ahora es String 0001
+                    storeData.put("prioridad", rs.getString("prioridad"));
                     storeData.put("huecosTurno1", rs.getInt("HuecosTurno1"));
                     storeData.put("huecosTurno2", rs.getInt("HuecosTurno2"));
                     storeData.put("huecosTurno3", rs.getInt("HuecosTurno3"));
                     storeData.put("huecosTurno4", rs.getInt("HuecosTurno4"));
-                    
-                    // Añadimos los campos nuevos para que syncTienda los procese
                     storeData.put("supervisor", rs.getString("Supervisor"));
                     storeData.put("coordinador", rs.getString("Coordinador"));
                     storeData.put("marca", rs.getString("Marca"));
@@ -59,7 +59,6 @@ public class RepairTiendasData {
                     storeData.put("zona", rs.getString("Zona"));
                     storeData.put("modalidad", rs.getString("Modalidad"));
 
-                    // ¡CORREGIDO! Pasar la conexión 'conn' como primer argumento
                     SharePointUtil.syncTienda(conn, storeData);
                     
                     procesados++;
@@ -68,15 +67,17 @@ public class RepairTiendasData {
                     }
 
                 } catch (Exception e) {
-                    logger.error("Error al procesar la tienda con código {}: {}", rs.getString("codigo"), e.getMessage());
+                    // Este catch se mantiene para que un error en una tienda no detenga todo el proceso
+                    logger.error("Error al procesar la tienda con código {}: {}. Se continúa con la siguiente.", rs.getString("codigo"), e.getMessage());
                     errores++;
                 }
             }
 
             logger.info("Proceso de sincronización finalizado. Resumen -> Sincronizadas: {}. Errores: {}.", procesados, errores);
 
-        } catch (Exception e) {
-            logger.error("Error crítico durante la sincronización masiva de tiendas: {}", e.getMessage(), e);
-        }
+        } 
+        // El try-with-resources se encarga de cerrar la conexión.
+        // Cualquier SQLException en el bloque try-with-resources (getConnection, prepareStatement, etc.) 
+        // ahora se propagará hacia arriba, al servlet, que es lo que queremos.
     }
 }

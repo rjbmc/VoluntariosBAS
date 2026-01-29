@@ -24,18 +24,10 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.PasswordUtils;
 
-/**
- * Servlet que finaliza el proceso de restablecimiento de contraseña.
- * Verifica el token y actualiza la contraseña del usuario.
- */
 @WebServlet("/restablecer-clave")
 public class RestablecerClaveServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
-    
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(RestablecerClaveServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
@@ -47,37 +39,35 @@ public class RestablecerClaveServlet extends HttpServlet {
         String nuevaClave = request.getParameter("nuevaClave");
 
         if (token == null || token.trim().isEmpty() || nuevaClave == null || nuevaClave.trim().isEmpty()) {
-            logger.warn("Intento de restablecer clave sin token o clave. IP: {}", request.getRemoteAddr());
             sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "Token o contraseña no proporcionados.");
             return;
         }
 
-        try (Connection conn = DatabaseUtil.getConnection()) {
-            String usuario = null;
+        Connection conn = null;
+        String usuario = "Desconocido (Token: " + token + ")";
+
+        try {
+            conn = DatabaseUtil.getConnection();
             Timestamp expiryTime = null;
 
-            // 1. Buscar el usuario por el token
-            String sqlFindUser = "SELECT Usuario, reset_token_expiry FROM voluntarios WHERE reset_token = ?";
+            String sqlFindUser = "SELECT Usuario, fecha_expiracion_token FROM voluntarios WHERE token_recuperacion_clave = ?";
             try (PreparedStatement stmtFind = conn.prepareStatement(sqlFindUser)) {
                 stmtFind.setString(1, token);
                 try (ResultSet rs = stmtFind.executeQuery()) {
                     if (rs.next()) {
                         usuario = rs.getString("Usuario");
-                        expiryTime = rs.getTimestamp("reset_token_expiry");
+                        expiryTime = rs.getTimestamp("fecha_expiracion_token");
                     }
                 }
             }
 
-            // 2. Validar el token y su caducidad
             if (usuario == null || expiryTime == null || expiryTime.before(new Timestamp(System.currentTimeMillis()))) {
-                logger.warn("Intento de restablecimiento con token inválido o expirado: {}", token);
                 sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "El enlace de recuperación no es válido o ha caducado. Por favor, solicita uno nuevo.");
                 return;
             }
 
-            // 3. Si todo es correcto, actualizar la contraseña
             String nuevaClaveHasheada = PasswordUtils.hashPassword(nuevaClave);
-            String sqlUpdate = "UPDATE voluntarios SET Clave = ?, reset_token = NULL, reset_token_expiry = NULL, notificar = 'S' WHERE Usuario = ?";
+            String sqlUpdate = "UPDATE voluntarios SET Clave = ?, token_recuperacion_clave = NULL, fecha_expiracion_token = NULL, notificar = 'S' WHERE Usuario = ?";
 
             try (PreparedStatement stmtUpdate = conn.prepareStatement(sqlUpdate)) {
                 stmtUpdate.setString(1, nuevaClaveHasheada);
@@ -86,25 +76,33 @@ public class RestablecerClaveServlet extends HttpServlet {
                 
                 if (rows > 0) {
                     LogUtil.logOperation(conn, "RECUPERACION_OK", usuario, "Contraseña restablecida correctamente via token.");
-                    logger.info("Contraseña restablecida exitosamente para el usuario: {}", usuario);
                     sendJsonResponse(response, HttpServletResponse.SC_OK, true, "¡Contraseña actualizada con éxito! Ya puedes iniciar sesión.");
                 } else {
-                    logger.error("No se pudo actualizar la contraseña para el usuario {} a pesar de tener token válido.", usuario);
-                    sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error al actualizar la contraseña.");
+                    // Este caso es muy improbable si el token era válido, pero se registra por si acaso.
+                    LogUtil.logException(logger, new Exception("No se pudo actualizar la contraseña a pesar de tener un token válido."), "Error al actualizar contraseña con token válido", usuario);
+                    sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error al actualizar la contraseña. El error ha sido registrado.");
                 }
             }
 
         } catch (SQLException e) {
-            logger.error("Error SQL al restablecer la contraseña", e);
-            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos al actualizar la contraseña.");
+            LogUtil.logException(logger, e, "Error SQL al restablecer la contraseña", usuario);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos. El problema ha sido registrado.");
+        } finally {
+            if (conn != null) {
+                try { conn.close(); } catch (SQLException e) {
+                    LogUtil.logException(logger, e, "Error al cerrar conexión en RestablecerClaveServlet");
+                }
+            }
         }
     }
 
     private void sendJsonResponse(HttpServletResponse response, int statusCode, boolean success, String message) throws IOException {
-        response.setStatus(statusCode);
-        Map<String, Object> jsonResponse = new HashMap<>();
-        jsonResponse.put("success", success);
-        jsonResponse.put("message", message);
-        mapper.writeValue(response.getWriter(), jsonResponse);
+        if (!response.isCommitted()) {
+            response.setStatus(statusCode);
+            Map<String, Object> jsonResponse = new HashMap<>();
+            jsonResponse.put("success", success);
+            jsonResponse.put("message", message);
+            mapper.writeValue(response.getWriter(), jsonResponse);
+        }
     }
 }

@@ -21,21 +21,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
-/**
- * Servlet que devuelve una lista completa de todas las tiendas activas
- * para poder consultar sus nombres y coordenadas.
- */
 @WebServlet("/todas-las-tiendas")
 public class TodasLasTiendasServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
-    
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(TodasLasTiendasServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper mapper = new ObjectMapper();
 
-    // DTO simple para transferir datos de tienda
     public static class TiendaDTO {
         public int id;
         public String nombre;
@@ -61,14 +52,11 @@ public class TodasLasTiendasServlet extends HttpServlet {
                 t.id = rs.getInt("id");
                 t.nombre = rs.getString("nombre");
                 t.direccion = rs.getString("direccion");
-                // Usamos BigDecimal para preservar la precisión de las coordenadas
                 t.lat = rs.getBigDecimal("lat");
                 t.lon = rs.getBigDecimal("lon");
-                
                 tiendas.add(t);
             }
             
-            // 3. Serialización automática con Jackson
             mapper.writeValue(response.getWriter(), tiendas);
 
         } catch (SQLException e) {

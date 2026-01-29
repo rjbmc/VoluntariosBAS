@@ -1,11 +1,12 @@
 package util.sevilla.bancodealimentos.es;
 
-import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.sql.Connection;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import com.azure.identity.ClientSecretCredential;
@@ -50,6 +51,43 @@ public class SharePointUtil {
         return null;
     }
 
+    public static ListCollectionResponse getAllLists(String targetSiteId) throws Exception {
+        initializeGraphClient();
+        return graphClient.sites().bySiteId(targetSiteId).lists().get();
+    }
+
+    public static ColumnDefinitionCollectionResponse getListColumns(String targetSiteId, String listId) throws Exception {
+        initializeGraphClient();
+        return graphClient.sites().bySiteId(targetSiteId).lists().byListId(listId).columns().get();
+    }
+
+    public static ListItemCollectionResponse getListItems(String targetSiteId, String listId) throws Exception {
+        initializeGraphClient();
+        
+        ListItemCollectionResponse page = graphClient.sites().bySiteId(targetSiteId).lists().byListId(listId).items().get(requestConfiguration -> {
+            requestConfiguration.queryParameters.expand = new String[]{"fields"};
+        });
+
+        if (page == null) {
+            return new ListItemCollectionResponse();
+        }
+
+        final List<ListItem> allItems = new LinkedList<>();
+        allItems.addAll(page.getValue());
+
+        while (page.getOdataNextLink() != null) {
+            page = graphClient.sites().bySiteId(targetSiteId).lists().byListId(listId).items().withUrl(page.getOdataNextLink()).get();
+            if (page != null) {
+                allItems.addAll(page.getValue());
+            }
+        }
+        
+        final ListItemCollectionResponse allItemsResponse = new ListItemCollectionResponse();
+        allItemsResponse.setValue(allItems);
+        
+        return allItemsResponse;
+    }
+
     public static ListItem createListItem(String targetSiteId, String listId, FieldValueSet fields) throws Exception {
         initializeGraphClient();
         ListItem newItem = new ListItem();
@@ -65,6 +103,16 @@ public class SharePointUtil {
     public static void deleteListItem(String targetSiteId, String listId, String itemId) throws Exception {
         initializeGraphClient();
         graphClient.sites().bySiteId(targetSiteId).lists().byListId(listId).items().byListItemId(itemId).delete();
+    }
+
+    public static void deleteAllListItems(String targetSiteId, String listId) throws Exception {
+        initializeGraphClient();
+        ListItemCollectionResponse items = getListItems(targetSiteId, listId);
+        if (items != null && items.getValue() != null) {
+            for (ListItem item : items.getValue()) {
+                deleteListItem(targetSiteId, listId, item.getId());
+            }
+        }
     }
 
     public static String findItemIdByFieldValue(Connection conn, String siteId, String listId, String fieldName, String fieldValue) throws Exception {
@@ -93,6 +141,42 @@ public class SharePointUtil {
         }
         return null;
     }
+    
+    public static Map<String, Object> findItemByFieldValue(Connection conn, String siteId, String listName, String fieldName, String fieldValue) throws Exception {
+        initializeGraphClient();
+        String listId = getListId(siteId, listName);
+        if (listId == null) {
+            LogUtil.logOperation(conn, "SP_ERROR", "SYSTEM", "findItemByFieldValue: No se pudo encontrar el listId para la lista: " + listName);
+            throw new IOException("La lista de SharePoint '" + listName + "' no fue encontrada.");
+        }
+
+        if (fieldValue == null || fieldValue.isEmpty()) {
+            return null;
+        }
+
+        String escapedValue = fieldValue.replace("'", "''");
+        String filter = "fields/" + fieldName + " eq '" + escapedValue + "'";
+
+        try {
+            ListItemCollectionResponse response = graphClient.sites().bySiteId(siteId).lists().byListId(listId).items().get(requestConfiguration -> {
+                requestConfiguration.queryParameters.filter = filter;
+                requestConfiguration.queryParameters.expand = new String[]{"fields"};
+                requestConfiguration.queryParameters.top = 1;
+                requestConfiguration.headers.add("Prefer", "HonorNonIndexedQueriesWarningMayFailRandomly");
+            });
+
+            if (response != null && response.getValue() != null && !response.getValue().isEmpty()) {
+                LogUtil.logOperation(conn, "SP_QUERY_SUCCESS", "SYSTEM", "Item encontrado en lista '" + listName + "' con filtro: " + filter);
+                return response.getValue().get(0).getFields().getAdditionalData();
+            } else {
+                 LogUtil.logOperation(conn, "SP_QUERY_NOT_FOUND", "SYSTEM", "Item no encontrado en lista '" + listName + "' con filtro: " + filter);
+                return null;
+            }
+        } catch (Exception e) {
+            LogUtil.logOperation(conn, "SP_ERROR", "SYSTEM", "Error en findItemByFieldValue con filtro '" + filter + "': " + e.getMessage());
+            throw e;
+        }
+    }
 
     public static Map<String, Object> getTiendaFromSP(Connection conn, String codigoTienda) throws Exception {
         LogUtil.logOperation(conn, "SP_DEBUG", "SYSTEM", "getTiendaFromSP: Iniciando búsqueda para código: " + codigoTienda);
@@ -105,7 +189,6 @@ public class SharePointUtil {
         }
         LogUtil.logOperation(conn, "SP_DEBUG", "SYSTEM", "getTiendaFromSP: listId obtenido: " + listId);
 
-        // ** LA CORRECCIÓN DEFINITIVA **: El campo 'codigo' es numérico y NO debe llevar comillas.
         String filter = "fields/" + FIELD_CODIGO_TIENDA + " eq " + codigoTienda;
         LogUtil.logOperation(conn, "SP_DEBUG", "SYSTEM", "getTiendaFromSP: Buscando tienda con filtro: " + filter);
 
@@ -122,6 +205,28 @@ public class SharePointUtil {
         } else {
             LogUtil.logOperation(conn, "SP_DEBUG", "SYSTEM", "getTiendaFromSP: No se encontró ninguna tienda para código " + codigoTienda + " con el filtro " + filter + ".");
             return null;
+        }
+    }
+
+    public static void syncTienda(Connection conn, Map<String, Object> storeData) throws Exception {
+        initializeGraphClient();
+        String listId = getListId(SITE_ID, LIST_NAME_TIENDAS);
+        if (listId == null) {
+            throw new IOException("La lista de SharePoint '" + LIST_NAME_TIENDAS + "' no fue encontrada.");
+        }
+
+        String uuid = (String) storeData.get("SqlRowUUID");
+        String itemId = findItemIdByFieldValue(conn, SITE_ID, listId, "SqlRowUUID", uuid);
+
+        FieldValueSet fields = new FieldValueSet();
+        fields.setAdditionalData(storeData);
+
+        if (itemId != null) {
+            // Update
+            updateListItem(SITE_ID, listId, itemId, fields);
+        } else {
+            // Create
+            createListItem(SITE_ID, listId, fields);
         }
     }
 

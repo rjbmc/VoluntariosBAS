@@ -35,12 +35,13 @@ public class LoginServlet extends HttpServlet {
 
         String usuario = request.getParameter("usuario") != null ? request.getParameter("usuario").trim() : "";
         String clave = request.getParameter("clave") != null ? request.getParameter("clave") : "";
+        String remoteAddr = request.getRemoteAddr();
+        String context = String.format("Usuario: %s, IP: %s", usuario, remoteAddr);
 
-        Map<String, Object> jsonResponse = new HashMap<>();
-
-        try (Connection conn = DatabaseUtil.getConnection()) {
-            // Consulta incluyendo validación de baja
-            String sql = "SELECT Email, Clave, administrador, verificado, fecha_baja FROM voluntarios WHERE Usuario = ?";
+        Connection conn = null;
+        try {
+            conn = DatabaseUtil.getConnection();
+            String sql = "SELECT Nombre, Apellidos, Email, Clave, administrador, verificado, fecha_baja FROM voluntarios WHERE Usuario = ?";
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setString(1, usuario);
                 try (ResultSet rs = ps.executeQuery()) {
@@ -48,49 +49,60 @@ public class LoginServlet extends HttpServlet {
                         String storedHash = rs.getString("Clave");
                         String verificado = rs.getString("verificado");
                         String esAdminStr = rs.getString("administrador");
-                        String email = rs.getString("Email");
-                        
-                        // Validar si está de baja (tratando 0000-00-00 como activo)
                         String fb = rs.getString("fecha_baja");
-                        boolean isBaja = (fb != null && !fb.equals("0000-00-00"));
 
-                        if (isBaja) {
-                            jsonResponse.put("success", false);
-                            jsonResponse.put("message", "Esta cuenta ha sido dada de baja.");
+                        if (fb != null && !fb.equals("0000-00-00")) {
+                            LogUtil.logOperation(conn, "LOGIN_FAIL", usuario, "Intento de login en cuenta dada de baja. " + context);
+                            sendJsonResponse(response, 403, false, "Esta cuenta ha sido dada de baja.");
                         } else if (PasswordUtils.checkPassword(clave, storedHash)) {
                             if ("S".equals(verificado)) {
-                                // CREACIÓN DE SESIÓN: Aquí es donde reside la "magia" para no usar la URL
                                 HttpSession session = request.getSession(true);
                                 session.setAttribute("usuario", usuario);
-                                session.setAttribute("email", email);
+                                session.setAttribute("email", rs.getString("Email"));
                                 session.setAttribute("isAdmin", "S".equals(esAdminStr));
-                                session.setMaxInactiveInterval(60 * 60); // 1 hora de sesión
+                                session.setAttribute("nombreCompleto", (rs.getString("Nombre") + " " + rs.getString("Apellidos")).trim());
+                                session.setMaxInactiveInterval(60 * 60); // 1 hora
 
-                                jsonResponse.put("success", true);
-                                jsonResponse.put("isAdmin", "S".equals(esAdminStr));
-                                logger.info("Login exitoso para usuario: {}", usuario);
-                                LogUtil.logOperation(conn, "LOGIN", usuario, "Acceso correcto");
+                                LogUtil.logOperation(conn, "LOGIN_SUCCESS", usuario, "Login correcto. " + context);
+                                Map<String, Object> successData = new HashMap<>();
+                                successData.put("isAdmin", "S".equals(esAdminStr));
+                                sendJsonResponse(response, 200, true, "Login correcto.", successData);
                             } else {
-                                jsonResponse.put("success", false);
-                                jsonResponse.put("message", "Debes verificar tu cuenta por correo electrónico.");
+                                LogUtil.logOperation(conn, "LOGIN_FAIL", usuario, "Intento de login en cuenta no verificada. " + context);
+                                sendJsonResponse(response, 401, false, "Debes verificar tu cuenta por correo electrónico antes de entrar.");
                             }
                         } else {
-                            jsonResponse.put("success", false);
-                            jsonResponse.put("message", "Usuario o contraseña incorrectos.");
+                            LogUtil.logOperation(conn, "LOGIN_FAIL", usuario, "Contraseña incorrecta. " + context);
+                            sendJsonResponse(response, 401, false, "Usuario o contraseña incorrectos.");
                         }
                     } else {
-                        jsonResponse.put("success", false);
-                        jsonResponse.put("message", "Usuario o contraseña incorrectos.");
+                        LogUtil.logOperation(conn, "LOGIN_FAIL", usuario, "Usuario no encontrado. " + context);
+                        sendJsonResponse(response, 401, false, "Usuario o contraseña incorrectos.");
                     }
                 }
             }
-        } catch (SQLException e) {
-            logger.error("Error en login", e);
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.put("success", false);
-            jsonResponse.put("message", "Error de base de datos.");
+        } catch (Exception e) {
+            LogUtil.logException(logger, e, "Error inesperado durante el login", context);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error interno del servidor. El problema ha sido registrado.");
+        } finally {
+             if (conn != null) try { conn.close(); } catch (SQLException e) { LogUtil.logException(logger, e, "Error cerrando conexión en LoginServlet", context); }
         }
+    }
 
-        objectMapper.writeValue(response.getWriter(), jsonResponse);
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
+        sendJsonResponse(response, status, success, message, null);
+    }
+    
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message, Map<String, Object> data) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(status);
+            Map<String, Object> jsonResponse = new HashMap<>();
+            jsonResponse.put("success", success);
+            jsonResponse.put("message", message);
+            if (data != null) {
+                jsonResponse.putAll(data);
+            }
+            objectMapper.writeValue(response.getWriter(), jsonResponse);
+        }
     }
 }

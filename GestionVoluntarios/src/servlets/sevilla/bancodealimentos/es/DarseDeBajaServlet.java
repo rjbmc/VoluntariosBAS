@@ -1,6 +1,7 @@
 package servlets.sevilla.bancodealimentos.es;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -19,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.mail.Authenticator;
 import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
 import jakarta.mail.PasswordAuthentication;
 import jakarta.mail.Session;
 import jakarta.mail.Transport;
@@ -32,15 +34,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
+import util.sevilla.bancodealimentos.es.LogUtil;
 
 @WebServlet("/darse-de-baja")
 public class DarseDeBajaServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L;
-    
-    // 1. Logger SLF4J
+    private static final long serialVersionUID = 3L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(DarseDeBajaServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
@@ -49,109 +48,93 @@ public class DarseDeBajaServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         HttpSession session = request.getSession(false);
-
-        if (session == null || session.getAttribute("usuario") == null) {
-            logger.warn("Intento de baja sin sesión activa. IP: {}", request.getRemoteAddr());
-            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "No tienes permiso para realizar esta acción.");
+        if (session == null || session.getAttribute("usuario") == null || session.getAttribute("email") == null) {
+            sendJsonResponse(response, HttpServletResponse.SC_UNAUTHORIZED, false, "Acceso no autorizado.");
             return;
         }
 
         String usuario = (String) session.getAttribute("usuario");
         String email = (String) session.getAttribute("email");
+        String context = "Usuario: " + usuario;
 
-        if (email == null || email.isEmpty()) {
-             logger.error("Usuario {} intentó darse de baja pero no tiene email en sesión.", usuario);
-             sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "No se pudo encontrar el email del usuario en la sesión.");
-             return;
-        }
-
-        logger.info("Iniciando proceso de solicitud de baja para el usuario: {}", usuario);
-
+        Connection conn = null;
         try {
-            String tokenBaja = UUID.randomUUID().toString();
-            // Token válido por 1 hora
-            Timestamp expiryDate = Timestamp.from(Instant.now().plus(1, ChronoUnit.HOURS));
+            conn = DatabaseUtil.getConnection();
+            conn.setAutoCommit(false);
 
-            try (Connection conn = DatabaseUtil.getConnection()) {
-                String sql = "UPDATE voluntarios SET token_baja = ?, token_baja_expiry = ? WHERE Usuario = ?";
-                try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                    ps.setString(1, tokenBaja);
-                    ps.setTimestamp(2, expiryDate);
-                    ps.setString(3, usuario);
-                    int rows = ps.executeUpdate();
-                    if (rows > 0) {
-                        logger.debug("Token de baja generado y guardado para usuario {}", usuario);
-                    } else {
-                        logger.warn("No se encontró el usuario {} en la base de datos para actualizar el token de baja.", usuario);
-                    }
-                }
-            } catch (SQLException e) {
-                logger.error("Error de base de datos al guardar token de baja para {}", usuario, e);
-                throw new ServletException("Error de base de datos al guardar el token de baja", e);
-            }
+            // 1. Generar y guardar el token de baja en la BD
+            String tokenBaja = generateAndStoreBajaToken(conn, usuario);
 
-            sendConfirmationEmail(email, tokenBaja, request);
-            
-            logger.info("Correo de confirmación de baja enviado a {}", email);
+            // 2. Enviar el email de confirmación
+            sendConfirmationEmail(request, email, tokenBaja, usuario);
 
-            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Se ha enviado un correo de confirmación a tu dirección. Por favor, sigue las instrucciones para completar la baja.");
+            // 3. Si todo tiene éxito, confirmar la transacción
+            conn.commit();
+            LogUtil.logOperation(conn, "UNSUBSCRIBE_REQUEST", usuario, "Solicitud de baja iniciada y correo enviado.");
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Se ha enviado un correo de confirmación. Por favor, sigue las instrucciones para completar la baja.");
 
         } catch (Exception e) {
-            logger.error("Error interno al procesar la solicitud de baja de {}", usuario, e);
-            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error interno del servidor. Inténtalo más tarde.");
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { LogUtil.logException(logger, ex, "CRITICAL: Rollback fallido al solicitar baja", context); }
+            LogUtil.logException(logger, e, "Error en el proceso de solicitud de baja", context);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error interno al procesar la solicitud. El problema ha sido registrado.");
+        } finally {
+            if (conn != null) try { conn.close(); } catch (SQLException e) { LogUtil.logException(logger, e, "Error cerrando conexión en DarseDeBajaServlet", context); }
         }
     }
     
-    private void sendConfirmationEmail(String emailDestino, String token, HttpServletRequest request) throws Exception {
+    private String generateAndStoreBajaToken(Connection conn, String usuario) throws SQLException {
+        String tokenBaja = UUID.randomUUID().toString();
+        Timestamp expiryDate = Timestamp.from(Instant.now().plus(1, ChronoUnit.HOURS));
+
+        String sql = "UPDATE voluntarios SET token_baja = ?, token_baja_expiry = ?, notificar = 'S' WHERE Usuario = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, tokenBaja);
+            ps.setTimestamp(2, expiryDate);
+            ps.setString(3, usuario);
+            int rowsAffected = ps.executeUpdate();
+            if (rowsAffected == 0) {
+                throw new SQLException("No se encontró el usuario '" + usuario + "' para actualizar el token de baja.");
+            }
+        }
+        return tokenBaja;
+    }
+
+    private void sendConfirmationEmail(HttpServletRequest request, String emailDestino, String token, String nombreUsuario) throws MessagingException, UnsupportedEncodingException {
         String baseUrl = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort() + request.getContextPath();
         String confirmationLink = baseUrl + "/confirmar-baja.html?token=" + token;
 
-        final String username = Config.SMTP_USER;
-        final String password = Config.SMTP_PASSWORD;
-
         Properties prop = new Properties();
-        prop.put("mail.smtp.host", Config.SMTP_HOST);
-        prop.put("mail.smtp.port", Config.SMTP_PORT);
-        prop.put("mail.smtp.auth", "true");
-        prop.put("mail.smtp.starttls.enable", "true"); 
+        prop.put("mail.smtp.host", Config.SMTP_HOST); prop.put("mail.smtp.port", Config.SMTP_PORT);
+        prop.put("mail.smtp.auth", "true"); prop.put("mail.smtp.starttls.enable", "true");
 
         Session mailSession = Session.getInstance(prop, new Authenticator() {
-            @Override
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(username, password);
-            }
+            protected PasswordAuthentication getPasswordAuthentication() { return new PasswordAuthentication(Config.SMTP_USER, Config.SMTP_PASSWORD); }
         });
 
-        try {
-            Message message = new MimeMessage(mailSession);
-            message.setFrom(new InternetAddress(username));
-            message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailDestino));
-            message.setSubject("Confirma tu solicitud de baja - VoluntariosBAS");
+        Message message = new MimeMessage(mailSession);
+        message.setFrom(new InternetAddress(Config.SMTP_USER, "Banco de Alimentos de Sevilla"));
+        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(emailDestino));
+        message.setSubject("Confirma tu solicitud de baja de voluntario/a");
 
-            String emailBody = "<h1>Confirmación de Baja</h1>"
-                             + "<p>Hola,</p>"
-                             + "<p>Hemos recibido una solicitud para dar de baja tu cuenta en la aplicación de Voluntarios del Banco de Alimentos de Sevilla.</p>"
-                             + "<p>Si has sido tú, por favor, haz clic en el siguiente enlace para confirmar la operación. Este enlace caducará en 1 hora.</p>"
-                             + "<a href='" + confirmationLink + "'>Confirmar mi baja</a>"
-                             + "<p>Si no has solicitado esto, puedes ignorar este correo de forma segura.</p>"
-                             + "<p>Gracias.</p>"
-                             + "<br><br><strong>La dirección de correo desde donde se envía este mensaje es de sólo envío. Por favor, no la uses para responder.</strong><br>";
+        String emailBody = "<h1>Confirmación de Baja</h1>"
+                         + "<p>Hola " + nombreUsuario + ",</p>"
+                         + "<p>Hemos recibido una solicitud para dar de baja tu cuenta en la aplicación de Voluntarios del Banco de Alimentos de Sevilla.</p>"
+                         + "<p>Si has sido tú, por favor, haz clic en el siguiente enlace para confirmar la operación. Este enlace caducará en 1 hora.</p>"
+                         + "<p><a href='" + confirmationLink + "'>SÍ, QUIERO DARME DE BAJA</a></p>"
+                         + "<p>Si no has solicitado esto, puedes ignorar este correo de forma segura. Tu cuenta no será eliminada.</p>"
+                         + "<p>Gracias.</p>";
 
-            message.setContent(emailBody, "text/html; charset=utf-8");
-
-            Transport.send(message); 
-
-        } catch (Exception e) {
-            // Propagamos la excepción para que sea logueada correctamente en el doPost
-            throw e;
-        }
+        message.setContent(emailBody, "text/html; charset=utf-8");
+        Transport.send(message);
     }
     
     private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
-        response.setStatus(status);
-        Map<String, Object> jsonResponse = new HashMap<>();
-        jsonResponse.put("success", success);
-        jsonResponse.put("message", message);
-        mapper.writeValue(response.getWriter(), jsonResponse);
+        if (!response.isCommitted()) {
+            response.setStatus(status);
+            Map<String, Object> jsonResponse = new HashMap<>();
+            jsonResponse.put("success", success);
+            jsonResponse.put("message", message);
+            mapper.writeValue(response.getWriter(), jsonResponse);
+        }
     }
 }

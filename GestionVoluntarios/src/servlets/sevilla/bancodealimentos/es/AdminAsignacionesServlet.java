@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID; // Importación necesaria para UUID si se usara aquí directamente
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,148 +26,56 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 import util.sevilla.bancodealimentos.es.SharePointUtil;
 
-/**
- * Servlet para que los administradores consulten y modifiquen las asignaciones de turnos.
- */
 @WebServlet("/admin-asignaciones")
 public class AdminAsignacionesServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
-    
-    // 1. Logger SLF4J
+    private static final long serialVersionUID = 2L;
     private static final Logger logger = LoggerFactory.getLogger(AdminAsignacionesServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper mapper = new ObjectMapper();
 
-    // DTO para mapear los resultados.
-    public static class AsignacionDTO {
-        public String usuario;
-        public String nombre;
-        public String apellidos;
-        
-        public String tiendaTurno1;
-        public String comentario1;
-        public int acompanantes1;
-        
-        public String tiendaTurno2;
-        public String comentario2;
-        public int acompanantes2;
-        
-        public String tiendaTurno3;
-        public String comentario3;
-        public int acompanantes3;
-        
-        public String tiendaTurno4;
-        public String comentario4;
-        public int acompanantes4;
+    public static class AsignacionDTO { 
+        public String usuario, nombre, apellidos, tiendaTurno1, comentario1, tiendaTurno2, comentario2, tiendaTurno3, comentario3, tiendaTurno4, comentario4;
+        public int acompanantes1, acompanantes2, acompanantes3, acompanantes4;
     }
+    private static class ParsedComment { String text = ""; int count = 0; }
+    private static class TurnoData { int tiendaId; String comentario; }
 
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
-        if (session == null || session.getAttribute("usuario") == null) return false;
-        
+        if (session == null || session.getAttribute("usuario") == null) {
+            return false;
+        }
         Object isAdminAttr = session.getAttribute("isAdmin");
-        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
-               ("S".equals(isAdminAttr));
-    }
-    
-    private String getUsuario(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        return (session != null && session.getAttribute("usuario") != null) ? (String) session.getAttribute("usuario") : "sistema";
+        if (isAdminAttr instanceof Boolean) {
+            return (Boolean) isAdminAttr;
+        }
+        if (isAdminAttr instanceof String) {
+            return "S".equalsIgnoreCase((String) isAdminAttr);
+        }
+        return false;
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        response.setContentType("application/json");
-        response.setCharacterEncoding("UTF-8");
-
-        if (!isAdmin(request)) {
-            logger.warn("Acceso denegado a AdminAsignaciones (GET). IP: {}", request.getRemoteAddr());
-            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
-            return;
-        }
-
-        List<AsignacionDTO> asignaciones = new ArrayList<>();
-
-        String sql = "SELECT " +
-                     "    v.Usuario, v.Nombre, v.Apellidos, " +
-                     "    t1.denominacion AS TiendaTurno1, vec.Comentario1, " +
-                     "    t2.denominacion AS TiendaTurno2, vec.Comentario2, " +
-                     "    t3.denominacion AS TiendaTurno3, vec.Comentario3, " +
-                     "    t4.denominacion AS TiendaTurno4, vec.Comentario4 " +
-                     "FROM voluntarios_en_campana vec " +
-                     "JOIN voluntarios v ON vec.Usuario = v.Usuario " +
-                     "LEFT JOIN tiendas t1 ON vec.Turno1 = t1.codigo " +
-                     "LEFT JOIN tiendas t2 ON vec.Turno2 = t2.codigo " +
-                     "LEFT JOIN tiendas t3 ON vec.Turno3 = t3.codigo " +
-                     "LEFT JOIN tiendas t4 ON vec.Turno4 = t4.codigo " +
-                     "WHERE vec.Campana = (SELECT Campana FROM campanas WHERE estado = 'S' LIMIT 1) " +
-                     "ORDER BY v.Apellidos, v.Nombre";
-
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-
-            while (rs.next()) {
-                AsignacionDTO dto = new AsignacionDTO();
-                dto.usuario = rs.getString("Usuario");
-                dto.nombre = rs.getString("Nombre");
-                dto.apellidos = rs.getString("Apellidos");
-                
-                // Turno 1
-                dto.tiendaTurno1 = rs.getString("TiendaTurno1");
-                ParsedComment pc1 = parseComment(rs.getString("Comentario1"));
-                dto.comentario1 = pc1.text;
-                dto.acompanantes1 = pc1.count;
-                
-                // Turno 2
-                dto.tiendaTurno2 = rs.getString("TiendaTurno2");
-                ParsedComment pc2 = parseComment(rs.getString("Comentario2"));
-                dto.comentario2 = pc2.text;
-                dto.acompanantes2 = pc2.count;
-                
-                // Turno 3
-                dto.tiendaTurno3 = rs.getString("TiendaTurno3");
-                ParsedComment pc3 = parseComment(rs.getString("Comentario3"));
-                dto.comentario3 = pc3.text;
-                dto.acompanantes3 = pc3.count;
-                
-                // Turno 4
-                dto.tiendaTurno4 = rs.getString("TiendaTurno4");
-                ParsedComment pc4 = parseComment(rs.getString("Comentario4"));
-                dto.comentario4 = pc4.text;
-                dto.acompanantes4 = pc4.count;
-                
-                asignaciones.add(dto);
-            }
-            
-            mapper.writeValue(response.getWriter(), asignaciones);
-
-        } catch (SQLException e) {
-            logger.error("Error SQL al consultar las asignaciones.", e);
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar las asignaciones.");
-        }
+        handleGetRequest(request, response);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        request.setCharacterEncoding("UTF-8");
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
         if (!isAdmin(request)) {
-            logger.warn("Acceso denegado a AdminAsignaciones (POST). IP: {}", request.getRemoteAddr());
-            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
 
+        String adminUser = (String) request.getSession().getAttribute("usuario");
         String usuarioTarget = request.getParameter("usuario");
-        String campanaId = request.getParameter("campana");
-        String adminUser = getUsuario(request);
-        Map<String, Object> jsonResponse = new HashMap<>();
+        String campanaId = getActiveCampaignId(request);
+        String context = String.format("Admin: %s, Voluntario: %s, Campaña: %s", adminUser, usuarioTarget, campanaId);
 
         if (usuarioTarget == null || campanaId == null) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Faltan parámetros obligatorios (usuario, campana).");
+            sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "Parámetros 'usuario' y campaña activa son obligatorios.");
             return;
         }
 
@@ -177,221 +84,239 @@ public class AdminAsignacionesServlet extends HttpServlet {
             conn = DatabaseUtil.getConnection();
             conn.setAutoCommit(false);
 
-            // CORRECCIÓN: Usar INSERT ... ON DUPLICATE KEY UPDATE para soportar nuevas asignaciones
-            String sql = "INSERT INTO voluntarios_en_campana (Campana, Usuario, Turno1, Comentario1, Turno2, Comentario2, Turno3, Comentario3, Turno4, Comentario4, notificar) " +
-                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) " +
-                         "ON DUPLICATE KEY UPDATE " +
-                         "Turno1 = VALUES(Turno1), Comentario1 = VALUES(Comentario1), " +
-                         "Turno2 = VALUES(Turno2), Comentario2 = VALUES(Comentario2), " +
-                         "Turno3 = VALUES(Turno3), Comentario3 = VALUES(Comentario3), " +
-                         "Turno4 = VALUES(Turno4), Comentario4 = VALUES(Comentario4), " +
-                         "notificar = VALUES(notificar)";
-
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, campanaId);
-                stmt.setString(2, usuarioTarget);
-                
-                // Procesar los 4 turnos
-                for (int i = 1; i <= 4; i++) {
-                    String tiendaStr = request.getParameter("tienda_" + i);
-                    String comentarioInput = request.getParameter("comentario_" + i);
-                    
-                    // CORRECCIÓN: Chequeo de ambos nombres de parámetro (con n y con ñ)
-                    String acompanantesStr = request.getParameter("acompanantes_" + i);
-                    if (acompanantesStr == null) {
-                        acompanantesStr = request.getParameter("acompañantes_" + i);
-                    }
-                    
-                    // Índices para INSERT (comienzan en 3)
-                    int idxTienda = 3 + (i - 1) * 2;
-                    int idxComent = 4 + (i - 1) * 2;
-
-                    if (tiendaStr != null && !tiendaStr.isEmpty()) {
-                        stmt.setInt(idxTienda, Integer.parseInt(tiendaStr));
-                        
-                        // --- LÓGICA DE COMBINACIÓN: Acompañantes + Texto ---
-                        StringBuilder sbComentario = new StringBuilder();
-                        if (acompanantesStr != null && !acompanantesStr.trim().isEmpty()) {
-                            try {
-                                int num = Integer.parseInt(acompanantesStr.trim());
-                                if (num > 0) {
-                                    sbComentario.append("Voluntarios: ").append(num).append(". ");
-                                }
-                            } catch (NumberFormatException e) {
-                                logger.debug("Formato inválido en acompañantes turno {}: {}", i, acompanantesStr);
-                            }
-                        }
-                        if (comentarioInput != null && !comentarioInput.trim().isEmpty()) {
-                            sbComentario.append(comentarioInput.trim());
-                        }
-                        stmt.setString(idxComent, sbComentario.toString());
-                    } else {
-                        stmt.setNull(idxTienda, java.sql.Types.INTEGER);
-                        stmt.setString(idxComent, "");
-                    }
-                }
-
-                stmt.setString(11, "S"); // Notificar 'S'
-
-                stmt.executeUpdate();
-            }
-            
-            LogUtil.logOperation(conn, "ADMIN_UPDATE_ASIG", adminUser, "Admin modificó asignaciones de " + usuarioTarget);
-
-            // 2. Replicar a SharePoint
-            // ¡CORREGIDO! Pasar 'conn' a replicarAsignacionASharePoint
-            replicarAsignacionASharePoint(conn, campanaId, usuarioTarget);
-
+            TurnoData[] turnos = prepareTurnoData(request);
+            SharePointIds spIds = getSharePointIds(conn, usuarioTarget);
+            updateVoluntarioEnCampana(conn, campanaId, usuarioTarget, turnos);
+            replicateToSharePoint(conn, spIds, campanaId, turnos, usuarioTarget);
             conn.commit();
-            
-            jsonResponse.put("success", true);
-            jsonResponse.put("message", "Asignaciones guardadas correctamente.");
+
+            LogUtil.logOperation(conn, "ADMIN_UPDATE_ASIG", adminUser, "Asignaciones de " + usuarioTarget + " actualizadas y sincronizadas.");
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Asignaciones guardadas y sincronizadas correctamente.");
 
         } catch (Exception e) {
-            logger.error("Error al actualizar asignaciones para {}", usuarioTarget, e);
-            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { logger.warn("Rollback fallido", ex); }
-            
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResponse.put("success", false);
-            jsonResponse.put("message", "Error al guardar los cambios: " + e.getMessage());
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { LogUtil.logException(logger, ex, "CRITICAL: Rollback fallido al actualizar asignaciones", context); }
+            LogUtil.logException(logger, e, "Error al actualizar asignaciones", context);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error al guardar las asignaciones. El problema ha sido registrado.");
         } finally {
-            if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
+            if (conn != null) try { conn.close(); } catch (SQLException e) { LogUtil.logException(logger, e, "Error cerrando conexión en doPost(Asignaciones)", adminUser); }
         }
-
-        mapper.writeValue(response.getWriter(), jsonResponse);
     }
-    
-    // Método auxiliar para replicar a SP (Igual que en GuardarTurnosServlet)
-    private void replicarAsignacionASharePoint(Connection conn, String campanaId, String usuario) throws Exception {
-        String listIdAsignaciones = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Asignaciones");
-        String listIdVoluntarios = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Voluntarios");
-        String listIdTiendas = SharePointUtil.getListId(SharePointUtil.SITE_ID, "Tiendas");
 
-        if (listIdAsignaciones == null || listIdVoluntarios == null || listIdTiendas == null) {
-             logger.warn("replicarAsignacionASharePoint: No se pudo obtener uno o más IDs de lista de SharePoint.");
-             return;
-        }
-
-        String voluntarioUuid = getSqlRowUuid(conn, usuario);
-        if (voluntarioUuid == null) {
-            logger.warn("replicarAsignacionASharePoint: No se encontró SqlRowUUID para el voluntario {}. No se puede replicar a SharePoint.", usuario);
-            return;
-        }
-        
-        // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
-        String spVoluntarioId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdVoluntarios, "SqlRowUUID", voluntarioUuid);
-        if (spVoluntarioId == null) {
-            logger.warn("replicarAsignacionASharePoint: Voluntario {} con UUID {} no encontrado en la lista de SharePoint 'Voluntarios'.", usuario, voluntarioUuid);
-            return;
-        }
-
-        String assignmentUuid = "AS-" + voluntarioUuid;
-        FieldValueSet fields = new FieldValueSet();
-        fields.getAdditionalData().put("Title", assignmentUuid);
-        fields.getAdditionalData().put("UsuarioLookupId", spVoluntarioId);
-        fields.getAdditionalData().put("Campana", campanaId);
-        
-        String sqlSelect = "SELECT Turno1, Comentario1, Turno2, Comentario2, Turno3, Comentario3, Turno4, Comentario4 FROM voluntarios_en_campana WHERE Usuario = ? AND Campana = ?";
-        boolean tieneTurnos = false;
-        
-        try (PreparedStatement stmt = conn.prepareStatement(sqlSelect)) {
-            stmt.setString(1, usuario);
-            stmt.setString(2, campanaId);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                for (int i = 1; i <= 4; i++) {
-                    int idTiendaDb = rs.getInt("Turno" + i);
-                    String comentario = rs.getString("Comentario" + i);
-                    fields.getAdditionalData().put("Turno" + i + "LookupId", null);
-                    fields.getAdditionalData().put("Comentario" + i, comentario);
-
-                    if (idTiendaDb > 0) {
-                        tieneTurnos = true;
-                        String tiendaUuid = getSqlRowUuidForTienda(conn, idTiendaDb);
-                        if (tiendaUuid != null) {
-                            // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
-                            String spTiendaId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdTiendas, "SqlRowUUID", tiendaUuid);
-                            if (spTiendaId != null) {
-                                fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
-                            } else {
-                                logger.warn("replicarAsignacionASharePoint: Tienda con código {} y UUID {} no encontrada en la lista de SharePoint 'Tiendas'.", idTiendaDb, tiendaUuid);
-                            }
-                        } else {
-                            logger.warn("replicarAsignacionASharePoint: No se encontró SqlRowUUID para la tienda con código {}.", idTiendaDb);
-                        }
-                    }
+    private void updateVoluntarioEnCampana(Connection conn, String campanaId, String usuario, TurnoData[] turnos) throws SQLException {
+        String sql = "INSERT INTO voluntarios_en_campana (Campana, Usuario, Turno1, Comentario1, Turno2, Comentario2, Turno3, Comentario3, Turno4, Comentario4, notificar) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'S') ON DUPLICATE KEY UPDATE " +
+                     "Turno1=VALUES(Turno1), Comentario1=VALUES(Comentario1), Turno2=VALUES(Turno2), Comentario2=VALUES(Comentario2), " +
+                     "Turno3=VALUES(Turno3), Comentario3=VALUES(Comentario3), Turno4=VALUES(Turno4), Comentario4=VALUES(Comentario4), notificar='S'";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, campanaId); stmt.setString(2, usuario);
+            for (int i = 0; i < 4; i++) {
+                int idx = 3 + i * 2;
+                if (turnos[i].tiendaId > 0) {
+                    stmt.setInt(idx, turnos[i].tiendaId);
+                    stmt.setString(idx + 1, turnos[i].comentario);
+                } else {
+                    stmt.setNull(idx, java.sql.Types.INTEGER);
+                    stmt.setString(idx + 1, "");
                 }
             }
+            stmt.executeUpdate();
+        }
+    }
+
+    private void replicateToSharePoint(Connection conn, SharePointIds spIds, String campanaId, TurnoData[] turnos, String usuario) throws Exception {
+        String assignmentUuid = "AS-" + spIds.voluntarioUuid;
+        FieldValueSet fields = new FieldValueSet();
+        fields.getAdditionalData().put("Title", assignmentUuid);
+        fields.getAdditionalData().put("Campana", campanaId);
+        fields.getAdditionalData().put("UsuarioLookupId", spIds.voluntarioSpId);
+        
+        boolean tieneTurnos = false;
+        for (int i = 0; i < 4; i++) {
+            String spTiendaId = null;
+            if (turnos[i].tiendaId > 0) {
+                tieneTurnos = true;
+                String tiendaUuid = findSqlRowUuid(conn, "tiendas", "codigo", String.valueOf(turnos[i].tiendaId));
+                if (tiendaUuid != null) {
+                    spTiendaId = findItemIdByUuid(conn, spIds.tiendasListId, tiendaUuid);
+                }
+            }
+            fields.getAdditionalData().put("Turno" + (i + 1) + "LookupId", spTiendaId);
+            fields.getAdditionalData().put("Comentario" + (i + 1), turnos[i].comentario);
         }
 
-        // ¡CORREGIDO! Pasar 'conn' a findItemIdByFieldValue
-        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SITE_ID, listIdAsignaciones, "Title", assignmentUuid);
-        if (itemId != null) {
-            if (tieneTurnos) {
-                SharePointUtil.updateListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId, fields);
-                logger.info("replicarAsignacionASharePoint: Asignación actualizada en SharePoint para voluntario {}", usuario);
-            } else {
-                SharePointUtil.deleteListItem(SharePointUtil.SITE_ID, listIdAsignaciones, itemId);
-                logger.info("replicarAsignacionASharePoint: Asignación eliminada de SharePoint (ya no tiene turnos) para voluntario {}", usuario);
-            }
+        String assignmentSpId = findItemIdByUuid(conn, spIds.asignacionesListId, assignmentUuid, "Title");
+
+        if (assignmentSpId != null) {
+            if (tieneTurnos) SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, spIds.asignacionesListId, assignmentSpId, fields);
+            else SharePointUtil.deleteListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, spIds.asignacionesListId, assignmentSpId);
         } else if (tieneTurnos) {
-            SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
-            logger.info("replicarAsignacionASharePoint: Nueva asignación creada en SharePoint para voluntario {}", usuario);
-        } else {
-            logger.info("replicarAsignacionASharePoint: No hay turnos para voluntario {} y no existe en SP. No se crea.", usuario);
+            SharePointUtil.createListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, spIds.asignacionesListId, fields);
         }
     }
-    
-    private String getSqlRowUuid(Connection conn, String usuario) throws SQLException {
-        try (PreparedStatement stmt = conn.prepareStatement("SELECT SqlRowUUID FROM voluntarios WHERE Usuario = ?")) {
-            stmt.setString(1, usuario);
+
+    private TurnoData[] prepareTurnoData(HttpServletRequest request) {
+        TurnoData[] turnos = new TurnoData[4];
+        for (int i = 0; i < 4; i++) {
+            turnos[i] = new TurnoData();
+            String tiendaStr = request.getParameter("tienda_" + (i + 1));
+            try {
+                turnos[i].tiendaId = (tiendaStr != null && !tiendaStr.isEmpty()) ? Integer.parseInt(tiendaStr) : 0;
+            } catch (NumberFormatException e) { turnos[i].tiendaId = 0; }
+            
+            String comentarioInput = request.getParameter("comentario_" + (i + 1));
+            String acompanantesStr = request.getParameter("acompanantes_" + (i + 1));
+            turnos[i].comentario = buildComment(acompanantesStr, comentarioInput);
+        }
+        return turnos;
+    }
+
+    private String findSqlRowUuid(Connection conn, String table, String pkColumn, String pkValue) throws SQLException {
+        if (pkValue == null || pkValue.isEmpty() || "0".equals(pkValue)) return null;
+        String sql = String.format("SELECT SqlRowUUID FROM %s WHERE %s = ?", table, pkColumn);
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, pkValue);
             try (ResultSet rs = stmt.executeQuery()) { return rs.next() ? rs.getString(1) : null; }
         }
     }
-    
-    private String getSqlRowUuidForTienda(Connection conn, int codigo) throws SQLException {
-        try (PreparedStatement stmt = conn.prepareStatement("SELECT SqlRowUUID FROM tiendas WHERE codigo = ?")) {
-            stmt.setInt(1, codigo);
-            try (ResultSet rs = stmt.executeQuery()) { return rs.next() ? rs.getString(1) : null; }
-        }
+
+    private String findItemIdByUuid(Connection conn, String listId, String uuid) throws Exception {
+        return findItemIdByUuid(conn, listId, uuid, "SqlRowUUID");
+    }
+
+    private String findItemIdByUuid(Connection conn, String listId, String uuid, String fieldName) throws Exception {
+        return SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, fieldName, uuid);
     }
     
-    private static class ParsedComment {
-        String text = "";
-        int count = 0;
+    private void handleGetRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        String adminUser = (String) request.getSession(false).getAttribute("usuario");
+
+        if (!isAdmin(request)) {
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
+            return;
+        }
+
+        List<AsignacionDTO> asignaciones = new ArrayList<>();
+        String campanaId = getActiveCampaignId(request);
+        String sql = "SELECT v.Usuario, v.Nombre, v.Apellidos, t1.denominacion AS TiendaTurno1, vec.Comentario1, " +
+                     "t2.denominacion AS TiendaTurno2, vec.Comentario2, t3.denominacion AS TiendaTurno3, vec.Comentario3, " +
+                     "t4.denominacion AS TiendaTurno4, vec.Comentario4 FROM voluntarios_en_campana vec " +
+                     "JOIN voluntarios v ON vec.Usuario = v.Usuario LEFT JOIN tiendas t1 ON vec.Turno1 = t1.codigo " +
+                     "LEFT JOIN tiendas t2 ON vec.Turno2 = t2.codigo LEFT JOIN tiendas t3 ON vec.Turno3 = t3.codigo " +
+                     "LEFT JOIN tiendas t4 ON vec.Turno4 = t4.codigo WHERE vec.Campana = ? ORDER BY v.Apellidos, v.Nombre";
+
+        try (Connection conn = DatabaseUtil.getConnection(); PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, campanaId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) asignaciones.add(mapRowToAsignacion(rs));
+            }
+            mapper.writeValue(response.getWriter(), asignaciones);
+        } catch (Exception e) {
+            LogUtil.logException(logger, e, "Error de BD al consultar asignaciones", adminUser);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos. El problema ha sido registrado.");
+        }
+    }
+
+    private String getActiveCampaignId(HttpServletRequest request) {
+        try (Connection conn = DatabaseUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement("SELECT Campana FROM campanas WHERE estado = 'S' LIMIT 1");
+             ResultSet rs = stmt.executeQuery()) {
+            if (rs.next()) {
+                return rs.getString("Campana");
+            }
+        } catch (SQLException e) {
+            logger.error("No se pudo obtener la campaña activa", e);
+        }
+        return null;
+    }
+    
+    private static class SharePointIds {
+        String voluntarioUuid, voluntarioSpId, asignacionesListId, tiendasListId;
+    }
+
+    private SharePointIds getSharePointIds(Connection conn, String usuario) throws Exception {
+        SharePointIds ids = new SharePointIds();
+        ids.voluntarioUuid = findSqlRowUuid(conn, "voluntarios", "Usuario", usuario);
+        if (ids.voluntarioUuid == null) throw new Exception("No se encontró el SqlRowUUID para el voluntario: " + usuario);
+
+        ids.asignacionesListId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, "Asignaciones");
+        ids.tiendasListId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, SharePointUtil.LIST_NAME_TIENDAS);
+        String voluntariosListId = SharePointUtil.getListId(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, "Voluntarios");
+
+        if (ids.asignacionesListId == null || ids.tiendasListId == null || voluntariosListId == null) {
+            throw new Exception("No se encontraron una o más listas de SharePoint (Asignaciones, Tiendas, Voluntarios).");
+        }
+
+        ids.voluntarioSpId = findItemIdByUuid(conn, voluntariosListId, ids.voluntarioUuid);
+        if (ids.voluntarioSpId == null) throw new Exception("El voluntario con UUID " + ids.voluntarioUuid + " no fue encontrado en SharePoint.");
+
+        return ids;
+    }
+
+    private String buildComment(String acompanantesStr, String comentarioInput) {
+        StringBuilder sb = new StringBuilder();
+        if (acompanantesStr != null && !acompanantesStr.isEmpty()) {
+            try {
+                int num = Integer.parseInt(acompanantesStr.trim());
+                if (num > 0) sb.append("Voluntarios: ").append(num).append(". ");
+            } catch (NumberFormatException e) {}
+        }
+        if (comentarioInput != null && !comentarioInput.isEmpty()) {
+            sb.append(comentarioInput.trim());
+        }
+        return sb.toString();
+    }
+
+    private AsignacionDTO mapRowToAsignacion(ResultSet rs) throws SQLException {
+        AsignacionDTO dto = new AsignacionDTO();
+        dto.usuario = rs.getString("Usuario");
+        dto.nombre = rs.getString("Nombre");
+        dto.apellidos = rs.getString("Apellidos");
+        dto.tiendaTurno1 = rs.getString("TiendaTurno1");
+        ParsedComment pc1 = parseComment(rs.getString("Comentario1"));
+        dto.comentario1 = pc1.text; dto.acompanantes1 = pc1.count;
+        dto.tiendaTurno2 = rs.getString("TiendaTurno2");
+        ParsedComment pc2 = parseComment(rs.getString("Comentario2"));
+        dto.comentario2 = pc2.text; dto.acompanantes2 = pc2.count;
+        dto.tiendaTurno3 = rs.getString("TiendaTurno3");
+        ParsedComment pc3 = parseComment(rs.getString("Comentario3"));
+        dto.comentario3 = pc3.text; dto.acompanantes3 = pc3.count;
+        dto.tiendaTurno4 = rs.getString("TiendaTurno4");
+        ParsedComment pc4 = parseComment(rs.getString("Comentario4"));
+        dto.comentario4 = pc4.text; dto.acompanantes4 = pc4.count;
+        return dto;
     }
 
     private ParsedComment parseComment(String raw) {
         ParsedComment pc = new ParsedComment();
-        if (raw == null) return pc;
-        
-        String text = raw.trim();
+        if (raw == null || raw.isEmpty()) return pc;
         String prefix = "Voluntarios: ";
-        
-        if (text.startsWith(prefix)) {
-            try {
-                int dotIndex = text.indexOf('.');
-                if (dotIndex > 0) {
-                    String numStr = text.substring(prefix.length(), dotIndex).trim();
-                    pc.count = Integer.parseInt(numStr);
-                    
-                    if (dotIndex + 1 < text.length()) {
-                        pc.text = text.substring(dotIndex + 1).trim();
-                    }
-                } else {
-                    String numStr = text.substring(prefix.length()).trim();
-                    if (numStr.matches("\\d+")) {
-                        pc.count = Integer.parseInt(numStr);
-                    } else {
-                        pc.text = text;
-                    }
+        if (raw.startsWith(prefix)) {
+            int dotIndex = raw.indexOf('.');
+            if (dotIndex > 0) {
+                try {
+                    pc.count = Integer.parseInt(raw.substring(prefix.length(), dotIndex).trim());
+                    pc.text = raw.substring(dotIndex + 1).trim();
+                } catch (NumberFormatException e) {
+                    pc.text = raw;
                 }
-            } catch (Exception e) {
+            } else {
                 pc.text = raw;
             }
         } else {
-            pc.text = text;
+            pc.text = raw;
         }
         return pc;
+    }
+
+    private void sendJsonResponse(HttpServletResponse response, int status, boolean success, String message) throws IOException {
+        if (!response.isCommitted()) {
+            response.setStatus(status);
+            Map<String, Object> res = new HashMap<>();
+            res.put("success", success);
+            res.put("message", message);
+            mapper.writeValue(response.getWriter(), res);
+        }
     }
 }

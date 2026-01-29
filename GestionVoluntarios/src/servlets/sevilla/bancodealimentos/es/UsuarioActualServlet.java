@@ -13,7 +13,7 @@ import jakarta.servlet.http.HttpSession;
 
 @WebServlet("/usuario-actual")
 public class UsuarioActualServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; // Versión actualizada
+    private static final long serialVersionUID = 3L; // Versión actualizada
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -23,12 +23,14 @@ public class UsuarioActualServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         if (session != null && session.getAttribute("usuario") != null) {
-            String usuario = ((String) session.getAttribute("usuario")).toUpperCase();
+            String usuario = (String) session.getAttribute("usuario");
             boolean isAdmin = (Boolean) session.getAttribute("isAdmin");
+            String nombreCompleto = (String) session.getAttribute("nombreCompleto");
 
             ObjectNode jsonResponse = objectMapper.createObjectNode();
             jsonResponse.put("usuario", usuario);
             jsonResponse.put("isAdmin", isAdmin);
+            jsonResponse.put("nombre", nombreCompleto); // Añadimos el nombre completo
 
             objectMapper.writeValue(response.getWriter(), jsonResponse);
         } else {

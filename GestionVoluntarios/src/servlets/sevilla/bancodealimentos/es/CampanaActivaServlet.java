@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
+import util.sevilla.bancodealimentos.es.LogUtil;
 
 /**
  * Servlet que busca la campaña activa (estado = 'S') y devuelve
@@ -26,19 +27,14 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 @WebServlet("/campana-activa")
 public class CampanaActivaServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
-    
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(CampanaActivaServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper mapper = new ObjectMapper();
 
-    // DTO para enviar los datos de la campaña al frontend
     public static class CampanaDTO {
-        public String campana;      // ID (UUID)
+        public String campana;
         public String denominacion;
-        public String fecha1;       // Fecha inicio (yyyy-MM-dd)
-        public String fecha2;       // Fecha fin (yyyy-MM-dd)
+        public String fecha1;
+        public String fecha2;
     }
 
     @Override
@@ -57,24 +53,22 @@ public class CampanaActivaServlet extends HttpServlet {
                 dto.campana = rs.getString("Campana");
                 dto.denominacion = rs.getString("denominacion");
                 
-                // Convertimos java.sql.Date a String (formato por defecto yyyy-MM-dd)
                 Date f1 = rs.getDate("fecha1");
                 Date f2 = rs.getDate("fecha2");
                 dto.fecha1 = (f1 != null) ? f1.toString() : null;
                 dto.fecha2 = (f2 != null) ? f2.toString() : null;
                 
-                // 3. Serialización automática con Jackson
                 mapper.writeValue(response.getWriter(), dto);
 
             } else {
-                // Es normal que a veces no haya campaña activa, usamos WARN o INFO según preferencia
                 logger.debug("Solicitud de campaña activa: No se encontró ninguna activa en este momento.");
                 response.sendError(HttpServletResponse.SC_NOT_FOUND, "No se encontró ninguna campaña activa.");
             }
 
         } catch (SQLException e) {
-            logger.error("Error SQL al consultar la campaña activa.", e);
-            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar la base de datos.");
+            // ¡NUEVO! Usamos el sistema de logging centralizado
+            LogUtil.logException(logger, e, "Error de SQL al consultar la campaña activa");
+            response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar la base de datos. El error ha sido registrado.");
         }
     }
 }

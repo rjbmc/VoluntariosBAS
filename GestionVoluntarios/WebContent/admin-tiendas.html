@@ -330,7 +330,7 @@
                     const tr = document.createElement('tr');
                     tr.className = "hover:bg-gray-50 transition-colors";
                     tr.innerHTML = `
-                        <td class="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-900">${t.codigo.toString().padStart(4, '0')}</td>
+                        <td class="px-6 py-5 whitespace-nowrap text-sm font-bold text-gray-900">${t.codigo.toString().padStart(3, '0')}</td>
                         <td class="px-6 py-5 text-sm font-medium text-gray-600 truncate-cell" title="${t.denominacion}">${t.denominacion}</td>
                         <td class="px-6 py-5 whitespace-nowrap text-sm text-gray-400 font-medium">${t.supervisor || '-'}</td>
                         <td class="px-6 py-5 whitespace-nowrap text-center">

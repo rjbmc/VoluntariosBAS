@@ -22,9 +22,10 @@ const AppConfig = {
 
         USUARIO_ACTUAL: '/usuario-actual',
         VOLUNTARIO_DETALLES: '/voluntario-detalles',
+        CONSULTAR_VOLUNTARIO: '/consultar-voluntario',
         MIS_TURNOS: '/mis-turnos',
         GUARDAR_TURNOS: '/guardar-turnos',
-        CAMPANA_ACTIVA: '/campana-active',
+        CAMPANA_ACTIVA: '/campana-activa', // CORREGIDO: active -> activa
         
         TODAS_LAS_TIENDAS: '/todas-las-tiendas',
         PUNTOS_DISPONIBLES: '/puntos-disponibles',
@@ -51,6 +52,7 @@ const AppConfig = {
         SYNC_CAMPANAS: '/sync-campanas',
         SYNC_ASIGNACIONES: '/sync-asignaciones',
         ADMIN_LOGS: '/admin-logs'
+        
     },
 
     /**

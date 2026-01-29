@@ -25,21 +25,17 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
-/**
- * Servlet para consultar el historial de operaciones (logs) del sistema.
- */
 @WebServlet("/admin-logs")
 public class LogsServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión incrementada
     
     private static final Logger logger = LoggerFactory.getLogger(LogsServlet.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
-    // DTO para enviar al frontend
     public static class LogEntryDTO {
         public String operacion;
         public String operador;
-        public String fecha; // Combinamos Dia y Hora
+        public String fecha;
         public String comentario;
     }
 
@@ -56,17 +52,19 @@ public class LogsServlet extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
+        
+        HttpSession session = request.getSession(false);
 
-        if (!isAdmin(request)) {
+        if (session == null || session.getAttribute("usuario") == null || !isAdmin(request)) {
             logger.warn("Acceso denegado a LogsServlet. IP: {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;
         }
-
+        
+        String currentUserDNI = (String) session.getAttribute("usuario");
         String filtroOperacion = request.getParameter("operacion");
         List<LogEntryDTO> logs = new ArrayList<>();
 
-        // Consulta base: Últimos 100 registros
         StringBuilder sql = new StringBuilder("SELECT Operación, Operador, Dia, Hora, Comentario FROM logs ");
         
         if (filtroOperacion != null && !filtroOperacion.isEmpty() && !"TODOS".equals(filtroOperacion)) {
@@ -75,48 +73,78 @@ public class LogsServlet extends HttpServlet {
         
         sql.append("ORDER BY Dia DESC, Hora DESC LIMIT 100");
 
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
-
-            if (filtroOperacion != null && !filtroOperacion.isEmpty() && !"TODOS".equals(filtroOperacion)) {
-                stmt.setString(1, filtroOperacion);
-            }
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
-                
-                while (rs.next()) {
-                    LogEntryDTO log = new LogEntryDTO();
-                    log.operacion = rs.getString("Operación");
-                    log.operador = rs.getString("Operador");
-                    log.comentario = rs.getString("Comentario");
-                    
-                    // Combinar fecha y hora para visualización
-                    java.sql.Date dia = rs.getDate("Dia");
-                    Timestamp hora = rs.getTimestamp("Hora");
-                    
-                    if (hora != null) {
-                        log.fecha = sdf.format(hora);
-                    } else if (dia != null) {
-                        log.fecha = dia.toString();
-                    } else {
-                        log.fecha = "N/A";
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            try (PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+                if (filtroOperacion != null && !filtroOperacion.isEmpty() && !"TODOS".equals(filtroOperacion)) {
+                    stmt.setString(1, filtroOperacion);
+                }
+                try (ResultSet rs = stmt.executeQuery()) {
+                    SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+                    while (rs.next()) {
+                        LogEntryDTO log = new LogEntryDTO();
+                        log.operacion = rs.getString("Operación");
+                        log.operador = rs.getString("Operador");
+                        log.comentario = rs.getString("Comentario");
+                        
+                        java.sql.Date dia = rs.getDate("Dia");
+                        Timestamp hora = rs.getTimestamp("Hora");
+                        
+                        if (hora != null) {
+                            log.fecha = sdf.format(hora);
+                        } else if (dia != null) {
+                            log.fecha = dia.toString();
+                        } else {
+                            log.fecha = "N/A";
+                        }
+                        
+                        logs.add(log);
                     }
-                    
-                    logs.add(log);
                 }
             }
             
-            // Enviamos también una lista de tipos de operación distintos para llenar el filtro
             Map<String, Object> result = new HashMap<>();
             result.put("logs", logs);
-            result.put("tipos", obtenerTiposOperacion(conn)); // Método auxiliar
+            result.put("tipos", obtenerTiposOperacion(conn));
+            result.put("currentUser", currentUserDNI);
             
             mapper.writeValue(response.getWriter(), result);
 
         } catch (SQLException e) {
             logger.error("Error SQL al consultar logs", e);
             response.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Error al consultar los logs.");
+        }
+    }
+    
+    @Override
+    protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        HttpSession session = request.getSession(false);
+
+        String currentUserDNI = (session != null) ? (String) session.getAttribute("usuario") : null;
+        if (!"28654139A".equals(currentUserDNI)) {
+            logger.warn("Intento de borrado de logs NO AUTORIZADO por usuario: {}. IP: {}", currentUserDNI, request.getRemoteAddr());
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            mapper.writeValue(response.getWriter(), Map.of("success", false, "message", "Acceso denegado. Permisos insuficientes."));
+            return;
+        }
+
+        logger.info("Solicitud de borrado de logs recibida del super-administrador {}", currentUserDNI);
+
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            try (PreparedStatement stmt = conn.prepareStatement("TRUNCATE TABLE logs")) {
+                stmt.execute();
+            }
+            
+            logger.info("La tabla de logs ha sido truncada por el usuario {}", currentUserDNI);
+            
+            response.setStatus(HttpServletResponse.SC_OK);
+            mapper.writeValue(response.getWriter(), Map.of("success", true, "message", "Todos los registros de logs han sido borrados con éxito."));
+
+        } catch (SQLException e) {
+            logger.error("Error SQL al intentar truncar la tabla de logs. Solicitado por: " + currentUserDNI, e);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            mapper.writeValue(response.getWriter(), Map.of("success", false, "message", "Error de base de datos al borrar los logs."));
         }
     }
     

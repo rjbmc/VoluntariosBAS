@@ -33,17 +33,10 @@ import util.sevilla.bancodealimentos.es.Config;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.LogUtil;
 
-/**
- * Servlet que gestiona la solicitud de recuperación de contraseña.
- */
 @WebServlet("/recuperar-clave")
 public class RecuperarClaveServlet extends HttpServlet {
     private static final long serialVersionUID = 1L;
-    
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(RecuperarClaveServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Override
@@ -53,8 +46,10 @@ public class RecuperarClaveServlet extends HttpServlet {
         
         String email = request.getParameter("email");
         Map<String, Object> jsonResponse = new HashMap<>();
+        Connection conn = null;
 
-        try (Connection conn = DatabaseUtil.getConnection()) {
+        try {
+            conn = DatabaseUtil.getConnection();
             String sqlSelect = "SELECT Usuario FROM voluntarios WHERE Email = ?";
             String usuario = null;
 
@@ -72,7 +67,7 @@ public class RecuperarClaveServlet extends HttpServlet {
                 long expiryTime = System.currentTimeMillis() + 3600 * 1000; // 1 hora de validez
                 Timestamp expiryTimestamp = new Timestamp(expiryTime);
 
-                String sqlUpdate = "UPDATE voluntarios SET reset_token = ?, reset_token_expiry = ? WHERE Usuario = ?";
+                String sqlUpdate = "UPDATE voluntarios SET token_recuperacion_clave = ?, fecha_expiracion_token = ? WHERE Usuario = ?";
                 try (PreparedStatement stmtUpdate = conn.prepareStatement(sqlUpdate)) {
                     stmtUpdate.setString(1, token);
                     stmtUpdate.setTimestamp(2, expiryTimestamp);
@@ -80,35 +75,31 @@ public class RecuperarClaveServlet extends HttpServlet {
                     stmtUpdate.executeUpdate();
                 }
 
-                // Intentamos enviar el correo. Si falla, lo logueamos pero no fallamos la petición HTTP
-                // para no dar pistas al usuario (aunque idealmente debería saberlo, por seguridad se suele ocultar).
                 try {
                     sendPasswordResetEmail(email, usuario, token, request);
                     LogUtil.logOperation(conn, "RECUPERACION_SOL", usuario, "Solicitud de recuperación de clave para " + email);
-                    logger.info("Correo de recuperación enviado exitosamente a {}", email);
                 } catch (MessagingException e) {
-                    logger.error("Error al enviar correo de recuperación a {}", email, e);
-                    // Aquí podríamos decidir poner success=false si queremos informar al usuario del error técnico
+                    LogUtil.logException(logger, e, "Error al enviar email de recuperación de clave", usuario);
                 }
-            } else {
-                // Si el usuario no existe, logueamos una advertencia interna pero al usuario le decimos OK
-                // para evitar enumeración de cuentas.
-                logger.info("Solicitud de recuperación para email no registrado: {}", email);
-            }
+            } 
             
-            // Respuesta genérica de éxito por seguridad
             response.setStatus(HttpServletResponse.SC_OK);
             jsonResponse.put("success", true);
             jsonResponse.put("message", "Si el correo electrónico existe en nuestra base de datos, recibirás las instrucciones para restablecer tu contraseña.");
 
         } catch (SQLException e) {
-            logger.error("Error SQL en proceso de recuperación de clave", e);
+            LogUtil.logException(logger, e, "Error de BD en recuperación de clave", "Email: " + email);
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.put("success", false);
-            jsonResponse.put("message", "Error interno del servidor. Inténtalo más tarde.");
+            jsonResponse.put("message", "Error interno del servidor. El problema ha sido registrado.");
+        } finally {
+            if (conn != null) {
+                try { conn.close(); } catch (SQLException e) {
+                    LogUtil.logException(logger, e, "Error al cerrar conexión en RecuperarClaveServlet");
+                }
+            }
         }
         
-        // Escritura final con Jackson
         mapper.writeValue(response.getWriter(), jsonResponse);
     }
 
@@ -142,8 +133,7 @@ public class RecuperarClaveServlet extends HttpServlet {
                          + "<a href=\"" + resetLink + "\">Restablecer mi contraseña</a><br><br>"
                          + "Si no has solicitado esto, puedes ignorar este correo.<br><br>"
                          + "Gracias,<br>"
-                         + "El equipo del Banco de Alimentos de Sevilla."
-                         + "<br><br><strong>La dirección de correo desde donde se envía este mensaje es de sólo envío. Por favor, no la uses para responder.</strong><br>";
+                         + "El equipo del Banco de Alimentos de Sevilla.";
         
         message.setContent(emailBody, "text/html; charset=utf-8");
         Transport.send(message);

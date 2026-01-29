@@ -14,8 +14,9 @@ public class TiendasUtil {
      * Reconstruye las tiendas en el sistema.
      * Este método contiene la lógica para realizar la reconstrucción de las tiendas.
      * @return true si la reconstrucción fue exitosa, false en caso contrario.
+     * @throws SQLException Si ocurre un error de base de datos.
      */
-    public static boolean rebuildTiendas() {
+    public static boolean rebuildTiendas() throws SQLException {
         try (Connection conn = DatabaseUtil.getConnection()) {
             LOGGER.log(Level.INFO, "Iniciando la reconstrucción de tiendas...");
 
@@ -44,9 +45,6 @@ public class TiendasUtil {
 
             LOGGER.log(Level.INFO, "Reconstrucción de tiendas completada exitosamente.");
             return true;
-        } catch (SQLException e) {
-            LOGGER.log(Level.SEVERE, "Error durante la reconstrucción de tiendas: {0}", e.getMessage());
-            return false;
         }
     }
 }
