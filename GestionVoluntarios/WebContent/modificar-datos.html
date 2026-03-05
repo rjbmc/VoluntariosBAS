@@ -181,7 +181,9 @@
                 const tiendaRefId = data.tiendaReferencia;
                 document.getElementById('tiendaReferencia').value = tiendaRefId;
                 if (todasTiendasCache.has(tiendaRefId)) {
-                    document.getElementById('tiendaReferenciaNombre').textContent = todasTiendasCache.get(tiendaRefId).nombre;
+                    const tienda = todasTiendasCache.get(tiendaRefId);
+                    const codigoFormateado = String(tienda.id).padStart(3, '0');
+                    document.getElementById('tiendaReferenciaNombre').textContent = `${codigoFormateado} - ${tienda.nombre}`;
                 } else {
                     document.getElementById('tiendaReferenciaNombre').textContent = 'Tienda no asignada';
                 }
@@ -293,11 +295,14 @@
             }, 100);
         }
         
+        // --- MODIFICACIÓN: Mostrar código formateado con 3 dígitos ---
         function selectStore(tienda) {
             document.getElementById('tiendaReferencia').value = tienda.id;
-            document.getElementById('tiendaReferenciaNombre').textContent = tienda.nombre;
+            const codigoFormateado = String(tienda.id).padStart(3, '0');
+            document.getElementById('tiendaReferenciaNombre').textContent = `${codigoFormateado} - ${tienda.nombre}`;
             closeMapModal();
         }
+        // -------------------------------------------------------------
 
         function closeMapModal() {
             document.getElementById('map-modal').style.display = 'none';

@@ -3,7 +3,7 @@ package util.sevilla.bancodealimentos.es;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.SQLException; // Importar SQLException
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -37,7 +37,10 @@ public class RepairTiendasData {
             while (rs.next()) {
                 try {
                     Map<String, Object> storeData = new HashMap<>();
-                    storeData.put("codigo", rs.getInt("codigo"));
+                    
+                    // --- MODIFICACIÓN: Enviar código como String a SharePoint ---
+                    storeData.put("codigo", String.valueOf(rs.getInt("codigo")));
+                    
                     storeData.put("SqlRowUUID", rs.getString("SqlRowUUID"));
                     storeData.put("denominacion", rs.getString("denominacion"));
                     storeData.put("direccion", rs.getString("Direccion"));
@@ -67,17 +70,14 @@ public class RepairTiendasData {
                     }
 
                 } catch (Exception e) {
-                    // Este catch se mantiene para que un error en una tienda no detenga todo el proceso
-                    logger.error("Error al procesar la tienda con código {}: {}. Se continúa con la siguiente.", rs.getString("codigo"), e.getMessage());
+                    logger.error("Error al procesar la tienda con código {}: {}. Se continúa con la siguiente.", 
+                               rs.getString("codigo"), e.getMessage());
                     errores++;
                 }
             }
 
             logger.info("Proceso de sincronización finalizado. Resumen -> Sincronizadas: {}. Errores: {}.", procesados, errores);
 
-        } 
-        // El try-with-resources se encarga de cerrar la conexión.
-        // Cualquier SQLException en el bloque try-with-resources (getConnection, prepareStatement, etc.) 
-        // ahora se propagará hacia arriba, al servlet, que es lo que queremos.
+        }
     }
 }

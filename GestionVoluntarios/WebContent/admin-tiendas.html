@@ -232,19 +232,19 @@
                                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                                      <div class="bg-white p-3 rounded-xl border border-orange-100">
                                         <label for="huecosTurno1" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Viernes Mañ.</label>
-                                        <input type="number" id="huecosTurno1" name="huecosTurno1" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                        <input type="number" id="huecosTurno1" name="huecosTurno1" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0" step="1">
                                     </div>
                                     <div class="bg-white p-3 rounded-xl border border-orange-100">
                                         <label for="huecosTurno2" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Viernes Tarde</label>
-                                        <input type="number" id="huecosTurno2" name="huecosTurno2" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                        <input type="number" id="huecosTurno2" name="huecosTurno2" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0" step="1">
                                     </div>
                                     <div class="bg-white p-3 rounded-xl border border-orange-100">
                                         <label for="huecosTurno3" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Sábado Mañ.</label>
-                                        <input type="number" id="huecosTurno3" name="huecosTurno3" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                        <input type="number" id="huecosTurno3" name="huecosTurno3" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0" step="1">
                                     </div>
                                     <div class="bg-white p-3 rounded-xl border border-orange-100">
                                         <label for="huecosTurno4" class="block text-[9px] font-black text-gray-400 uppercase mb-1">Sábado Tarde</label>
-                                        <input type="number" id="huecosTurno4" name="huecosTurno4" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0">
+                                        <input type="number" id="huecosTurno4" name="huecosTurno4" class="w-full text-center font-bold text-orange-600 border-none p-0 focus:ring-0" min="0" value="0" step="1">
                                     </div>
                                 </div>
                             </div>
@@ -495,5 +495,79 @@
             if (type !== 'info') setTimeout(() => { container.innerHTML = ''; }, 5000);
         }
     </script>
+    <!-- Script para hacer el modal arrastrable -->
+<script>
+    // Hacer el modal arrastrable
+    function makeModalDraggable() {
+        const modal = document.getElementById('tienda-modal');
+        const modalContent = modal.querySelector('.modal-content');
+        const modalHeader = modalContent.querySelector('h3'); // Usamos el título como agarre
+        
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+
+        modalHeader.addEventListener('mousedown', dragStart);
+        modalHeader.addEventListener('mouseup', dragEnd);
+        modalHeader.addEventListener('mouseleave', dragEnd);
+        document.addEventListener('mousemove', drag);
+
+        function dragStart(e) {
+            initialX = e.clientX - xOffset;
+            initialY = e.clientY - yOffset;
+
+            if (e.target === modalHeader || modalHeader.contains(e.target)) {
+                isDragging = true;
+                modalHeader.style.cursor = 'grabbing';
+            }
+        }
+
+        function dragEnd(e) {
+            isDragging = false;
+            modalHeader.style.cursor = 'grab';
+        }
+
+        function drag(e) {
+            if (isDragging) {
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                currentY = e.clientY - initialY;
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                setTranslate(currentX, currentY, modalContent);
+            }
+        }
+
+        function setTranslate(xPos, yPos, el) {
+            el.style.transform = `translate(${xPos}px, ${yPos}px)`;
+        }
+
+        // Inicializar cursor
+        modalHeader.style.cursor = 'grab';
+    }
+
+    // Llamar a la función cuando se abre el modal
+    const originalOpenModal = window.openModal;
+    window.openModal = function(tiendaCodigo = null) {
+        originalOpenModal(tiendaCodigo);
+        makeModalDraggable();
+    };
+
+    // Resetear posición al cerrar
+    const originalCloseModal = window.closeModal;
+    window.closeModal = function() {
+        const modalContent = document.querySelector('#tienda-modal .modal-content');
+        if (modalContent) {
+            modalContent.style.transform = 'translate(0, 0)';
+        }
+        originalCloseModal();
+    };
+</script>
 </body>
 </html>

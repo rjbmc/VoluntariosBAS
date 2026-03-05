@@ -225,7 +225,6 @@ public class RefrescarPowerAppServlet extends HttpServlet {
         if (activeCampaignId.isEmpty()) return;
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        // String timestamp = sdf.format(new Date()); // Opcional, si se usa
 
         String query = "SELECT vc.Campana, vc.Usuario, v.`DNI NIF`, vc.Turno1, vc.Comentario1, vc.Turno2, vc.Comentario2, vc.Turno3, vc.Comentario3, vc.Turno4, vc.Comentario4 FROM voluntarios_en_campana vc JOIN voluntarios v ON vc.Usuario = v.Usuario WHERE vc.Campana = ? ORDER BY vc.Usuario";
         try (PreparedStatement stmt = conn.prepareStatement(query)) {
@@ -247,13 +246,15 @@ public class RefrescarPowerAppServlet extends HttpServlet {
                 row.createCell(1).setCellValue(uniqueNum);
                 row.createCell(2).setCellValue(rs.getString("Usuario"));
                 row.createCell(3).setCellValue(rs.getString("DNI NIF"));
-                row.createCell(4).setCellValue(turno1);
+                
+                // --- MODIFICACIÓN: Formatear códigos de tienda a 3 dígitos ---
+                row.createCell(4).setCellValue(turno1 > 0 ? String.format("%03d", turno1) : "");
                 row.createCell(5).setCellValue(rs.getString("Comentario1"));
-                row.createCell(6).setCellValue(turno2);
+                row.createCell(6).setCellValue(turno2 > 0 ? String.format("%03d", turno2) : "");
                 row.createCell(7).setCellValue(rs.getString("Comentario2"));
-                row.createCell(8).setCellValue(turno3);
+                row.createCell(8).setCellValue(turno3 > 0 ? String.format("%03d", turno3) : "");
                 row.createCell(9).setCellValue(rs.getString("Comentario3"));
-                row.createCell(10).setCellValue(turno4);
+                row.createCell(10).setCellValue(turno4 > 0 ? String.format("%03d", turno4) : "");
                 row.createCell(11).setCellValue(rs.getString("Comentario4"));
                 row.createCell(12).setCellValue(nTurnos);
                 row.createCell(13).setCellValue("NO");

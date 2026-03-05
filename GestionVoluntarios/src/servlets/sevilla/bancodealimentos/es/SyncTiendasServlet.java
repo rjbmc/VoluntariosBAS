@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.graph.models.FieldValueSet;
 import com.microsoft.graph.models.ListItem;
-import com.microsoft.graph.models.ListItemCollectionResponse; // Import necesario para getListItems
+import com.microsoft.graph.models.ListItemCollectionResponse;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
@@ -30,7 +30,7 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/sync-tiendas")
 public class SyncTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L; 
+    private static final long serialVersionUID = 3L; // Versión incrementada
     
     private static final Logger logger = LoggerFactory.getLogger(SyncTiendasServlet.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -73,7 +73,7 @@ public class SyncTiendasServlet extends HttpServlet {
         }
 
         TiendaData(Map<String, Object> spFields) {
-            // DEBUGGING: Log all fields from SharePoint item (Opcional, lo mantengo por si acaso)
+            // DEBUGGING: Log all fields from SharePoint item (Opcional)
             if (logger.isDebugEnabled()) {
                 logger.debug("Campos de SharePoint para item (Título: {}):", spFields.get("Title"));
                 for (Map.Entry<String, Object> entry : spFields.entrySet()) {
@@ -84,10 +84,26 @@ public class SyncTiendasServlet extends HttpServlet {
             this.sqlRowUUID = (String) spFields.get("SqlRowUUID");
             this.denominacion = (String) spFields.get("Title");
             
+            // --- MODIFICACIÓN: Leer código como String desde SharePoint ---
             Object codigoObj = spFields.get("codigo");
-            if (codigoObj instanceof Double) { this.codigo = ((Double) codigoObj).intValue(); }
-            else if (codigoObj instanceof String) { this.codigo = Integer.parseInt((String) codigoObj); }
-            else { this.codigo = 0; }
+            if (codigoObj instanceof Double) { 
+                this.codigo = ((Double) codigoObj).intValue(); 
+            } else if (codigoObj instanceof String) { 
+                // El código ahora es String en SP, pero en BD local sigue siendo int
+                String codigoStr = (String) codigoObj;
+                if (!codigoStr.isEmpty()) {
+                    try {
+                        this.codigo = Integer.parseInt(codigoStr);
+                    } catch (NumberFormatException e) {
+                        logger.warn("Código de tienda no numérico en SharePoint: '{}'. Se usará 0.", codigoStr);
+                        this.codigo = 0;
+                    }
+                } else {
+                    this.codigo = 0;
+                }
+            } else { 
+                this.codigo = 0; 
+            }
 
             this.direccion = (String) spFields.get("direccion");
             
@@ -109,7 +125,13 @@ public class SyncTiendasServlet extends HttpServlet {
 
             Object prioridadObj = spFields.get("prioridad");
             if (prioridadObj instanceof Double) { this.prioridad = ((Double) prioridadObj).intValue(); }
-            else if (prioridadObj instanceof String) { this.prioridad = Integer.parseInt((String) prioridadObj); }
+            else if (prioridadObj instanceof String) { 
+                try {
+                    this.prioridad = Integer.parseInt((String) prioridadObj); 
+                } catch (NumberFormatException e) {
+                    this.prioridad = 0;
+                }
+            }
             else { this.prioridad = 0; }
 
             this.disponible = spFields.get("disponible") instanceof Boolean ? (Boolean) spFields.get("disponible") : false;
@@ -140,6 +162,15 @@ public class SyncTiendasServlet extends HttpServlet {
         }
     }
 
+    private boolean isAdmin(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session == null || session.getAttribute("usuario") == null) return false;
+        
+        Object isAdminAttr = session.getAttribute("isAdmin");
+        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
+               ("S".equals(isAdminAttr));
+    }
+
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
@@ -147,11 +178,7 @@ public class SyncTiendasServlet extends HttpServlet {
         Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        boolean isAdmin = session != null && 
-                          session.getAttribute("usuario") != null && 
-                          (Boolean) session.getAttribute("isAdmin"); 
-
-        if (!isAdmin) {
+        if (!isAdmin(request)) {
             logger.warn("Acceso denegado a SyncTiendas. Usuario: {}, IP: {}", 
                         (session != null ? session.getAttribute("usuario") : "Anónimo"), request.getRemoteAddr());
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
@@ -175,7 +202,7 @@ public class SyncTiendasServlet extends HttpServlet {
 
             logger.debug("Fase 1: Leyendo tiendas de la BD y de SharePoint...");
             Map<String, TiendaData> dbTiendas = getDbTiendasAsMap(conn);
-            Map<String, ListItem> spTiendas = getSharePointItemsAsMap(listId); // CORREGIDO: Usar getListItems internamente
+            Map<String, ListItem> spTiendas = getSharePointItemsAsMap(listId);
             logger.info("Lectura completa: {} tiendas en BD, {} en SharePoint.", dbTiendas.size(), spTiendas.size());
             
             SyncResult result = new SyncResult();
@@ -184,13 +211,13 @@ public class SyncTiendasServlet extends HttpServlet {
             syncSharePointToDb(conn, listId, spTiendas, dbTiendas, result);
             
             Map<String, TiendaData> dbTiendasActualizadas = getDbTiendasAsMap(conn);
-            spTiendas = getSharePointItemsAsMap(listId); // Recargar spTiendas después de posibles actualizaciones de UUID
+            spTiendas = getSharePointItemsAsMap(listId);
             logger.debug("Fase 3: Sincronizando tiendas de la Base de Datos a SharePoint...");
             syncDbToSharePoint(conn, listId, dbTiendasActualizadas, spTiendas, result);
             
             conn.commit(); 
             String successMessage = "Sincronización bidireccional completada. " + result.toString();
-            logger.info(successMessage); // Loggear el éxito también aquí
+            logger.info(successMessage);
             LogUtil.logOperation(conn, "SYNC_TIENDAS", adminUser, successMessage);
             jsonResponse.put("success", true);
             jsonResponse.put("message", successMessage);
@@ -277,7 +304,7 @@ public class SyncTiendasServlet extends HttpServlet {
 
     private Map<String, ListItem> getSharePointItemsAsMap(String listId) throws Exception {
         Map<String, ListItem> map = new HashMap<>();
-        ListItemCollectionResponse response = SharePointUtil.getListItems(SharePointUtil.SITE_ID, listId); // CORREGIDO: Uso de getListItems
+        ListItemCollectionResponse response = SharePointUtil.getListItems(SharePointUtil.SITE_ID, listId);
         
         if (response != null && response.getValue() != null) {
             for (ListItem item : response.getValue()) {
@@ -377,6 +404,7 @@ public class SyncTiendasServlet extends HttpServlet {
     private FieldValueSet createFieldsFromTiendaData(TiendaData tienda, String uuid) {
         FieldValueSet fields = new FieldValueSet();
         fields.getAdditionalData().put("Title", tienda.denominacion);
+        // Enviar código como String a SharePoint
         fields.getAdditionalData().put("codigo", String.valueOf(tienda.codigo));
         fields.getAdditionalData().put("denominacion", tienda.denominacion);
         fields.getAdditionalData().put("direccion", tienda.direccion);

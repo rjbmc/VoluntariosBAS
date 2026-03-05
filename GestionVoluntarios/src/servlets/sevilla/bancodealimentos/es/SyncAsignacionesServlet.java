@@ -22,11 +22,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.DatabaseUtil;
 import util.sevilla.bancodealimentos.es.SharePointUtil;
-import util.sevilla.bancodealimentos.es.LogUtil; // Importación añadida
+import util.sevilla.bancodealimentos.es.LogUtil;
 
 @WebServlet("/sync-asignaciones")
 public class SyncAsignacionesServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L; // Versión incrementada
     
     private static final Logger logger = LoggerFactory.getLogger(SyncAsignacionesServlet.class);
     
@@ -105,10 +105,9 @@ public class SyncAsignacionesServlet extends HttpServlet {
                         fields.getAdditionalData().put("Campana", rs.getString("Campana"));
 
                         // --- PROCESAR TURNOS (Lookups de Tiendas) ---
-                        // La declaración de 'tieneAlgunoTurno' es correcta aquí para cada registro del ResultSet
                         boolean tieneAlgunoTurno = false; 
                         for (int i = 1; i <= 4; i++) {
-                            int idTiendaDb = rs.getInt("Turno" + i); // Esta es la línea 123 en el conteo actual
+                            int idTiendaDb = rs.getInt("Turno" + i);
                             String comentario = rs.getString("Comentario" + i);
 
                             if (idTiendaDb > 0 && !rs.wasNull()) {
@@ -120,6 +119,10 @@ public class SyncAsignacionesServlet extends HttpServlet {
                                     if (spTiendaId != null) {
                                         fields.getAdditionalData().put("Turno" + i + "LookupId", spTiendaId);
                                         fields.getAdditionalData().put("Comentario" + i, comentario);
+                                        
+                                        // --- NUEVO: Guardar código formateado si existe el campo ---
+                                        String codigoFormateado = String.format("%03d", idTiendaDb);
+                                        fields.getAdditionalData().put("Turno" + i + "Codigo", codigoFormateado);
                                     } else {
                                         logger.warn("Tienda UUID {} no encontrada en SP. Turno {} quedará vacío.", tiendaUuid, i);
                                         errorLog.append("WARN: Tienda UUID ").append(tiendaUuid).append(" no en SP (Turno ").append(i).append(").\n");
@@ -131,13 +134,10 @@ public class SyncAsignacionesServlet extends HttpServlet {
                             }
                         }
                         
-                        // Si se quisiera usar 'tieneAlgunoTurno', sería aquí:
-                        // if (tieneAlgunoTurno) {
-                        //    SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
-                        // } else {
-                        //    // Manejar caso sin turnos, si es necesario crear un ítem vacío o loggear
-                        // }
-                        SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields); // Asumiendo que siempre se crea
+                        // Solo crear si tiene al menos un turno
+                        if (tieneAlgunoTurno) {
+                            SharePointUtil.createListItem(SharePointUtil.SITE_ID, listIdAsignaciones, fields);
+                        }
 
                         if (totalProcesados % 10 == 0) Thread.sleep(200);
 

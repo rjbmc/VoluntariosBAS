@@ -32,6 +32,7 @@
             </div>
             <div class="flex items-center space-x-4">
                 <span id="user-display" class="hidden md:inline text-sm font-semibold text-gray-500 bg-gray-100 px-4 py-2 rounded-full border border-gray-200">Verificando sesión...</span>
+                <a href="#" id="link-modificar-datos" class="px-4 py-2 text-gray-600 hover:text-orange-600 transition-colors font-bold text-sm hidden">Mis datos</a>
                 <a href="login.html" id="link-volver" class="px-4 py-2 text-gray-600 hover:text-orange-600 transition-colors font-bold text-sm">Volver</a>
             </div>
         </nav>
@@ -166,7 +167,12 @@
                 const urlUser = params.get('usuario');
                 targetUsuario = (urlUser && sessionUser.isAdmin) ? urlUser : sessionUser.usuario;
                 document.getElementById('user-display').textContent = `Conectado: ${sessionUser.usuario}`;
-                document.getElementById('display-usuario-fuerte').textContent = targetUsuario;
+                
+                // --- CAMBIO SOLICITADO: Mostrar nombre completo seguido del código ---
+                const nombreAMostrar = sessionUser.nombre ? `${sessionUser.nombre} (${targetUsuario})` : targetUsuario;
+                document.getElementById('display-usuario-fuerte').textContent = nombreAMostrar;
+                // ---------------------------------------------------------------------
+                
                 document.getElementById('targetUsuario').value = targetUsuario;
                 
                 const linkVolver = document.getElementById('link-volver');
@@ -175,7 +181,7 @@
                     linkVolver.textContent = "Volver al Listado";
                 } else {
                     linkVolver.href = "login.html";
-                    linkVolver.textContent = "Cerrar Sesión";
+                    linkVolver.textContent = "Volver";
                 }
 
                 document.getElementById('campanaId').value = campana.campana;
@@ -220,17 +226,15 @@
             document.getElementById('map-modal').classList.remove('hidden');
 
             setTimeout(async () => {
-                let center = [37.3891, -5.9845]; // Default: Seville center
-                let zoom = 12; // Default: Wide zoom
+                let center = [37.3891, -5.9845]; // Sevilla
+                let zoom = 12;
                 let targetStore = null;
 
-                // 1. Check for a store already selected in the CURRENT turn being edited
                 const currentTiendaId = document.getElementById(`tienda_${turno}`).value;
                 if (currentTiendaId) {
                     targetStore = tiendasCache.find(t => t.id == currentTiendaId);
                 }
 
-                // 2. If no store is selected, fetch volunteer details to get their reference store
                 if (!targetStore) {
                     try {
                         const url = `${AppConfig.getUrl('VOLUNTARIO_DETALLES')}?usuario=${encodeURIComponent(targetUsuario)}`;
@@ -240,18 +244,15 @@
                             if (voluntarioDetails && voluntarioDetails.tiendaReferencia) {
                                 targetStore = tiendasCache.find(t => t.id == voluntarioDetails.tiendaReferencia);
                             }
-                        } else {
-                            console.error(`No se pudieron obtener los detalles para el voluntario: ${targetUsuario}`);
                         }
                     } catch (error) {
                         console.error('Error al obtener los detalles del voluntario:', error);
                     }
                 }
                 
-                // 3. If a target store was found (either from current turn or reference), update center and zoom
                 if (targetStore && targetStore.lat && targetStore.lon) {
                     center = [targetStore.lat, targetStore.lon];
-                    zoom = 18; // Zoom 18 provides a very close view (approx. 1km side)
+                    zoom = 18;
                 }
 
                 if (!mapInstance) {
@@ -269,10 +270,6 @@
 
         function renderMarkers() {
             mapInstance.eachLayer((layer) => { if (layer instanceof L.Marker) mapInstance.removeLayer(layer); });
-            if (!tiendasCache || tiendasCache.length === 0) {
-                console.error("No hay tiendas en la caché para mostrar en el mapa.");
-                return;
-            }
             tiendasCache.forEach(tienda => {
                 if (tienda.lat && tienda.lon) {
                     const marker = L.marker([tienda.lat, tienda.lon]).addTo(mapInstance);
@@ -283,12 +280,19 @@
 
         window.selectTienda = (id) => { updateTiendaDisplay(currentTurnoSelection, id); closeMapModal(); };
 
+        // --- MODIFICACIÓN: Mostrar código formateado con 3 dígitos ---
         function updateTiendaDisplay(turno, id) {
             document.getElementById(`tienda_${turno}`).value = id;
             const t = tiendasCache.find(x => x.id == id);
             const el = document.getElementById(`tienda_nombre_${turno}`);
-            if (t) { el.textContent = t.nombre; el.classList.remove('italic', 'text-gray-500'); el.classList.add('font-bold', 'text-orange-600'); }
+            if (t) { 
+                const codigoFormateado = String(t.id).padStart(3, '0');
+                el.textContent = `${codigoFormateado} - ${t.nombre}`; 
+                el.classList.remove('italic', 'text-gray-500'); 
+                el.classList.add('font-bold', 'text-orange-600'); 
+            }
         }
+        // -------------------------------------------------------------
 
         window.clearTienda = (turno) => {
             document.getElementById(`tienda_${turno}`).value = "";

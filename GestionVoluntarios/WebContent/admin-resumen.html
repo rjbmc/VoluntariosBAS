@@ -165,7 +165,10 @@
 
                 resumen.forEach(tienda => {
                     const tr = document.createElement('tr');
-                    let cellsHtml = `<td class="table-cell"><div class="text-sm font-medium text-gray-900">${tienda.denominacion}</div><div class="text-xs text-gray-500">Cód: ${tienda.codigo}</div></td>`;
+                    // --- MODIFICACIÓN: Formatear código a 3 dígitos ---
+                    const codigoFormateado = String(tienda.codigo).padStart(3, '0');
+                    let cellsHtml = `<td class="table-cell"><div class="text-sm font-medium text-gray-900">${tienda.denominacion}</div><div class="text-xs text-gray-500">Cód: ${codigoFormateado}</div></td>`;
+                    // -------------------------------------------------
                     
                     for (let i = 1; i <= 4; i++) {
                         const huecos = tienda[`huecosTurno${i}`];

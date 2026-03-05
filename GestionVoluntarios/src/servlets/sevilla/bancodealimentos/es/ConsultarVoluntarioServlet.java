@@ -66,6 +66,7 @@ public class ConsultarVoluntarioServlet extends HttpServlet {
                 data.put("email", sharepointData.getOrDefault("field_6", ""));
                 data.put("telefono", sharepointData.getOrDefault("field_7", ""));
                 data.put("cp", sharepointData.getOrDefault("field_9", ""));
+                data.put("fechaNacimiento", sharepointData.getOrDefault("field_8", "")); // <-- NUEVO
 
                 Map<String, Object> jsonResponse = new HashMap<>();
                 jsonResponse.put("status", "success");

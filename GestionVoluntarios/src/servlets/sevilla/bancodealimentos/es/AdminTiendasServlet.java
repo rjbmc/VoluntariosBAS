@@ -33,12 +33,13 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/admin-tiendas")
 public class AdminTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 6L;
+    private static final long serialVersionUID = 8L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(AdminTiendasServlet.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
     public static class TiendaDTO {
-        public int codigo, huecosTurno1, huecosTurno2, huecosTurno3, huecosTurno4;
+        public int codigo; // Se mantiene como int en BD local
+        public int huecosTurno1, huecosTurno2, huecosTurno3, huecosTurno4;
         public String denominacion, direccion, lat, lon, cp, poblacion, cadena, disponible, prioridad, sqlRowUUID, supervisor, coordinador, marca, codZona, zona, modalidad;
     }
 
@@ -68,6 +69,7 @@ public class AdminTiendasServlet extends HttpServlet {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
+
         response.setContentType("application/json");
         String adminUser = getUsuario(request);
         String action = request.getParameter("action");
@@ -75,35 +77,122 @@ public class AdminTiendasServlet extends HttpServlet {
 
         try (Connection spConn = DatabaseUtil.getConnection()) {
             switch (action) {
+                case "refreshAll":
+                    syncFromSPtoDB(adminUser);
+                    sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Sincronización completada con éxito.");
+                    break;
+
+                case "refresh":
+                    String codigo = request.getParameter("codigo");
+                    refreshSingleTienda(adminUser, codigo);
+                    sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Tienda " + codigo + " actualizada correctamente.");
+                    break;
+
                 case "save":
                     handleSave(request, spConn);
+                    syncFromSPtoDB(adminUser);
+                    sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Guardado y sincronizado correctamente.");
                     break;
-                case "syncAll":
-                    break;
+
                 default:
-                    throw new ServletException("Acción desconocida: " + action);
+                    sendJsonResponse(response, HttpServletResponse.SC_BAD_REQUEST, false, "Acción desconocida: " + action);
             }
-            syncFromSPtoDB(adminUser);
-            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Operación completada y sistema sincronizado.");
         } catch (Exception e) {
-            LogUtil.logException(logger, e, "Error en doPost de AdminTiendasServlet", context);
-            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error en la operación. El problema ha sido registrado.");
+            String errorMsg = e.getMessage();
+            String stackTrace = getStackTraceAsString(e);
+
+            logger.error("Error en doPost de AdminTiendasServlet. Contexto: {}", context, e);
+
+            try (Connection conn = DatabaseUtil.getConnection()) {
+                LogUtil.logOperation(conn, "ERROR_SYNC", adminUser,
+                        "Error en sincronización: " + errorMsg + " - " + stackTrace.substring(0, Math.min(500, stackTrace.length())));
+            } catch (SQLException ex) {
+                logger.error("No se pudo registrar el error en la tabla de logs", ex);
+            }
+
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Error en la sincronización: " + errorMsg);
+            errorResponse.put("detail", stackTrace);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            mapper.writeValue(response.getWriter(), errorResponse);
+        }
+    }
+
+    private String getStackTraceAsString(Exception e) {
+        java.io.StringWriter sw = new java.io.StringWriter();
+        java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+        e.printStackTrace(pw);
+        return sw.toString();
+    }
+
+    private void refreshSingleTienda(String adminUser, String codigo) throws Exception {
+        String listId = getListId();
+
+        String itemId = SharePointUtil.findItemIdByFieldValue(null, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "codigo", codigo);
+
+        if (itemId == null) {
+            throw new Exception("La tienda con código " + codigo + " no existe en SharePoint");
+        }
+
+        ListItemCollectionResponse spTiendasResponse = SharePointUtil.getListItems(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId);
+        ListItem tiendaSP = null;
+
+        if (spTiendasResponse != null && spTiendasResponse.getValue() != null) {
+            for (ListItem item : spTiendasResponse.getValue()) {
+                Map<String, Object> fields = item.getFields().getAdditionalData();
+                String spCodigo = getString(fields, "codigo");
+                if (spCodigo != null && spCodigo.equals(codigo)) {
+                    tiendaSP = item;
+                    break;
+                }
+            }
+        }
+
+        if (tiendaSP == null) {
+            throw new Exception("No se encontraron datos para la tienda " + codigo + " en SharePoint");
+        }
+
+        try (Connection conn = DatabaseUtil.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                List<ListItem> items = new ArrayList<>();
+                items.add(tiendaSP);
+                Set<Integer> spCodes = upsertTiendas(conn, items);
+                conn.commit();
+
+                LogUtil.logOperation(conn, "REFRESH_TIENDA", adminUser,
+                        "Tienda " + codigo + " actualizada desde SharePoint");
+
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            }
         }
     }
 
     private void handleSave(HttpServletRequest request, Connection conn) throws Exception {
-        int codigo = Integer.parseInt(request.getParameter("codigo"));
+        try {
+            String codigo = request.getParameter("codigo"); // Ahora es String
 
-        FieldValueSet fields = new FieldValueSet();
-        fields.getAdditionalData().put("disponible", "S".equals(request.getParameter("disponible")));
-        fields.getAdditionalData().put("HuecosTurno1", Integer.parseInt(request.getParameter("huecosTurno1")));
-        fields.getAdditionalData().put("HuecosTurno2", Integer.parseInt(request.getParameter("huecosTurno2")));
-        fields.getAdditionalData().put("HuecosTurno3", Integer.parseInt(request.getParameter("huecosTurno3")));
-        fields.getAdditionalData().put("HuecosTurno4", Integer.parseInt(request.getParameter("huecosTurno4")));
+            FieldValueSet fields = new FieldValueSet();
+            fields.getAdditionalData().put("codigo", codigo); // Enviar como string
+            fields.getAdditionalData().put("disponible", "S".equals(request.getParameter("disponible")));
+            fields.getAdditionalData().put("huecosTurno1", Integer.parseInt(request.getParameter("huecosTurno1")));
+            fields.getAdditionalData().put("huecosTurno2", Integer.parseInt(request.getParameter("huecosTurno2")));
+            fields.getAdditionalData().put("huecosTurno3", Integer.parseInt(request.getParameter("huecosTurno3")));
+            fields.getAdditionalData().put("huecosTurno4", Integer.parseInt(request.getParameter("huecosTurno4")));
 
-        String listId = getListId();
-        String itemId = findItemIdByCodigo(conn, listId, codigo);
-        SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
+            String listId = getListId();
+            String itemId = findItemIdByCodigo(conn, listId, codigo);
+            SharePointUtil.updateListItem(SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, itemId, fields);
+
+            logger.info("Tienda {} actualizada correctamente en SharePoint", codigo);
+
+        } catch (Exception e) {
+            logger.error("Error al guardar tienda", e);
+            throw new Exception("Error al guardar: " + e.getMessage());
+        }
     }
 
     private void syncFromSPtoDB(String adminUser) throws Exception {
@@ -137,8 +226,18 @@ public class AdminTiendasServlet extends HttpServlet {
         try (PreparedStatement stmt = conn.prepareStatement(upsertSql)) {
             for (ListItem item : spItems) {
                 Map<String, Object> fields = item.getFields().getAdditionalData();
-                Integer codigo = parseToInt(fields.get("codigo"));
-                if (codigo == null) continue;
+
+                logger.debug("Procesando tienda desde SharePoint");
+
+                // Leer el código como String desde SharePoint
+                String codigoStr = getString(fields, "codigo");
+                if (codigoStr == null || codigoStr.isEmpty()) {
+                    logger.warn("Item sin código, se omite.");
+                    continue;
+                }
+                
+                // Convertir a entero para la BD local
+                Integer codigo = Integer.parseInt(codigoStr);
                 spCodes.add(codigo);
 
                 stmt.setInt(1, codigo);
@@ -148,13 +247,31 @@ public class AdminTiendasServlet extends HttpServlet {
                 stmt.setString(5, getString(fields, "poblacion"));
                 stmt.setString(6, getString(fields, "cadena"));
                 stmt.setString(7, Boolean.TRUE.equals(fields.get("disponible")) ? "S" : "N");
-                stmt.setString(8, getString(fields, "Lat").replace(',', '.'));
-                stmt.setString(9, getString(fields, "Lon").replace(',', '.'));
+
+                // --- LATITUD (campo 8) - Campo en minúsculas 'lat' ---
+                String latStr = getString(fields, "lat").replace(',', '.');
+                if (latStr == null || latStr.trim().isEmpty()) {
+                    logger.debug("No se encontró latitud para tienda {}, usando 0.0", codigo);
+                    stmt.setString(8, "0.0");
+                } else {
+                    stmt.setString(8, latStr);
+                }
+
+                // --- LONGITUD (campo 9) - Campo en minúsculas 'lon' ---
+                String lonStr = getString(fields, "lon").replace(',', '.');
+                if (lonStr == null || lonStr.trim().isEmpty()) {
+                    logger.debug("No se encontró longitud para tienda {}, usando 0.0", codigo);
+                    stmt.setString(9, "0.0");
+                } else {
+                    stmt.setString(9, lonStr);
+                }
+
                 stmt.setString(10, String.format("%04d", parseToInt(fields.get("prioridad"))));
-                stmt.setInt(11, parseToInt(fields.get("HuecosTurno1")));
-                stmt.setInt(12, parseToInt(fields.get("HuecosTurno2")));
-                stmt.setInt(13, parseToInt(fields.get("HuecosTurno3")));
-                stmt.setInt(14, parseToInt(fields.get("HuecosTurno4")));
+
+                stmt.setInt(11, parseToInt(fields.get("huecosTurno1")));
+                stmt.setInt(12, parseToInt(fields.get("huecosTurno2")));
+                stmt.setInt(13, parseToInt(fields.get("huecosTurno3")));
+                stmt.setInt(14, parseToInt(fields.get("huecosTurno4")));
 
                 String sqlRowUUID = findExistingUuid(conn, codigo);
                 stmt.setString(15, (sqlRowUUID != null) ? sqlRowUUID : UUID.randomUUID().toString());
@@ -163,7 +280,11 @@ public class AdminTiendasServlet extends HttpServlet {
                 stmt.setString(17, getString(fields, "Coordinador"));
                 stmt.setString(18, getString(fields, "Marca"));
                 stmt.setString(19, getString(fields, "CodZona"));
-                stmt.setString(20, getString(fields, "Zona"));
+
+                // --- ZONA (campo 20) - Se mantiene en mayúsculas como estaba ---
+                String zona = getString(fields, "ZONA");
+                stmt.setString(20, zona);
+
                 stmt.setString(21, getString(fields, "Modalidad"));
                 stmt.addBatch();
             }
@@ -207,8 +328,8 @@ public class AdminTiendasServlet extends HttpServlet {
         return listId;
     }
 
-    private String findItemIdByCodigo(Connection conn, String listId, int codigo) throws Exception {
-        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "codigo", String.valueOf(codigo));
+    private String findItemIdByCodigo(Connection conn, String listId, String codigo) throws Exception {
+        String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "codigo", codigo);
         if (itemId == null) throw new IOException("La tienda con código '" + codigo + "' no fue encontrada en SharePoint.");
         return itemId;
     }
@@ -216,20 +337,54 @@ public class AdminTiendasServlet extends HttpServlet {
     private void handleGetRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
+
         if (!isAdmin(request)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
+
+        String supervisor = request.getParameter("supervisor");
+        String zona = request.getParameter("zona");
+
         List<TiendaDTO> tiendas = new ArrayList<>();
-        String sql = "SELECT * FROM tiendas ORDER BY denominacion";
+
+        StringBuilder sql = new StringBuilder("SELECT * FROM tiendas WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (supervisor != null && !supervisor.trim().isEmpty()) {
+            sql.append(" AND Supervisor = ?");
+            params.add(supervisor);
+        }
+
+        if (zona != null && !zona.trim().isEmpty()) {
+            sql.append(" AND Zona = ?");
+            params.add(zona);
+        }
+
+        sql.append(" ORDER BY denominacion");
+
         try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-            while (rs.next()) tiendas.add(mapRowToTienda(rs));
+             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setString(i + 1, (String) params.get(i));
+            }
+
+            logger.info("Ejecutando consulta de tiendas con filtros - Supervisor: {}, Zona: {}", supervisor, zona);
+
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    tiendas.add(mapRowToTienda(rs));
+                }
+            }
+
+            logger.info("Se encontraron {} tiendas", tiendas.size());
             mapper.writeValue(response.getWriter(), tiendas);
+
         } catch (SQLException e) {
-            LogUtil.logException(logger, e, "Error en GET de tiendas", getUsuario(request));
-            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, "Error de base de datos.");
+            logger.error("Error SQL en GET de tiendas con filtros. Supervisor: {}, Zona: {}", supervisor, zona, e);
+            sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false,
+                    "Error de base de datos: " + e.getMessage());
         }
     }
 
@@ -280,7 +435,7 @@ public class AdminTiendasServlet extends HttpServlet {
     }
 
     private Integer parseToInt(Object obj) {
-        if (obj == null) return 0; 
+        if (obj == null) return 0;
         if (obj instanceof Number) return ((Number) obj).intValue();
         try {
             String str = String.valueOf(obj).trim();

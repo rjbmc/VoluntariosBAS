@@ -32,42 +32,49 @@
                     <label for="dni" class="input-label font-semibold">Introduce tu DNI / NIF</label>
                     <p class="text-sm text-gray-500">Comprobaremos si ya figuras en nuestra base de datos de voluntarios.</p>
                 </div>
-                <div class="relative">
-                    <input id="dni" name="dni" type="text" maxlength="9" required class="form-input relative block w-full px-3 py-3 text-lg text-center text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A">
-                    <div id="dni-spinner" class="absolute inset-y-0 right-0 flex items-center pr-3 hidden">
-                        <svg class="animate-spin h-5 w-5 text-orange-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
+                <!-- Contenedor flex para input y botón -->
+                <div class="flex items-center space-x-2">
+                    <div class="relative flex-grow">
+                        <input id="dni" name="dni" type="text" maxlength="9" required class="form-input block w-full px-3 py-3 text-lg text-center text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A">
+                        <div id="dni-spinner" class="absolute inset-y-0 right-0 flex items-center pr-3 hidden">
+                            <svg class="animate-spin h-5 w-5 text-orange-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </div>
                     </div>
+                    <button type="button" id="btn-comprobar-dni" class="px-6 py-3 bg-orange-500 text-white font-semibold rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                        Comprobar
+                    </button>
                 </div>
             </div>
 
             <div id="details-step" class="hidden">
-                <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+                <!-- Grid con proporción 1:2 para que la columna derecha sea más ancha -->
+                <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-[1fr_2fr]">
                     <div>
                         <label for="nombre" class="input-label">Nombre</label>
-                        <input id="nombre" name="nombre" type="text" required class="form-input" placeholder="Tu nombre">
+                        <input id="nombre" name="nombre" type="text" required class="form-input w-full" placeholder="Tu nombre">
                     </div>
                     <div>
                         <label for="apellidos" class="input-label">Apellidos</label>
-                        <input id="apellidos" name="apellidos" type="text" required class="form-input" placeholder="Tus apellidos">
+                        <input id="apellidos" name="apellidos" type="text" required class="form-input w-full" placeholder="Tus apellidos">
                     </div>
                     <div>
                         <label for="fechaNacimiento" class="input-label">Fecha de Nacimiento</label>
-                        <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input">
+                        <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input w-full">
                     </div>
                     <div>
                         <label for="email" class="input-label">Correo Electrónico</label>
-                        <input id="email" name="email" type="email" required class="form-input" placeholder="tu@email.com">
+                        <input id="email" name="email" type="email" required class="form-input w-full" placeholder="tu@email.com">
                     </div>
                     <div>
                         <label for="telefono" class="input-label">Teléfono</label>
-                        <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input">
+                        <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input w-full">
                     </div>
                     <div>
                         <label for="cp" class="input-label">Código Postal</label>
-                        <input id="cp" name="cp" type="text" maxlength="5" required class="form-input" placeholder="41XXX">
+                        <input id="cp" name="cp" type="text" maxlength="5" required class="form-input w-full" placeholder="41XXX">
                     </div>
                 </div>
 
@@ -77,11 +84,11 @@
                     <input type="hidden" id="usuario" name="usuario">
                     <div class="w-full max-w-md">
                         <label for="clave" class="input-label block text-center">Contraseña</label>
-                        <input id="clave" name="clave" type="password" required class="form-input mx-auto block w-full max-w-md" placeholder="Mínimo 8 caracteres">
+                        <input id="clave" name="clave" type="password" required class="form-input mx-auto block w-full max-w-md" placeholder="Mínimo 8 caracteres" autocomplete="new-password">
                     </div>
                     <div class="w-full max-w-md">
                         <label for="confirmar_clave" class="input-label block text-center">Confirmar Contraseña</label>
-                        <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input mx-auto block w-full max-w-md" placeholder="Repite la contraseña">
+                        <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input mx-auto block w-full max-w-md" placeholder="Repite la contraseña" autocomplete="new-password">
                     </div>
                 </div>
 
@@ -114,8 +121,9 @@
             </div>
         </form>
         
+        <!-- Enlace de inicio de sesión con ID para control -->
         <div class="text-center">
-            <a href="login.html" class="text-sm font-medium text-gray-600 hover:text-orange-500">
+            <a href="login.html" id="login-prompt-link" class="text-sm font-medium text-gray-600 hover:text-orange-500">
                 ¿Ya tienes una cuenta? Inicia sesión
             </a>
         </div>
@@ -129,6 +137,23 @@
         const detailsStep = document.getElementById('details-step');
         const messageDiv = document.getElementById('message');
         const dniSpinner = document.getElementById('dni-spinner');
+        const loginLink = document.getElementById('login-prompt-link');
+        const comprobarBtn = document.getElementById('btn-comprobar-dni');
+        const claveInput = document.getElementById('clave');
+        const confirmarClaveInput = document.getElementById('confirmar_clave');
+
+        function setLoginLinkVisibility(visible) {
+            if (visible) {
+                loginLink.classList.remove('hidden');
+            } else {
+                loginLink.classList.add('hidden');
+            }
+        }
+
+        function clearPasswordFields() {
+            if (claveInput) claveInput.value = '';
+            if (confirmarClaveInput) confirmarClaveInput.value = '';
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
@@ -144,7 +169,17 @@
             setupMobileDateField();
             setupDniCheck();
             setupConsentCheck();
+            setupComprobarButton();
+
+            setLoginLinkVisibility(true);
+            clearPasswordFields();
         }); 
+
+        function setupComprobarButton() {
+            comprobarBtn.addEventListener('click', () => {
+                dniInput.blur();
+            });
+        }
 
         function setupDniCheck() {
             dniInput.addEventListener('blur', async () => {
@@ -154,12 +189,15 @@
                         showMessage('El DNI o NIE introducido no es válido.', 'error');
                     }
                     detailsStep.classList.add('hidden');
+                    setLoginLinkVisibility(true);
                     return;
                 }
                 
                 hideMessage();
                 dniSpinner.classList.remove('hidden');
                 detailsStep.classList.add('hidden');
+                setLoginLinkVisibility(true);
+                comprobarBtn.disabled = true;
 
                 try {
                     const response = await fetch(`${AppConfig.getUrl('CONSULTAR_VOLUNTARIO')}?dni=${dni}`);
@@ -167,35 +205,43 @@
 
                     if (result.status === 'error') {
                         showMessage(`${result.message} <a href="login.html" class="font-bold underline">Inicia sesión aquí.</a>`, 'error');
+                        setLoginLinkVisibility(true);
                     } else if (result.status === 'success' && result.source === 'sharepoint') {
                         showMessage('Hemos encontrado tus datos. Por favor, establece una contraseña para completar tu registro.', 'success');
                         populateForm(result.data);
                         detailsStep.classList.remove('hidden');
+                        setLoginLinkVisibility(false);
                     } else {
                         showMessage('No hemos encontrado tus datos. Por favor, completa el formulario para registrarte.', 'info');
                         resetForm();
                         detailsStep.classList.remove('hidden');
+                        setLoginLinkVisibility(false);
                     }
                 } catch (error) {
                     console.error('Error al consultar DNI:', error);
                     showMessage('No se pudo conectar con el servidor para verificar el DNI. Inténtalo más tarde.', 'error');
+                    setLoginLinkVisibility(true);
                 } finally {
                     dniSpinner.classList.add('hidden');
+                    comprobarBtn.disabled = false;
                 }
             });
         }
         
+        // MODIFICADO: incluimos fechaNacimiento en el array
         function populateForm(data) {
-            const fieldsToFill = ['nombre', 'apellidos', 'email', 'telefono', 'cp'];
+            const fieldsToFill = ['nombre', 'apellidos', 'email', 'telefono', 'cp', 'fechaNacimiento'];
             fieldsToFill.forEach(id => {
                 const input = document.getElementById(id);
                 input.value = data[id] || '';
                 input.disabled = true;
                 input.classList.add('bg-gray-100');
             });
-            document.getElementById('fechaNacimiento').disabled = false;
+            // Nota: fechaNacimiento ya está deshabilitado por el bucle
+            clearPasswordFields();
         }
 
+        // MODIFICADO: también incluimos fechaNacimiento en reset
         function resetForm() {
             const formIds = ['nombre', 'apellidos', 'email', 'telefono', 'cp', 'fechaNacimiento'];
             formIds.forEach(id => {
@@ -204,6 +250,8 @@
                 input.disabled = false;
                 input.classList.remove('bg-gray-100');
             });
+            setLoginLinkVisibility(true);
+            clearPasswordFields();
         }
 
         async function handleRegister(event) {
@@ -218,6 +266,7 @@
                 formData.set('email', document.getElementById('email').value);
                 formData.set('telefono', document.getElementById('telefono').value);
                 formData.set('cp', document.getElementById('cp').value);
+                formData.set('fechaNacimiento', document.getElementById('fechaNacimiento').value); // AÑADIDO
             }
 
             const clave = formData.get('clave');
@@ -277,7 +326,6 @@
             const checkbox = document.getElementById('consent-checkbox');
             const submitBtn = document.getElementById('submit-btn');
             
-            // Para hacer opcional la lectura, simplemente cambia estos valores a true.
             let haLeidoCompromisos = true;
             let haLeidoPrivacidad = true;
 
@@ -289,7 +337,6 @@
             linkPrivacidad.addEventListener('click', () => { haLeidoPrivacidad = true; checkEnableCheckbox(); });
             checkbox.addEventListener('change', () => { submitBtn.disabled = !checkbox.checked; });
 
-            // Comprobar estado al cargar, para habilitar el checkbox si los valores ya son true.
             checkEnableCheckbox();
         }
 

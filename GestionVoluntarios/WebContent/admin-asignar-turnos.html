@@ -154,24 +154,39 @@
 
         async function initializePage() {
             try {
-                // 1. Obtener usuario de sesión (Imprescindible para no usar URL)
+                // 1. Obtener usuario de sesión (el administrador actual)
                 const resp = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
                 if (!resp.ok) { window.location.href = 'login.html'; return; }
                 sessionUser = await resp.json();
 
-                // 2. Determinar el usuario objetivo (Lógica de URL param vs Sesión)
+                // 2. Determinar el usuario objetivo desde la URL
                 const params = new URLSearchParams(window.location.search);
                 const urlUser = params.get('usuario');
 
                 // Si soy admin y hay un usuario en la URL, edito a ese usuario.
-                // En cualquier otro caso, edito mis propios turnos (sesión).
                 targetUsuario = (urlUser && sessionUser.isAdmin) ? urlUser : sessionUser.usuario;
-
+                
                 // 3. UI Updates
                 document.getElementById('user-display').textContent = `Conectado como: ${sessionUser.usuario}`;
                 document.getElementById('user-display').classList.remove('hidden');
-                document.getElementById('display-usuario-fuerte').textContent = targetUsuario;
                 document.getElementById('targetUsuario').value = targetUsuario;
+
+                // --- MEJORA SOLICITADA: Obtener el nombre completo (Código) del voluntario objetivo ---
+                try {
+                    const detallesUrl = `${AppConfig.getUrl('VOLUNTARIO_DETALLES')}?usuario=${encodeURIComponent(targetUsuario)}`;
+                    const detResp = await fetch(detallesUrl);
+                    if (detResp.ok) {
+                        const volData = await detResp.json();
+                        const fullDisplayName = ((volData.nombre || "") + " " + (volData.apellidos || "")).trim();
+                        document.getElementById('display-usuario-fuerte').textContent = `${fullDisplayName} (${targetUsuario})`;
+                    } else {
+                        document.getElementById('display-usuario-fuerte').textContent = targetUsuario;
+                    }
+                } catch (e) {
+                    console.error("No se pudo obtener el nombre del voluntario objetivo:", e);
+                    document.getElementById('display-usuario-fuerte').textContent = targetUsuario;
+                }
+                // -------------------------------------------------------------------------------------
 
                 // Adaptar link de volver
                 const linkVolver = document.getElementById('link-volver');
@@ -206,6 +221,10 @@
             try {
                 const response = await fetch(AppConfig.getUrl('TODAS_LAS_TIENDAS')); 
                 if (response.ok) tiendasCache = await response.json();
+                console.log('Tiendas cargadas:', tiendasCache.length, tiendasCache);
+                const tiendasConCoordenadas = tiendasCache.filter(t => t.lat && t.lon && t.lat.trim() !== '' && t.lon.trim() !== '');
+                console.log('Tiendas con coordenadas:', tiendasConCoordenadas.length);
+                console.log('Ejemplo de primeras tiendas:', tiendasCache.slice(0, 5));
             } catch (e) {}
         }
 
@@ -275,16 +294,19 @@
             closeMapModal();
         };
 
+        // --- MODIFICACIÓN: Mostrar código formateado con 3 dígitos ---
         function updateTiendaDisplay(turno, tiendaId) {
             document.getElementById(`tienda_${turno}`).value = tiendaId;
             const tienda = tiendasCache.find(t => t.id == tiendaId);
             const displayEl = document.getElementById(`tienda_nombre_${turno}`);
             if (tienda) {
-                displayEl.textContent = tienda.nombre;
+                const codigoFormateado = String(tienda.id).padStart(3, '0');
+                displayEl.textContent = `${codigoFormateado} - ${tienda.nombre}`;
                 displayEl.classList.remove('italic', 'text-gray-600');
                 displayEl.classList.add('font-bold', 'text-orange-600');
             }
         }
+        // -------------------------------------------------------------
 
         window.clearTienda = function(turno) {
             document.getElementById(`tienda_${turno}`).value = "";

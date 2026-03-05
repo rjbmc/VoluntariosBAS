@@ -99,7 +99,7 @@
                     </div>
                     <div>
                         <label for="dni" class="block text-sm font-semibold text-gray-700 mb-1">DNI / NIF</label>
-                        <input type="text" id="dni" name="dni" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500" required>
+                        <input type="text" id="dni" name="dni" class="form-input w-full rounded-lg border-gray-300 focus:ring-orange-500 focus:border-orange-500 bg-gray-100" readonly required>
                     </div>
                     <div>
                         <label for="telefono" class="block text-sm font-semibold text-gray-700 mb-1">Teléfono</label>
@@ -238,20 +238,41 @@
             formData.append('action', 'save');
 
             try {
+                console.log('Enviando datos:', Object.fromEntries(formData));
+                
                 const response = await fetch(AppConfig.getUrl('ADMIN_VOLUNTARIOS'), {
                     method: 'POST',
                     body: new URLSearchParams(formData)
                 });
-                const result = await response.json();
+                
+                const responseText = await response.text();
+                console.log('Respuesta del servidor (texto):', responseText);
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (e) {
+                    console.error('No se pudo parsear como JSON:', responseText);
+                    throw new Error('Respuesta del servidor no válida');
+                }
+                
                 if (response.ok) {
                     displayMessage(result.message || 'Cambios guardados correctamente', 'success');
                     closeModal();
                     loadVoluntarios();
                 } else {
-                    throw new Error(result.message || 'Error desconocido');
+                    console.error('Error response:', result);
+                    // Mostrar el detalle si existe
+                    let errorMsg = result.message || 'Error al guardar';
+                    if (result.detail) {
+                        console.error('Detalle del error:', result.detail);
+                        errorMsg += ' - Revisa la consola (F12) para más detalles';
+                    }
+                    displayMessage(errorMsg, 'error');
                 }
             } catch (error) {
-                displayMessage(error.message, 'error');
+                console.error('Error en la petición:', error);
+                displayMessage('Error de conexión: ' + error.message, 'error');
             }
         }
 
