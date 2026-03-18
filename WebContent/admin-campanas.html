@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Campañas - Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
+    <style>
+        :root { --banco-orange: #F36C21; --banco-dark-blue: #2E3D4C; }
+        body { font-family: 'Montserrat', sans-serif; background-color: #f0f2f5; }
+        .btn { padding: 0.5rem 1rem; border-radius: 0.375rem; font-weight: 600; transition: all 0.2s; font-size: 0.875rem; }
+        .btn-primary { background-color: var(--banco-orange); color: white; }
+        .btn-blue { background-color: #2563eb; color: white; }
+        .btn-blue:hover { background-color: #1d4ed8; }
+        .btn-secondary { background-color: var(--banco-dark-blue); color: white; }
+        .btn-success { background-color: #16a34a; color: white; }
+        .btn-warning { background-color: #f59e0b; color: white; }
+        .btn-danger { background-color: #dc2626; color: white; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.5); z-index: 40; display: flex; align-items: center; justify-content: center; }
+        .modal-content { background-color: white; padding: 2rem; border-radius: 0.75rem; width: 90%; max-width: 500px; }
+        .form-input { width: 100%; padding: 0.5rem; border: 1px solid #D1D5DB; border-radius: 0.375rem; }
+    </style>
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="min-h-screen">
+
+    <header class="bg-white shadow-md">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center">
+                <img src="/VoluntariosBAS/images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo" class="h-10 w-auto">
+                <span class="ml-4 text-xl font-bold text-gray-700">Gestión de Campañas</span>
+            </div>
+            <div><a href="admin.html" class="px-4 py-2 text-gray-600 hover:text-orange-600 font-bold">Volver al Panel</a></div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-6 py-12">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <h1 class="text-3xl font-bold text-gray-800">Campañas</h1>
+            <div class="flex gap-2">
+                <!-- Botón de Sincronización Global con SharePoint -->
+                <button onclick="refreshFromSP()" 
+                        class="btn btn-blue shadow-lg flex items-center"
+                        title="Sincroniza las campañas desde la lista de SharePoint. Crea nuevas y actualiza datos de las existentes.">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    REFRESCAR DESDE SHAREPOINT
+                </button>
+                <!--  <button onclick="openModal()" class="btn btn-primary shadow-lg">NUEVA CAMPAÑA</button>  -->
+            </div>
+        </div>
+
+        <div id="message-container" class="mb-4"></div>
+
+        <div class="bg-white shadow-xl rounded-xl overflow-hidden border border-gray-100">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">ID</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Denominación</th>
+                        <th class="px-6 py-4 text-left text-xs font-bold text-gray-400 uppercase tracking-widest">Periodo</th>
+                        <th class="px-6 py-4 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">Estado</th>
+                        <th class="px-6 py-4 text-right text-xs font-bold text-gray-400 uppercase tracking-widest">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="campaigns-table-body" class="bg-white divide-y divide-gray-100"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- Modal para Crear/Editar -->
+    <div id="campaign-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-xl font-bold mb-6">Ficha de Campaña</h3>
+            <form id="campaign-form" onsubmit="handleSave(event)">
+                <input type="hidden" id="isUpdate" name="isUpdate" value="false">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Código ID</label>
+                        <input type="text" id="campanaId" name="campanaId" class="form-input" required>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Denominación</label>
+                        <input type="text" id="denominacion" name="denominacion" class="form-input" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Inicio</label>
+                            <input type="date" id="fecha1" name="fecha1" class="form-input" required>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Fin</label>
+                            <input type="date" id="fecha2" name="fecha2" class="form-input" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Turnos/Día</label>
+                        <input type="number" id="turnospordia" name="turnospordia" class="form-input" min="1" value="2" required>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Comentarios</label>
+                        <textarea id="comentarios" name="comentarios" rows="2" class="form-input"></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-8">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-gray-400 font-bold uppercase text-xs">Cancelar</button>
+                    <button type="submit" class="btn btn-primary uppercase text-xs">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let campaignsData = {};
+
+        document.addEventListener('DOMContentLoaded', loadCampaigns);
+
+        async function loadCampaigns() {
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_CAMPANAS'));
+                if (!response.ok) throw new Error('Error al cargar.');
+                const campaigns = await response.json();
+                const tableBody = document.getElementById('campaigns-table-body');
+                tableBody.innerHTML = '';
+                campaignsData = {};
+
+                campaigns.forEach(c => {
+                    campaignsData[c.campana] = c;
+                    const actionButton = c.estado === 'S'
+                        ? `<button onclick='handleDeactivate("${c.campana}")' class="px-3 py-1 bg-amber-100 text-amber-700 rounded text-[10px] font-bold uppercase border border-amber-200">Desactivar</button>`
+                        : `<button onclick='handleActivate("${c.campana}")' class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded text-[10px] font-bold uppercase border border-amber-200">Activar</button>`;
+
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50 transition-colors";
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 text-sm font-bold text-gray-900">${c.campana}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${c.denominacion}</td>
+                        <td class="px-6 py-4 text-xs text-gray-400 font-medium">${c.fecha1} / ${c.fecha2}</td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${c.estado === 'S' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}">
+                                ${c.estado === 'S' ? 'Activa' : 'Inactiva'}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 text-right space-x-2">
+                            ${actionButton}
+                            <button onclick='openModal("${c.campana}")' class="text-blue-600 hover:underline font-bold text-xs">Editar</button>
+                            <button onclick='handleDelete("${c.campana}")' class="text-red-400 hover:text-red-600 font-bold text-xs">Eliminar</button>
+                        </td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+            } catch (e) { displayMessage(e.message, 'error'); }
+        }
+
+        /**
+         * Llama a la acción de sincronización global en el Servlet.
+         */
+        async function refreshFromSP() {
+            if (!confirm("¿Deseas sincronizar todas las campañas desde SharePoint? Se actualizarán los datos locales.")) return;
+            displayMessage("Sincronizando con SharePoint...", "info");
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_CAMPANAS'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ 'action': 'refreshFromSP' })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    displayMessage(result.message, "success");
+                    loadCampaigns();
+                } else {
+                    displayMessage(result.message, "error");
+                }
+            } catch (e) { displayMessage("Error de conexión.", "error"); }
+        }
+
+        function openModal(id = null) {
+            const form = document.getElementById('campaign-form'); form.reset();
+            if (id) {
+                const c = campaignsData[id];
+                document.getElementById('isUpdate').value = 'true';
+                document.getElementById('campanaId').value = c.campana;
+                document.getElementById('campanaId').readOnly = true;
+                document.getElementById('denominacion').value = c.denominacion;
+                document.getElementById('fecha1').value = c.fecha1;
+                document.getElementById('fecha2').value = c.fecha2;
+                document.getElementById('turnospordia').value = c.turnospordia;
+                document.getElementById('comentarios').value = c.comentarios;
+            } else {
+                document.getElementById('isUpdate').value = 'false';
+                document.getElementById('campanaId').readOnly = false;
+            }
+            document.getElementById('campaign-modal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('campaign-modal').classList.add('hidden'); }
+
+        async function handleSave(e) {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            formData.append('action', 'save');
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_CAMPANAS'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+                const res = await response.json();
+                if (res.success) { displayMessage(res.message, "success"); closeModal(); loadCampaigns(); }
+                else displayMessage(res.message, "error");
+            } catch (e) { displayMessage("Error al guardar.", "error"); }
+        }
+
+        async function handleActivate(id) { updateStatus(id, 'activate'); }
+        async function handleDeactivate(id) { updateStatus(id, 'deactivate'); }
+
+        async function updateStatus(id, action) {
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_CAMPANAS'), {
+                    method: 'POST',
+                    body: new URLSearchParams({ 'action': action, 'campanaId': id })
+                });
+                const res = await response.json();
+                if (res.success) loadCampaigns();
+                else displayMessage(res.message, "error");
+            } catch (e) { displayMessage("Error de conexión.", "error"); }
+        }
+
+        async function handleDelete(id) {
+            if (!confirm("¿Estás seguro de que quieres eliminar esta campaña?")) return;
+            try {
+                const response = await fetch(AppConfig.getUrl('ADMIN_CAMPANAS'), {
+                    method: 'POST',
+                    body: new URLSearchParams({ 'action': 'delete', 'campanaId': id })
+                });
+                const res = await response.json();
+                if (res.success) {
+                    displayMessage(res.message, "success");
+                    loadCampaigns();
+                } else {
+                    displayMessage(res.message, "error");
+                }
+            } catch (e) { displayMessage("Error de conexión.", "error"); }
+        }
+
+        function displayMessage(msg, type) {
+            const container = document.getElementById('message-container');
+            const colors = { 
+                success: 'bg-green-100 text-green-700 border-green-200', 
+                error: 'bg-red-100 text-red-700 border-red-200', 
+                info: 'bg-blue-100 text-blue-700 border-blue-200' 
+            };
+            container.innerHTML = `<div class="${colors[type]} p-4 rounded-xl border text-sm font-bold shadow-sm">${msg}</div>`;
+            if (type !== 'info') setTimeout(() => container.innerHTML = '', 5000);
+        }
+    </script>
+</body>
+</html>

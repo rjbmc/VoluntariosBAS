@@ -1,0 +1,38 @@
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+target/
+
+# NetBeans
+nbproject/
+nb-configuration.xml
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Maven / Gradle (si usas)
+target/
+build/
+*.jar
+*.war
+*.ear
+*.log
+
+# Archivos del sistema
+*.class
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración locales (pueden contener contraseñas)
+config.properties
+database.properties
+*.key

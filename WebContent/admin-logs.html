@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Actividad - VoluntariosBAS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/VoluntariosBAS/css/style.css">
+    <style>
+        .log-error { color: #dc2626; font-weight: 600; }
+        .log-warn { color: #d97706; font-weight: 600; }
+        .log-info { color: #059669; }
+        .log-auth { color: #2563eb; }
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { background-color: #f3f4f6; }
+        .sort-icon { display: inline-block; margin-left: 4px; font-size: 0.8em; color: #9ca3af; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <div id="app" class="flex h-screen">
+        
+        <div id="sidebar-container"></div>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <div id="header-container"></div>
+
+            <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="text-3xl font-bold text-gray-800">Registro de Actividad del Sistema</h1>
+                	<div><a href="admin.html" class="px-4 py-2 text-gray-600 hover:text-orange-600 font-bold">Volver al Panel</a></div>
+                </div>
+				
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <div class="flex items-center space-x-4 mb-4">
+                        <div class="flex-1">
+                            <input type="text" id="filter-text" placeholder="Buscar por operador o comentario..." 
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <select id="filter-type" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="TODOS">Todos los tipos</option>
+                                <!-- Se llenará dinámicamente -->
+                            </select>
+                        </div>
+                        <div id="delete-logs-container" class="hidden">
+                            <button id="delete-logs-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors duration-200">
+                                Borrar Todos los Logs
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-white">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th id="sort-fecha" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-sort="fecha">
+                                        Fecha y Hora <span class="sort-icon">▼</span>
+                                    </th>
+                                    <th id="sort-operacion" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-sort="operacion">
+                                        Operación <span class="sort-icon"></span>
+                                    </th>
+                                    <th id="sort-operador" class="sortable px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" data-sort="operador">
+                                        Operador <span class="sort-icon"></span>
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Comentario
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="logs-table-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400 mt-2 text-right">* Se muestran los últimos 100 registros. Filtra por tipo para ver más antiguos.</p>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        let allLogs = [];
+        let currentSort = { column: 'fecha', direction: 'desc' };
+
+        function checkPermissionsAndShowButton(currentUserDNI) {
+            const superAdminDNI = '28654139A';
+            if (currentUserDNI === superAdminDNI) {
+                document.getElementById('delete-logs-container').classList.remove('hidden');
+            }
+        }
+
+        function setupDeleteButton() {
+            document.getElementById('delete-logs-btn').addEventListener('click', () => {
+                if (confirm('¿Estás COMPLETAMENTE SEGURO de que quieres borrar TODOS los registros de logs? Esta acción es irreversible y no se puede deshacer.')) {
+                    fetch('/VoluntariosBAS/admin-logs', { method: 'DELETE' })
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success) {
+                                alert('Todos los logs han sido borrados con éxito.');
+                                fetchLogs(); 
+                            } else {
+                                alert('Error al borrar los logs: ' + (result.message || 'No se proporcionó un mensaje de error.'));
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error en la operación de borrado:', error);
+                            alert('Ocurrió un error de red al intentar borrar los logs.');
+                        });
+                }
+            });
+        }
+
+        function renderTable(logs) {
+            const tbody = document.getElementById('logs-table-body');
+            tbody.innerHTML = '';
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-10 text-gray-500">No se encontraron registros.</td></tr>';
+                return;
+            }
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${log.fecha}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-medium">${log.operacion}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">${log.operador}</td>
+                    <td class="px-6 py-4 text-sm text-gray-600 max-w-lg truncate" title="${log.comentario}">${log.comentario}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function populateFilterDropdown(tipos) {
+            const select = document.getElementById('filter-type');
+            select.innerHTML = '<option value="TODOS">Todos los tipos</option>';
+            if (tipos) {
+                tipos.forEach(tipo => {
+                    const option = document.createElement('option');
+                    option.value = tipo;
+                    option.textContent = tipo;
+                    select.appendChild(option);
+                });
+            }
+        }
+
+        function applyFiltersAndSort() {
+            const filterText = document.getElementById('filter-text').value.toLowerCase();
+            const filterType = document.getElementById('filter-type').value;
+
+            let filteredLogs = allLogs.filter(log => {
+                const textMatch = !filterText || log.operador.toLowerCase().includes(filterText) || (log.comentario && log.comentario.toLowerCase().includes(filterText));
+                const typeMatch = filterType === 'TODOS' || log.operacion === filterType;
+                return textMatch && typeMatch;
+            });
+
+            sortLogs(filteredLogs);
+            renderTable(filteredLogs);
+        }
+
+        function sortLogs(logs) {
+            const direction = currentSort.direction;
+            const column = currentSort.column;
+
+            logs.sort((a, b) => {
+                let valA = a[column] || '';
+                let valB = b[column] || '';
+                
+                if (valA < valB) return direction === 'asc' ? -1 : 1;
+                if (valA > valB) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('th.sortable .sort-icon').forEach(icon => icon.textContent = '');
+            const activeIcon = document.querySelector(`#sort-${currentSort.column} .sort-icon`);
+            if (activeIcon) {
+                activeIcon.textContent = currentSort.direction === 'asc' ? '▲' : '▼';
+            }
+        }
+
+        function fetchLogs() {
+            const filterType = document.getElementById('filter-type').value || 'TODOS';
+            fetch(`/VoluntariosBAS/admin-logs?operacion=${filterType}`)
+                .then(response => response.json())
+                .then(data => {
+                    allLogs = data.logs;
+                    
+                    checkPermissionsAndShowButton(data.currentUser);
+                    populateFilterDropdown(data.tipos);
+                    document.getElementById('filter-type').value = filterType; // Mantener selección
+
+                    applyFiltersAndSort(); 
+                })
+                .catch(error => {
+                    console.error('Error al cargar los logs:', error);
+                    document.getElementById('logs-table-body').innerHTML = '<tr><td colspan="4" class="text-center py-10 text-red-500">Error al cargar los datos. Revise la consola.</td></tr>';
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('sidebar-container').innerHTML = '<object type="text/html" data="sidebar.html" class="w-full h-full"></object>';
+            document.getElementById('header-container').innerHTML = '<object type="text/html" data="header.html" class="w-full h-full"></object>';
+            
+            setupDeleteButton();
+            fetchLogs();
+
+            document.getElementById('filter-text').addEventListener('input', applyFiltersAndSort);
+            document.getElementById('filter-type').addEventListener('change', fetchLogs); 
+            
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.addEventListener('click', () => {
+                    const column = th.dataset.sort;
+                    if (currentSort.column === column) {
+                        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        currentSort.column = column;
+                        currentSort.direction = 'desc'; 
+                    }
+                    updateSortIcons();
+                    applyFiltersAndSort();
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de Voluntarios - Banco de Alimentos de Sevilla</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="/VoluntariosBAS/js/config.js"></script>
+</head>
+<body class="flex items-center justify-center min-h-screen py-12">
+
+    <div class="w-full max-w-3xl p-8 space-y-6 bg-white rounded-2xl card-shadow m-4">
+        <div class="flex justify-center">
+            <img src="images/Logotipo-fundacion-banco-de-alimentos-de-sevilla.png" alt="Logo del Banco de Alimentos de Sevilla" class="w-48">
+        </div>
+        
+        <h2 class="text-2xl font-bold text-center text-gray-800">Alta de Nuevo Voluntario</h2>
+        
+        <div id="tienda-seleccionada-info" class="p-3 text-center bg-green-100 text-green-800 rounded-lg hidden">
+            <p>Punto de recogida seleccionado: <strong id="nombre-tienda"></strong></p>
+        </div>
+
+        <!-- Contenedor para mensajes (temporales) -->
+        <div id="message" class="hidden p-4 mt-4 text-sm text-center text-white rounded-md"></div>
+
+        <!-- Mensaje permanente para datos precargados desde SharePoint -->
+        <div id="datos-preCargados-aviso" class="hidden p-4 mb-4 text-sm text-blue-800 bg-blue-100 rounded-lg" role="alert">
+            <span class="font-medium">¡Atención!</span> Si desea cambiar alguno de sus datos, envíe un correo a <a href="mailto:voluntariado@fundacionbas.org" class="font-semibold underline hover:text-blue-900">voluntariado@fundacionbas.org</a> solicitándolo.
+        </div>
+
+        <form id="registroForm" class="mt-8 space-y-6" onsubmit="handleRegister(event)">
+            <input type="hidden" id="punto_id" name="punto_id">
+
+            <!-- PASO 1: DNI (visible inicialmente) -->
+            <div id="dni-step" class="space-y-4">
+                <div class="text-center">
+                    <label for="dni" class="input-label font-semibold">Introduce tu DNI / NIF</label>
+                    <p class="text-sm text-gray-500">Comprobaremos si ya figuras en nuestra base de datos de voluntarios.</p>
+                </div>
+                <!-- Contenedor flex para input y botón -->
+                <div class="flex items-center space-x-2">
+                    <div class="relative flex-grow">
+                        <input id="dni" name="dni" type="text" maxlength="9" required class="form-input block w-full px-3 py-3 text-lg text-center text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="12345678A">
+                        <div id="dni-spinner" class="absolute inset-y-0 right-0 flex items-center pr-3 hidden">
+                            <svg class="animate-spin h-5 w-5 text-orange-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <button type="button" id="btn-comprobar-dni" class="px-6 py-3 bg-orange-500 text-white font-semibold rounded-md hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500">
+                        Comprobar
+                    </button>
+                </div>
+            </div>
+
+            <!-- PASO 2: Resto del formulario (oculto inicialmente) -->
+            <div id="details-step" class="hidden">
+                <div class="grid grid-cols-1 gap-x-8 gap-y-6 md:grid-cols-2">
+                    <div>
+                        <label for="nombre" class="input-label">Nombre</label>
+                        <input id="nombre" name="nombre" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tu nombre">
+                    </div>
+                    <div>
+                        <label for="apellidos" class="input-label">Apellidos</label>
+                        <input id="apellidos" name="apellidos" type="text" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Tus apellidos">
+                    </div>
+                    <!-- NOTA: El campo DNI está en el paso 1, no se repite aquí -->
+                    <div>
+                        <label for="fechaNacimiento" class="input-label">Fecha de Nacimiento</label>
+                        <input id="fechaNacimiento" name="fechaNacimiento" type="date" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="email" class="input-label">Correo Electrónico</label>
+                        <input id="email" name="email" type="email" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="tu@email.com">
+                    </div>
+                    <div>
+                        <label for="telefono" class="input-label">Teléfono</label>
+                        <input id="telefono" name="telefono" type="tel" maxlength="11" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="600112233">
+                    </div>
+                    <div>
+                        <label for="cp" class="input-label">Código Postal</label>
+                        <input id="cp" name="cp" type="text" maxlength="5" required class="form-input relative block w-full px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="41XXX">
+                    </div>
+                </div>
+
+                <hr class="my-6">
+
+                <div class="flex flex-col items-center gap-y-6">
+                    <!-- Eliminado campo de usuario, se usará DNI/NIF como identificador -->
+                    <input type="hidden" id="usuario" name="usuario">
+                    <div class="w-full max-w-md">
+                        <label for="clave" class="input-label block text-center">Contraseña</label>
+                        <input id="clave" name="clave" type="password" required class="form-input mx-auto block w-full max-w-md px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Mínimo 8 caracteres">
+                    </div>
+                    <div class="w-full max-w-md">
+                        <label for="confirmar_clave" class="input-label block text-center">Confirmar Contraseña</label>
+                        <input id="confirmar_clave" name="confirmar_clave" type="password" required class="form-input mx-auto block w-full max-w-md px-3 py-2 text-gray-900 placeholder-gray-500 border rounded-md appearance-none sm:text-sm" placeholder="Repite la contraseña">
+                    </div>
+                </div>
+                
+                <hr class="my-8">
+                
+                <div class="space-y-4">
+                    <h3 class="text-lg font-semibold text-center text-gray-700">Compromiso y Tratamiento de Datos</h3>
+                    <a href="Acuerdo-Voluntarios-Grandes-Recogidas.pdf" target="_blank" id="link-compromisos" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Leer Acuerdo Voluntarios Grandes Recogidas
+                    </a>
+                    <a href="Politica-de-proteccion-de-datos-1.pdf" target="_blank" id="link-privacidad" class="w-full flex items-center justify-center px-4 py-3 font-medium text-white border border-transparent rounded-md btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        Leer Política de Privacidad de Datos (PDF)
+                    </a>
+                </div>
+                
+                <div class="pt-4 mt-4">
+                    <label class="flex items-center" id="consent-label">
+                        <input type="checkbox" id="consent-checkbox" disabled class="h-5 w-5 text-orange-600 border-gray-300 rounded focus:ring-orange-500 disabled:opacity-50">
+                        <span class="ml-3 text-gray-700">He leído y acepto los compromisos y la política de tratamiento de datos.</span>
+                    </label>
+                </div>
+                
+                <div>
+                    <button type="submit" id="submit-btn" disabled class="relative flex justify-center w-full px-4 py-3 mt-4 text-sm font-medium text-white border border-transparent rounded-md btn-orange group focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                        Completar Registro
+                    </button>
+                </div>
+            </div>
+        </form>
+        
+        <div class="text-center">
+            <a href="login.html" class="text-sm font-medium text-gray-600 hover:text-orange-500">
+                ¿Ya tienes una cuenta? Inicia sesión
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Elementos del DOM
+        const dniInput = document.getElementById('dni');
+        const detailsStep = document.getElementById('details-step');
+        const dniStep = document.getElementById('dni-step');
+        const messageDiv = document.getElementById('message');
+        const dniSpinner = document.getElementById('dni-spinner');
+        const comprobarBtn = document.getElementById('btn-comprobar-dni');
+        const avisoDatosPreCargados = document.getElementById('datos-preCargados-aviso');
+        const linkCompromisos = document.getElementById('link-compromisos');
+        const linkPrivacidad = document.getElementById('link-privacidad');
+        const checkbox = document.getElementById('consent-checkbox');
+        const submitBtn = document.getElementById('submit-btn');
+
+        let haLeidoCompromisos = false;
+        let haLeidoPrivacidad = false;
+        let datosPrecargados = false;
+
+        // --- CONFIGURACIÓN INICIAL ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const puntoId = params.get('tienda_id');
+            const puntoNombre = params.get('tienda_nombre');
+
+            if (puntoId && puntoNombre) {
+                document.getElementById('punto_id').value = puntoId;
+                document.getElementById('nombre-tienda').textContent = puntoNombre;
+                document.getElementById('tienda-seleccionada-info').classList.remove('hidden');
+            }
+            
+            setupDniCheck();
+            setupComprobarButton();
+            setupConsentCheck();
+        });
+
+        // --- CONFIGURACIÓN DEL BOTÓN COMPROBAR ---
+        function setupComprobarButton() {
+            comprobarBtn.addEventListener('click', () => {
+                dniInput.blur();
+            });
+        }
+
+        // --- CONFIGURACIÓN DE LA COMPROBACIÓN DE DNI ---
+        function setupDniCheck() {
+            dniInput.addEventListener('blur', async () => {
+                const dni = dniInput.value.trim();
+                if (dni.length === 0) return;
+
+                if (!validarDniNie(dni)) {
+                    mostrarMensaje('El DNI o NIE introducido no es válido.', 'error');
+                    return;
+                }
+
+                dniSpinner.classList.remove('hidden');
+                ocultarMensaje();
+                comprobarBtn.disabled = true;
+
+                try {
+                    const response = await fetch(`${AppConfig.getUrl('CONSULTAR_VOLUNTARIO')}?dni=${dni}`);
+                    const result = await response.json();
+
+                    if (result.status === 'error') {
+                        mostrarMensaje(`${result.message} <a href="login.html" class="font-bold underline">Inicia sesión aquí.</a>`, 'error');
+                        ocultarAvisoDatosPreCargados();
+                        detailsStep.classList.add('hidden');
+                    } else if (result.status === 'success' && result.source === 'sharepoint') {
+                        // MOSTRAR AMBOS MENSAJES
+                        mostrarMensaje('Hemos encontrado tus datos. Por favor, establece una contraseña para completar tu registro.', 'success');
+                        mostrarAvisoDatosPreCargados(); // Mensaje permanente
+                        
+                        rellenarFormulario(result.data);
+                        datosPrecargados = true;
+                        mostrarPaso2();
+                    } else {
+                        mostrarMensaje('No hemos encontrado tus datos. Por favor, completa el formulario para registrarte.', 'info');
+                        ocultarAvisoDatosPreCargados();
+                        limpiarFormulario();
+                        datosPrecargados = false;
+                        mostrarPaso2();
+                    }
+                } catch (error) {
+                    console.error('Error al consultar DNI:', error);
+                    mostrarMensaje('No se pudo conectar con el servidor para verificar el DNI. Inténtalo más tarde.', 'error');
+                    ocultarAvisoDatosPreCargados();
+                } finally {
+                    dniSpinner.classList.add('hidden');
+                    comprobarBtn.disabled = false;
+                }
+            });
+        }
+
+        // --- FUNCIÓN PARA MOSTRAR EL PASO 2 ---
+        function mostrarPaso2() {
+            detailsStep.classList.remove('hidden');
+        }
+
+        // --- FUNCIÓN PARA RELLENAR EL FORMULARIO ---
+        function rellenarFormulario(data) {
+            const campos = ['nombre', 'apellidos', 'email', 'telefono', 'cp', 'fechaNacimiento'];
+            campos.forEach(id => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.value = data[id] || '';
+                }
+            });
+        }
+
+        // --- FUNCIÓN PARA LIMPIAR EL FORMULARIO ---
+        function limpiarFormulario() {
+            const campos = ['nombre', 'apellidos', 'email', 'telefono', 'cp', 'fechaNacimiento'];
+            campos.forEach(id => {
+                const input = document.getElementById(id);
+                if (input) input.value = '';
+            });
+        }
+
+        // --- FUNCIÓN PARA MOSTRAR EL AVISO PERMANENTE ---
+        function mostrarAvisoDatosPreCargados() {
+            if (avisoDatosPreCargados) {
+                avisoDatosPreCargados.classList.remove('hidden');
+            }
+        }
+
+        // --- FUNCIÓN PARA OCULTAR EL AVISO PERMANENTE ---
+        function ocultarAvisoDatosPreCargados() {
+            if (avisoDatosPreCargados) {
+                avisoDatosPreCargados.classList.add('hidden');
+            }
+        }
+
+        // --- FUNCIÓN PARA MOSTRAR MENSAJES TEMPORALES ---
+        function mostrarMensaje(texto, tipo) {
+            const colores = {
+                error: 'bg-red-500',
+                success: 'bg-green-500',
+                info: 'bg-blue-500'
+            };
+            messageDiv.innerHTML = texto;
+            messageDiv.className = `p-4 mt-4 text-sm text-center text-white rounded-md ${colores[tipo] || 'bg-gray-500'}`;
+            messageDiv.classList.remove('hidden');
+            
+            // Ocultar después de 7 segundos para mensajes que no sean de error persistente
+            if (tipo !== 'error') {
+                setTimeout(() => {
+                    messageDiv.classList.add('hidden');
+                }, 7000);
+            }
+        }
+
+        // --- FUNCIÓN PARA OCULTAR EL MENSAJE TEMPORAL ---
+        function ocultarMensaje() {
+            messageDiv.classList.add('hidden');
+            messageDiv.innerHTML = '';
+        }
+
+        // --- CONFIGURACIÓN DEL CHECKBOX DE CONSENTIMIENTO ---
+        function setupConsentCheck() {
+            function checkEnableCheckbox() {
+                if (haLeidoCompromisos && haLeidoPrivacidad) {
+                    checkbox.disabled = false;
+                }
+            }
+
+            linkCompromisos.addEventListener('click', () => {
+                haLeidoCompromisos = true;
+                checkEnableCheckbox();
+            });
+
+            linkPrivacidad.addEventListener('click', () => {
+                haLeidoPrivacidad = true;
+                checkEnableCheckbox();
+            });
+
+            checkbox.addEventListener('change', () => {
+                submitBtn.disabled = !checkbox.checked;
+            });
+        }
+
+        // --- FUNCIÓN handleRegister ---
+        async function handleRegister(event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            
+            formData.set('usuario', formData.get('dni'));
+
+            const clave = formData.get('clave');
+            const confirmarClave = formData.get('confirmar_clave');
+
+            if (clave !== confirmarClave) {
+                mostrarMensaje('Las contraseñas no coinciden.', 'error');
+                return;
+            }
+            
+            if (clave.length < 8) {
+                mostrarMensaje('La contraseña debe tener al menos 8 caracteres.', 'error');
+                return;
+            }
+           
+            const fechaNacimientoStr = formData.get('fechaNacimiento');
+            if (!fechaNacimientoStr) {
+                mostrarMensaje('Por favor, introduce tu fecha de nacimiento.', 'error');
+                return;
+            }
+
+            const fechaNacimiento = new Date(fechaNacimientoStr);
+            const hoy = new Date();
+            const edadMinima = 16;
+            
+            let fechaMinima = new Date(hoy.getFullYear() - edadMinima, hoy.getMonth(), hoy.getDate());
+
+            if (fechaNacimiento > fechaMinima) {
+                mostrarMensaje('Debes tener al menos 16 años para registrarte.', 'error');
+                return;
+            }
+            
+            const dni = formData.get('dni');
+            if (!validarDniNie(dni)) {
+                mostrarMensaje('El DNI o NIE introducido no es válido.', 'error');
+                return;
+            }
+            
+            mostrarMensaje('Registrando...', 'info');
+
+            try {
+                const response = await fetch(AppConfig.getUrl('NUEVO_VOLUNTARIO'), {
+                    method: 'POST',
+                    body: new URLSearchParams(formData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const mensajeExito = `${result.message} <br>Email enviado a: <strong>${result.email}</strong>`;
+                    mostrarMensaje(mensajeExito, 'success');
+                    
+                    // Ocultar el aviso de datos precargados si estaba visible
+                    ocultarAvisoDatosPreCargados();
+                    
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 5000);
+                    
+                } else {
+                    mostrarMensaje(result.message || 'Error desconocido.', 'error');
+                }
+
+            } catch (error) {
+                console.error('Error al conectar con el servidor:', error);
+                mostrarMensaje('No se pudo conectar con el servidor. Inténtalo más tarde.', 'error');
+            }
+        }
+
+        // --- VALIDACIÓN DE DNI/NIE ---
+        function validarDniNie(valor) {
+            if (typeof valor !== 'string') return false;
+            const valorUpper = valor.toUpperCase().trim();
+            const nifRegex = /^([XYZ]?\d{7,8})([A-Z])$/;
+            if (!nifRegex.test(valorUpper)) return false;
+            const match = valorUpper.match(nifRegex);
+            let numero = match[1];
+            const letra = match[2];
+            numero = numero.replace('X', '0').replace('Y', '1').replace('Z', '2');
+            const resto = parseInt(numero, 10) % 23;
+            const letras = "TRWAGMYFPDXBNJZSQVHLCKE";
+            const letraCalculada = letras.charAt(resto);
+            return letra === letraCalculada;
+        }
+    </script>
+</body>
+</html>
