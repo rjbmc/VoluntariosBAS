@@ -35,9 +35,16 @@ public class GuardarTurnosServlet extends HttpServlet {
 
     private boolean isAdmin(HttpSession session) {
         if (session == null) return false;
-        Object isAdminAttr = session.getAttribute("isAdmin");
-        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
-               ("S".equals(isAdminAttr));
+        // Intentar obtener el nuevo atributo 'rol'
+        String rol = (String) session.getAttribute("rol");
+        if (rol != null) {
+            // Solo los administradores (A) pueden editar turnos de otros
+            return "A".equals(rol);
+        } else {
+            // Fallback al antiguo isAdmin (para no romper versiones anteriores)
+            Object isAdminAttr = session.getAttribute("isAdmin");
+            return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || "S".equals(isAdminAttr);
+        }
     }
 
     @Override

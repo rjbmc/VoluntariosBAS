@@ -234,7 +234,7 @@
                 voluntarios.forEach(v => {
                     voluntariosHtml += `
                         <li class="py-3">
-                            <p class="font-semibold text-gray-800">${v.apellidos}, ${v.nombre}</p>
+                            <p class="font-semibold text-gray-800">${v.nombre}</p>
                             <p class="text-gray-600">${v.email} - ${v.telefono}</p>
                             <p class="text-sm text-orange-600 font-medium">Acompañantes: ${v.acompanantes}</p>
                         </li>
@@ -343,7 +343,7 @@
                                     doc.addPage();
                                     yPos = margin;
                                 }
-                                doc.text(`- ${v.apellidos}, ${v.nombre} (+${v.acompanantes} acompañantes)`, margin + 5, yPos);
+                                doc.text(`- ${v.nombre} (+${v.acompanantes} acompañantes)`, margin + 5, yPos);
                                 yPos += 6;
                             });
                             yPos += 5;

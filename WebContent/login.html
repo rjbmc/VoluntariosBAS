@@ -89,7 +89,8 @@
                     messageDiv.className = 'p-4 mt-4 text-sm text-center text-white rounded-md bg-green-500';
                     
                     setTimeout(() => {
-                        if (result.isAdmin) {
+                        // Si el usuario es administrador (A), supervisor (S) o coordinador (C), va al panel de admin
+                        if (result.isAdmin || result.rol === 'S' || result.rol === 'C') {
                             window.location.href = 'admin.html';
                         } else {
                             window.location.href = 'asignar-turnos.html';

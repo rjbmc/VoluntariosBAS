@@ -33,7 +33,7 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/admin-campanas")
 public class AdminCampanasServlet extends HttpServlet {
-    private static final long serialVersionUID = 11L; // Versión incrementada
+    private static final long serialVersionUID = 12L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(AdminCampanasServlet.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -51,6 +51,32 @@ public class AdminCampanasServlet extends HttpServlet {
         public int turnospordia; 
     }
 
+    // --- Métodos de verificación de permisos basados en el nuevo sistema de roles ---
+
+    /**
+     * Verifica si el usuario tiene permiso de lectura (listar campañas).
+     * Permisos: Administrador (A), Supervisor (S), Coordinador (C).
+     */
+    private boolean tienePermisoLectura(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol) || "S".equals(rol) || "C".equals(rol);
+    }
+
+    /**
+     * Verifica si el usuario tiene permisos de administrador (escritura).
+     * Solo el rol 'A' tiene estos permisos.
+     */
+    private boolean esAdmin(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol);
+    }
+
+    /**
+     * Método de compatibilidad con el antiguo sistema (basado en isAdmin).
+     * Se mantiene por si alguna parte del código aún lo usa.
+     */
     private boolean isAdmin(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("usuario") == null) return false;
@@ -65,7 +91,9 @@ public class AdminCampanasServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        if (!isAdmin(request)) {
+        // En POST solo pueden acceder administradores (A)
+        HttpSession session = request.getSession(false);
+        if (!esAdmin(session)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
@@ -260,7 +288,10 @@ public class AdminCampanasServlet extends HttpServlet {
     private void handleGetRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        if (!isAdmin(request)) {
+
+        HttpSession session = request.getSession(false);
+        // En GET permitimos lectura a roles A, S, C
+        if (!tienePermisoLectura(session)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }

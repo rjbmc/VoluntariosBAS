@@ -17,18 +17,11 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import util.sevilla.bancodealimentos.es.TiendasUtil;
 
-/**
- * Servlet encargado de reconstruir la tabla de tiendas a partir de una fuente externa
- * o fichero maestro. Esta es una operación administrativa crítica.
- */
 @WebServlet("/rebuild-tiendas")
 public class RebuildTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Incrementar versión
     
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(RebuildTiendasServlet.class);
-    
-    // 2. Jackson ObjectMapper (Reutilizable y Thread-safe)
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -39,18 +32,25 @@ public class RebuildTiendasServlet extends HttpServlet {
         Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        // 3. Verificación de Seguridad Estandarizada
-        // Usamos la misma lógica que en AdminTiendasServlet para evitar ClassCastException
-        // si el atributo isAdmin se guarda como String "S" en lugar de Boolean true.
-        boolean isAdmin = session != null && 
-                          session.getAttribute("usuario") != null && 
-                          "S".equals(session.getAttribute("isAdmin"));
+        // --- Verificación de seguridad con nuevos roles ---
+        boolean autorizado = false;
+        if (session != null && session.getAttribute("usuario") != null) {
+            // Intentar obtener el nuevo atributo 'rol'
+            String rol = (String) session.getAttribute("rol");
+            if (rol != null) {
+                // Solo el Administrador ('A') puede reconstruir tiendas
+                autorizado = "A".equals(rol);
+            } else {
+                // Fallback al antiguo isAdmin (para compatibilidad)
+                Object isAdminAttr = session.getAttribute("isAdmin");
+                autorizado = (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || "S".equals(isAdminAttr);
+            }
+        }
 
-        if (!isAdmin) {
+        if (!autorizado) {
             String ip = request.getRemoteAddr();
             logger.warn("Acceso denegado a RebuildTiendas. Usuario: {}, IP: {}", 
                         (session != null ? session.getAttribute("usuario") : "Anónimo"), ip);
-            
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             jsonResponse.put("success", false);
             jsonResponse.put("message", "Acceso denegado. Solo los administradores pueden realizar esta acción.");
@@ -62,7 +62,6 @@ public class RebuildTiendasServlet extends HttpServlet {
         logger.info("El administrador {} ha iniciado la reconstrucción de tiendas.", adminUser);
 
         try {
-            // Llamada a la utilidad que realiza la lógica pesada
             boolean success = TiendasUtil.rebuildTiendas();
 
             if (success) {
@@ -75,15 +74,12 @@ public class RebuildTiendasServlet extends HttpServlet {
                 jsonResponse.put("message", "Hubo un problema al reconstruir las tiendas. Revise el log del servidor.");
             }
         } catch (Exception e) {
-            // 4. Manejo de errores con traza completa en el log
             logger.error("Error crítico durante la reconstrucción de tiendas.", e);
-            
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             jsonResponse.put("success", false);
             jsonResponse.put("message", "Error interno: " + e.getMessage());
         }
 
-        // Escritura final con Jackson
         objectMapper.writeValue(response.getWriter(), jsonResponse);
     }
 }

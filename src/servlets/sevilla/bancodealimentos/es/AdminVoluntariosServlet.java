@@ -32,7 +32,7 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/admin-voluntarios")
 public class AdminVoluntariosServlet extends HttpServlet {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 4L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(AdminVoluntariosServlet.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -40,18 +40,18 @@ public class AdminVoluntariosServlet extends HttpServlet {
         public String usuario, nombre, apellidos, dni, email, telefono, cp, fechaNacimiento, esAdmin, fechaBaja, verificado;
     }
 
-    private boolean isAdmin(HttpSession session) {
-        if (session == null || session.getAttribute("usuario") == null) {
-            return false;
-        }
-        Object isAdminAttr = session.getAttribute("isAdmin");
-        if (isAdminAttr instanceof Boolean) {
-            return (Boolean) isAdminAttr;
-        }
-        if (isAdminAttr instanceof String) {
-            return "S".equalsIgnoreCase((String) isAdminAttr);
-        }
-        return false;
+    // Permisos de lectura: administradores, supervisores y coordinadores
+    private boolean tienePermisoLectura(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol) || "S".equals(rol) || "C".equals(rol);
+    }
+
+    // Permisos de escritura: solo administradores
+    private boolean esAdmin(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol);
     }
 
     @Override
@@ -60,7 +60,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
         
         HttpSession session = request.getSession(false);
-        if (!isAdmin(session)) {
+        if (!tienePermisoLectura(session)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
@@ -97,91 +97,106 @@ public class AdminVoluntariosServlet extends HttpServlet {
     }
 
     @Override
-
-	protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-	    response.setContentType("application/json");
-	    response.setCharacterEncoding("UTF-8");
-	
-	    HttpSession session = request.getSession(false);
-	    if (!isAdmin(session)) {
-	        sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
-	        return;
-	    }
-	
-	    String adminUser = (String) session.getAttribute("usuario");
-	    String action = request.getParameter("action");
-	    String voluntarioUsuario = request.getParameter("usuario");
-	    String context = String.format("Admin: %s, Action: %s, Voluntario: %s", adminUser, action, voluntarioUsuario);
-	
-	    Connection conn = null;
-	    try {
-	        conn = DatabaseUtil.getConnection();
-	        conn.setAutoCommit(false);
-	
-	        String sqlRowUuid = findSqlRowUuid(conn, voluntarioUsuario);
-	
-	        switch (action) {
-	            case "save":
-	                updateVoluntario(conn, request, voluntarioUsuario);
-	                syncVoluntario(conn, sqlRowUuid, request, voluntarioUsuario);
-	                break;
-	            case "toggleAdmin":
-	                toggleAdminStatus(conn, request.getParameter("esAdmin"), voluntarioUsuario);
-	                break;
-	            case "toggleBaja":
-	                boolean reactivar = Boolean.parseBoolean(request.getParameter("reactivar"));
-	                toggleBajaStatus(conn, reactivar, voluntarioUsuario);
-	                syncBajaStatus(conn, sqlRowUuid, reactivar, voluntarioUsuario);
-	                break;
-	            default:
-	                throw new ServletException("Acción no reconocida: " + action);
-	        }
-	
-	        conn.commit();
-	        LogUtil.logOperation(conn, "ADMIN_ACTION_SUCCESS", adminUser, context);
-	        sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Operación completada con éxito.");
-	
-	    } catch (Exception e) {
-	        if (conn != null) try { conn.rollback(); } catch (SQLException ex) { 
-	            LogUtil.logException(logger, ex, "CRITICAL: Rollback fallido en acción de admin", context); 
-	        }
-	        
-	        // LOG COMPLETO DEL ERROR
-	        logger.error("ERROR EN ADMIN VOLUNTARIOS:", e);
-	        
-	        // Enviar el error detallado al cliente
-	        String errorMessage = e.getMessage();
-	        String stackTrace = getStackTraceAsString(e);
-	        
-	        Map<String, Object> errorResponse = new HashMap<>();
-	        errorResponse.put("success", false);
-	        errorResponse.put("message", "Error: " + errorMessage);
-	        errorResponse.put("detail", stackTrace);
-	        
-	        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-	        mapper.writeValue(response.getWriter(), errorResponse);
-	        
-	    } finally {
-	        if (conn != null) try { conn.close(); } catch (SQLException e) { 
-	            LogUtil.logException(logger, e, "Error cerrando conexión en AdminVoluntariosServlet (POST)", adminUser); 
-	        }
-	    }
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+    
+        HttpSession session = request.getSession(false);
+        if (!esAdmin(session)) {
+            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
+            return;
+        }
+    
+        String adminUser = (String) session.getAttribute("usuario");
+        String action = request.getParameter("action");
+        String voluntarioUsuario = request.getParameter("usuario");
+        String context = String.format("Admin: %s, Action: %s, Voluntario: %s", adminUser, action, voluntarioUsuario);
+    
+        Connection conn = null;
+        try {
+            conn = DatabaseUtil.getConnection();
+            conn.setAutoCommit(false);
+    
+            String sqlRowUuid = findSqlRowUuid(conn, voluntarioUsuario);
+    
+            switch (action) {
+                case "save":
+                    updateVoluntario(conn, request, voluntarioUsuario);
+                    syncVoluntario(conn, sqlRowUuid, request, voluntarioUsuario);
+                    break;
+                case "updateRol":
+                    String nuevoRol = request.getParameter("rol");
+                    actualizarRol(conn, nuevoRol, voluntarioUsuario);
+                    syncRol(conn, sqlRowUuid, nuevoRol, voluntarioUsuario);
+                    break;
+                case "toggleBaja":
+                    boolean reactivar = Boolean.parseBoolean(request.getParameter("reactivar"));
+                    toggleBajaStatus(conn, reactivar, voluntarioUsuario);
+                    syncBajaStatus(conn, sqlRowUuid, reactivar, voluntarioUsuario);
+                    break;
+                default:
+                    throw new ServletException("Acción no reconocida: " + action);
+            }
+    
+            conn.commit();
+            LogUtil.logOperation(conn, "ADMIN_ACTION_SUCCESS", adminUser, context);
+            sendJsonResponse(response, HttpServletResponse.SC_OK, true, "Operación completada con éxito.");
+    
+        } catch (Exception e) {
+            if (conn != null) try { conn.rollback(); } catch (SQLException ex) { 
+                LogUtil.logException(logger, ex, "CRITICAL: Rollback fallido en acción de admin", context); 
+            }
+            
+            logger.error("ERROR EN ADMIN VOLUNTARIOS:", e);
+            
+            String errorMessage = e.getMessage();
+            String stackTrace = getStackTraceAsString(e);
+            
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", "Error: " + errorMessage);
+            errorResponse.put("detail", stackTrace);
+            
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            mapper.writeValue(response.getWriter(), errorResponse);
+            
+        } finally {
+            if (conn != null) try { conn.close(); } catch (SQLException e) { 
+                LogUtil.logException(logger, e, "Error cerrando conexión en AdminVoluntariosServlet (POST)", adminUser); 
+            }
+        }
     }
-
-	// Añade este método auxiliar para obtener el stack trace como String
-	private String getStackTraceAsString(Exception e) {
-	    java.io.StringWriter sw = new java.io.StringWriter();
-	    java.io.PrintWriter pw = new java.io.PrintWriter(sw);
-	    e.printStackTrace(pw);
-	    return sw.toString();
-	}
+    
+    private void actualizarRol(Connection conn, String nuevoRol, String usuario) throws SQLException {
+        String sql = "UPDATE voluntarios SET administrador = ?, notificar='S' WHERE Usuario = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, nuevoRol);
+            stmt.setString(2, usuario);
+            stmt.executeUpdate();
+        }
+    }
+    
+    private void syncRol(Connection conn, String sqlRowUuid, String nuevoRol, String usuario) throws Exception {
+        if (sqlRowUuid == null) throw new Exception("No se puede sincronizar: SqlRowUUID es nulo para el usuario " + usuario);
+        
+        FieldValueSet fields = new FieldValueSet();
+        fields.getAdditionalData().put("rol", nuevoRol);
+        
+        updateSharePointItem(conn, sqlRowUuid, fields, usuario);
+    }
+    
+    private String getStackTraceAsString(Exception e) {
+        java.io.StringWriter sw = new java.io.StringWriter();
+        java.io.PrintWriter pw = new java.io.PrintWriter(sw);
+        e.printStackTrace(pw);
+        return sw.toString();
+    }
 
     private void updateVoluntario(Connection conn, HttpServletRequest request, String usuario) throws SQLException {
         String sql = "UPDATE voluntarios SET Nombre=?, Apellidos=?, Email=?, telefono=?, cp=?, fechaNacimiento=?, notificar='S' WHERE Usuario=?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, request.getParameter("nombre"));
             stmt.setString(2, request.getParameter("apellidos"));
-//            stmt.setString(3, request.getParameter("dni"));
             stmt.setString(3, request.getParameter("email"));
             stmt.setString(4, request.getParameter("telefono"));
             stmt.setString(5, request.getParameter("cp"));
@@ -206,6 +221,7 @@ public class AdminVoluntariosServlet extends HttpServlet {
 
         updateSharePointItem(conn, sqlRowUuid, fields, usuario);
     }
+    
     private String getDniActual(Connection conn, String usuario) throws SQLException {
         String sql = "SELECT `DNI NIF` FROM voluntarios WHERE Usuario = ?";
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
@@ -217,14 +233,6 @@ public class AdminVoluntariosServlet extends HttpServlet {
                     throw new SQLException("No se encontró el usuario: " + usuario);
                 }
             }
-        }
-    }
-    private void toggleAdminStatus(Connection conn, String esAdmin, String usuario) throws SQLException {
-        String sql = "UPDATE voluntarios SET administrador=?, notificar='S' WHERE Usuario=?";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, esAdmin);
-            stmt.setString(2, usuario);
-            stmt.executeUpdate();
         }
     }
 

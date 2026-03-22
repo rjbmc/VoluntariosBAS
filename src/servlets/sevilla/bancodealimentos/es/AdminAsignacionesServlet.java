@@ -28,7 +28,7 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/admin-asignaciones")
 public class AdminAsignacionesServlet extends HttpServlet {
-    private static final long serialVersionUID = 6L;
+    private static final long serialVersionUID = 8L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(AdminAsignacionesServlet.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -47,19 +47,11 @@ public class AdminAsignacionesServlet extends HttpServlet {
         String comentario; 
     }
 
-    private boolean isAdmin(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session == null || session.getAttribute("usuario") == null) {
-            return false;
-        }
-        Object isAdminAttr = session.getAttribute("isAdmin");
-        if (isAdminAttr instanceof Boolean) {
-            return (Boolean) isAdminAttr;
-        }
-        if (isAdminAttr instanceof String) {
-            return "S".equalsIgnoreCase((String) isAdminAttr);
-        }
-        return false;
+    // Verifica permiso de acceso (roles A, S, C)
+    private boolean tienePermiso(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol) || "S".equals(rol) || "C".equals(rol);
     }
 
     @Override
@@ -72,12 +64,13 @@ public class AdminAsignacionesServlet extends HttpServlet {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
-        if (!isAdmin(request)) {
+        HttpSession session = request.getSession(false);
+        if (!tienePermiso(session)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
 
-        String adminUser = (String) request.getSession().getAttribute("usuario");
+        String adminUser = (String) session.getAttribute("usuario");
         String usuarioTarget = request.getParameter("usuario");
         String campanaId = getActiveCampaignId(request);
         String context = String.format("Admin: %s, Voluntario: %s, Campaña: %s", adminUser, usuarioTarget, campanaId);
@@ -172,7 +165,6 @@ public class AdminAsignacionesServlet extends HttpServlet {
         Connection conn = null;
         PreparedStatement stmt = null;
         try {
-            // Conexión completamente nueva e independiente
             conn = DatabaseUtil.getConnection();
             String sql = "INSERT INTO logs (fecha, usuario, operacion, mensaje) VALUES (NOW(), ?, ?, ?)";
             stmt = conn.prepareStatement(sql);
@@ -181,7 +173,6 @@ public class AdminAsignacionesServlet extends HttpServlet {
             stmt.setString(3, mensaje);
             stmt.executeUpdate();
         } catch (Exception e) {
-            // No podemos hacer nada, pero al menos lo intentamos
             System.err.println("ERROR GRAVE escribiendo log directo: " + e.getMessage());
         } finally {
             try { if (stmt != null) stmt.close(); } catch (Exception e) {}
@@ -190,16 +181,12 @@ public class AdminAsignacionesServlet extends HttpServlet {
     }
 
     private void replicateToSharePoint(Connection conn, SharePointIds spIds, String campanaId, TurnoData[] turnos, String usuario) {
-        // Variable para guardar el resultado
         boolean exito = false;
-        
-        // LOG DIRECTO 1
         escribirLogDirecto(usuario, "SYNC_START", "Iniciando sync para campaña: " + campanaId);
         
         try {
             String assignmentUuid = "AS-" + spIds.voluntarioUuid;
             
-            // Obtener el DNI
             String dniVoluntario = "";
             try {
                 dniVoluntario = getDniVoluntario(conn, usuario);
@@ -214,7 +201,6 @@ public class AdminAsignacionesServlet extends HttpServlet {
             fields.getAdditionalData().put("Campana", campanaId);
             fields.getAdditionalData().put("UsuarioLookupId", spIds.voluntarioSpId);
             
-            // Añadir DNI con diferentes nombres
             if (dniVoluntario != null && !dniVoluntario.isEmpty()) {
                 fields.getAdditionalData().put("DNI", dniVoluntario);
                 fields.getAdditionalData().put("dni", dniVoluntario);
@@ -312,25 +298,57 @@ public class AdminAsignacionesServlet extends HttpServlet {
     private void handleGetRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        String adminUser = (String) request.getSession(false).getAttribute("usuario");
-
-        if (!isAdmin(request)) {
+        HttpSession session = request.getSession(false);
+        
+        if (!tienePermiso(session)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
 
+        String rol = (String) session.getAttribute("rol");
+        String nombreCompleto = (String) session.getAttribute("nombreCompleto");
+        if (nombreCompleto == null) nombreCompleto = "";
+
         List<AsignacionDTO> asignaciones = new ArrayList<>();
         String campanaId = getActiveCampaignId(request);
-        String sql = "SELECT v.Usuario, v.Nombre, v.Apellidos, t1.denominacion AS TiendaTurno1, vec.Comentario1, " +
-                     "t2.denominacion AS TiendaTurno2, vec.Comentario2, t3.denominacion AS TiendaTurno3, vec.Comentario3, " +
-                     "t4.denominacion AS TiendaTurno4, vec.Comentario4 FROM voluntarios_en_campana vec " +
-                     "JOIN voluntarios v ON vec.Usuario = v.Usuario LEFT JOIN tiendas t1 ON vec.Turno1 = t1.codigo " +
-                     "LEFT JOIN tiendas t2 ON vec.Turno2 = t2.codigo LEFT JOIN tiendas t3 ON vec.Turno3 = t3.codigo " +
-                     "LEFT JOIN tiendas t4 ON vec.Turno4 = t4.codigo WHERE vec.Campana = ? ORDER BY v.Apellidos, v.Nombre";
+        
+        // Construir la consulta SQL con filtro opcional por supervisor/coordinador
+        StringBuilder sql = new StringBuilder(
+            "SELECT v.Usuario, v.Nombre, v.Apellidos, " +
+            "t1.denominacion AS TiendaTurno1, vec.Comentario1, " +
+            "t2.denominacion AS TiendaTurno2, vec.Comentario2, " +
+            "t3.denominacion AS TiendaTurno3, vec.Comentario3, " +
+            "t4.denominacion AS TiendaTurno4, vec.Comentario4 " +
+            "FROM voluntarios_en_campana vec " +
+            "JOIN voluntarios v ON vec.Usuario = v.Usuario " +
+            "LEFT JOIN tiendas t1 ON vec.Turno1 = t1.codigo " +
+            "LEFT JOIN tiendas t2 ON vec.Turno2 = t2.codigo " +
+            "LEFT JOIN tiendas t3 ON vec.Turno3 = t3.codigo " +
+            "LEFT JOIN tiendas t4 ON vec.Turno4 = t4.codigo " +
+            "WHERE vec.Campana = ?"
+        );
+        
+        // Si no es administrador, añadir filtro por supervisor/coordinador
+        if (!"A".equals(rol)) {
+            sql.append(" AND (t1.Supervisor = ? OR t1.Coordinador = ? ");
+            sql.append(" OR t2.Supervisor = ? OR t2.Coordinador = ? ");
+            sql.append(" OR t3.Supervisor = ? OR t3.Coordinador = ? ");
+            sql.append(" OR t4.Supervisor = ? OR t4.Coordinador = ?)");
+        }
+        sql.append(" ORDER BY v.Apellidos, v.Nombre");
 
-        try (Connection conn = DatabaseUtil.getConnection(); 
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
-            stmt.setString(1, campanaId);
+        try (Connection conn = DatabaseUtil.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+            
+            int paramIndex = 1;
+            stmt.setString(paramIndex++, campanaId);
+            
+            if (!"A".equals(rol)) {
+                for (int i = 0; i < 8; i++) {
+                    stmt.setString(paramIndex++, nombreCompleto);
+                }
+            }
+            
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
                     asignaciones.add(mapRowToAsignacion(rs));
@@ -338,7 +356,7 @@ public class AdminAsignacionesServlet extends HttpServlet {
             }
             mapper.writeValue(response.getWriter(), asignaciones);
         } catch (Exception e) {
-            LogUtil.logException(logger, e, "Error de BD al consultar asignaciones", adminUser);
+            LogUtil.logException(logger, e, "Error de BD al consultar asignaciones", (String)session.getAttribute("usuario"));
             sendJsonResponse(response, HttpServletResponse.SC_INTERNAL_SERVER_ERROR, false, 
                 "Error de base de datos. El problema ha sido registrado.");
         }

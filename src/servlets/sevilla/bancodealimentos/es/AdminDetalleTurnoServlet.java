@@ -26,7 +26,7 @@ import util.sevilla.bancodealimentos.es.LogUtil;
 
 @WebServlet("/admin-detalle-turno")
 public class AdminDetalleTurnoServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(AdminDetalleTurnoServlet.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -44,11 +44,11 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
         return (session != null && session.getAttribute("usuario") != null) ? (String) session.getAttribute("usuario") : "Anónimo";
     }
 
-    private boolean isAdmin(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session == null || session.getAttribute("usuario") == null) return false;
-        Object isAdminAttr = session.getAttribute("isAdmin");
-        return "S".equals(isAdminAttr) || (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr);
+    // Verifica si el usuario tiene permiso (A, S, C)
+    private boolean tienePermiso(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol) || "S".equals(rol) || "C".equals(rol);
     }
 
     // --- Método Principal (doGet) ---
@@ -56,9 +56,10 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
+        HttpSession session = request.getSession(false);
         String adminUser = getUsuario(request);
 
-        if (!isAdmin(request)) {
+        if (!tienePermiso(session)) {
             LogUtil.logException(logger, new SecurityException("Acceso denegado"), "Intento de acceso a /admin-detalle-turno", adminUser);
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
@@ -74,19 +75,39 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
             return;
         }
 
+        String rol = (String) session.getAttribute("rol");
+        String nombreCompleto = (String) session.getAttribute("nombreCompleto");
+        if (nombreCompleto == null) nombreCompleto = "";
+
         List<VoluntarioTurnoDTO> listaVoluntarios = new ArrayList<>();
         String turnoCol = "Turno" + turnoNum;
         String comentarioCol = "Comentario" + turnoNum;
-        String sql = "SELECT concat(v.Nombre, ' ', v.Apellidos, ' (', v.Usuario, ')') as Voluntario, v.Email, v.telefono, vec." + comentarioCol + " AS Comentario " +
-                     "FROM voluntarios_en_campana vec JOIN voluntarios v ON vec.Usuario = v.Usuario " +
-                     "WHERE vec.Campana = ? AND vec." + turnoCol + " = ?";
+        
+        // Consulta base
+        StringBuilder sql = new StringBuilder(
+            "SELECT concat(v.Nombre, ' ', v.Apellidos, ' (', v.Usuario, ')') as Voluntario, v.Email, v.telefono, vec." + comentarioCol + " AS Comentario " +
+            "FROM voluntarios_en_campana vec " +
+            "JOIN voluntarios v ON vec.Usuario = v.Usuario " +
+            "WHERE vec.Campana = ? AND vec." + turnoCol + " = ?"
+        );
+        
+        // Si no es administrador, añadir filtro para que solo vea voluntarios en tiendas donde sea responsable
+        if (!"A".equals(rol)) {
+            sql.append(" AND EXISTS (SELECT 1 FROM tiendas t WHERE t.codigo = ? AND (t.Supervisor = ? OR t.Coordinador = ?))");
+        }
 
         Connection conn = null;
         try {
             conn = DatabaseUtil.getConnection();
-            try (PreparedStatement stmt = conn.prepareStatement(sql)) {
-                stmt.setString(1, campanaId);
-                stmt.setInt(2, Integer.parseInt(tiendaIdStr));
+            try (PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+                int paramIndex = 1;
+                stmt.setString(paramIndex++, campanaId);
+                stmt.setInt(paramIndex++, Integer.parseInt(tiendaIdStr));
+                if (!"A".equals(rol)) {
+                    stmt.setInt(paramIndex++, Integer.parseInt(tiendaIdStr)); // para el EXISTS
+                    stmt.setString(paramIndex++, nombreCompleto);
+                    stmt.setString(paramIndex++, nombreCompleto);
+                }
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
                         VoluntarioTurnoDTO dto = new VoluntarioTurnoDTO();

@@ -25,7 +25,7 @@ import util.sevilla.bancodealimentos.es.PasswordUtils;
 
 @WebServlet("/login")
 public class LoginServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Versión incrementada
     private static final Logger logger = LoggerFactory.getLogger(LoginServlet.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -49,7 +49,7 @@ public class LoginServlet extends HttpServlet {
                     if (rs.next()) {
                         String storedHash = rs.getString("Clave");
                         String verificado = rs.getString("verificado");
-                        String esAdminStr = rs.getString("administrador");
+                        String rol = rs.getString("administrador"); // Aquí obtenemos el rol
                         String fb = rs.getString("fecha_baja");
 
                         if (fb != null && !fb.equals("0000-00-00")) {
@@ -60,13 +60,15 @@ public class LoginServlet extends HttpServlet {
                                 HttpSession session = request.getSession(true);
                                 session.setAttribute("usuario", usuario);
                                 session.setAttribute("email", rs.getString("Email"));
-                                session.setAttribute("isAdmin", "S".equals(esAdminStr));
+                                session.setAttribute("rol", rol); // Guardamos el rol (V, C, S, A)
+                                session.setAttribute("isAdmin", "A".equals(rol)); // Para compatibilidad
                                 session.setAttribute("nombreCompleto", (rs.getString("Nombre") + " " + rs.getString("Apellidos")).trim());
                                 session.setMaxInactiveInterval(60 * 60); // 1 hora
 
                                 LogUtil.logOperation(conn, "LOGIN_SUCCESS", usuario, "Login correcto. " + context);
                                 Map<String, Object> successData = new HashMap<>();
-                                successData.put("isAdmin", "S".equals(esAdminStr));
+                                successData.put("isAdmin", "A".equals(rol));
+                                successData.put("rol", rol); // También devolvemos el rol al cliente
                                 sendJsonResponse(response, 200, true, "Login correcto.", successData);
                             } else {
                                 LogUtil.logOperation(conn, "LOGIN_FAIL", usuario, "Intento de login en cuenta no verificada. " + context);

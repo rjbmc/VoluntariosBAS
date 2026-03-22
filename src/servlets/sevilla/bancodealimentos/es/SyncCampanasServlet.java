@@ -27,12 +27,9 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 
 @WebServlet("/sync-campanas")
 public class SyncCampanasServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Incrementar versión
     
-    // 1. Logger SLF4J
     private static final Logger logger = LoggerFactory.getLogger(SyncCampanasServlet.class);
-    
-    // 2. Jackson ObjectMapper
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     private static final String SHAREPOINT_LIST_NAME = "Campanas";
@@ -45,12 +42,22 @@ public class SyncCampanasServlet extends HttpServlet {
         Map<String, Object> jsonResponse = new HashMap<>();
         HttpSession session = request.getSession(false);
 
-        // 3. Verificación de seguridad estandarizada (Busca "S" como en los otros servlets)
-        boolean isAdmin = session != null && 
-                          session.getAttribute("usuario") != null && 
-                          "S".equals(session.getAttribute("isAdmin"));
+        // Verificación de seguridad mejorada con roles
+        boolean accesoPermitido = false;
+        if (session != null && session.getAttribute("usuario") != null) {
+            // Intentar obtener el nuevo atributo 'rol'
+            String rol = (String) session.getAttribute("rol");
+            if (rol != null) {
+                // Permitir solo a administradores (A) - ajustar si otros roles también pueden
+                accesoPermitido = "A".equals(rol);
+            } else {
+                // Fallback al antiguo isAdmin (para compatibilidad)
+                Object isAdminAttr = session.getAttribute("isAdmin");
+                accesoPermitido = (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || "S".equals(isAdminAttr);
+            }
+        }
 
-        if (!isAdmin) {
+        if (!accesoPermitido) {
             String ip = request.getRemoteAddr();
             logger.warn("Acceso denegado a SyncCampanas. Usuario: {}, IP: {}", 
                         (session != null ? session.getAttribute("usuario") : "Anónimo"), ip);
@@ -68,8 +75,6 @@ public class SyncCampanasServlet extends HttpServlet {
         try {
             conn = DatabaseUtil.getConnection();
             
-            // CORRECCIÓN: Usamos SharePointUtil.SITE_ID en lugar de SITE_ID_VOLUNTARIOS
-            // Asumimos que SITE_ID apunta al sitio correcto donde está la lista "Campanas"
             String listId = SharePointUtil.getListId(SharePointUtil.SITE_ID, SHAREPOINT_LIST_NAME); 
             
             if (listId == null) {
@@ -90,7 +95,6 @@ public class SyncCampanasServlet extends HttpServlet {
                 while(rs.next()){
                     FieldValueSet fields = new FieldValueSet();
 
-                    // Mapeo de campos
                     fields.getAdditionalData().put("SqlRowUUID", rs.getString("SqlRowUUID"));
                     fields.getAdditionalData().put("Title", rs.getString("denominacion"));
                     fields.getAdditionalData().put("nombre", rs.getString("Campana"));
@@ -116,7 +120,6 @@ public class SyncCampanasServlet extends HttpServlet {
                         fields.getAdditionalData().put("fecha_fin", fecha2_sql.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE));
                     }
 
-                    // Creación del ítem en SharePoint usando SITE_ID
                     SharePointUtil.createListItem(SharePointUtil.SITE_ID, listId, fields);
                     count++;
                 }
@@ -135,8 +138,6 @@ public class SyncCampanasServlet extends HttpServlet {
             jsonResponse.put("message", "Error en la sincronización: " + e.getMessage());
         } finally {
             if (conn != null) try { conn.close(); } catch (SQLException e) { logger.warn("Error cerrando conexión", e); }
-            
-            // Respuesta final con Jackson
             objectMapper.writeValue(response.getWriter(), jsonResponse);
         }
     }

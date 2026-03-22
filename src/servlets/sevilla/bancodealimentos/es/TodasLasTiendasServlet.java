@@ -23,7 +23,7 @@ import util.sevilla.bancodealimentos.es.DatabaseUtil;
 
 @WebServlet("/todas-las-tiendas")
 public class TodasLasTiendasServlet extends HttpServlet {
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L; // Incrementar versión
     private static final Logger logger = LoggerFactory.getLogger(TodasLasTiendasServlet.class);
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -33,6 +33,8 @@ public class TodasLasTiendasServlet extends HttpServlet {
         public String direccion;
         public BigDecimal lat;
         public BigDecimal lon;
+        public String supervisor;  // Nuevo campo
+        public String coordinador; // Nuevo campo
     }
 
     @Override
@@ -41,7 +43,7 @@ public class TodasLasTiendasServlet extends HttpServlet {
         response.setCharacterEncoding("UTF-8");
 
         List<TiendaDTO> tiendas = new ArrayList<>();
-        String sql = "SELECT codigo AS id, denominacion AS nombre, Direccion AS direccion, Lat AS lat, Lon AS lon FROM tiendas WHERE disponible = 'S'";
+        String sql = "SELECT codigo AS id, denominacion AS nombre, Direccion AS direccion, Lat AS lat, Lon AS lon, Supervisor, Coordinador FROM tiendas WHERE disponible = 'S'";
 
         try (Connection conn = DatabaseUtil.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
@@ -54,6 +56,8 @@ public class TodasLasTiendasServlet extends HttpServlet {
                 t.direccion = rs.getString("direccion");
                 t.lat = rs.getBigDecimal("lat");
                 t.lon = rs.getBigDecimal("lon");
+                t.supervisor = rs.getString("Supervisor");
+                t.coordinador = rs.getString("Coordinador");
                 tiendas.add(t);
             }
             
