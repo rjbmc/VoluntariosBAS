@@ -2,9 +2,11 @@ package util.sevilla.bancodealimentos.es;
 
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.URI;
 import java.sql.Connection;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -13,17 +15,99 @@ import com.azure.identity.ClientSecretCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.microsoft.graph.models.*;
 import com.microsoft.graph.serviceclient.GraphServiceClient;
+import com.microsoft.kiota.HttpMethod;
+import com.microsoft.kiota.RequestInformation;
+import com.microsoft.kiota.serialization.ParsableFactory;
 
 public class SharePointUtil {
 
     public static final String SITE_ID = "bancodealimentosdsevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db";
     public static final String SP_SITE_ID_VOLUNTARIOS = "bancodealimentosdsevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db";
-    public static final String SP_SITE_ID_INFORMATICA = "bancodealimentosdsevilla.sharepoint.com,98b8faf3-b1b7-4a7b-8cd8-744fbe8c8c79,b2a4e075-4f56-47fe-9fc5-09466a41a27a";
+    public static final String SP_SITE_ID_INFORMATICA = "bancodealimentosdsevilla.sharepoint.com,a7c6f38d-82a8-4acd-bbb2-69383beb6f54,d9d19aa9-15fb-4f97-aa37-9ce7b3de7db5";
     public static final String LIST_NAME_TIENDAS = "Tiendas";
     public static final String FIELD_CODIGO_TIENDA = "codigo";
+    public static final String LIST_NAME_VOLUNTARIOS = "Voluntarios BAS";
 
     private static GraphServiceClient graphClient = null;
-
+    public static void listarTodasLasListasAccesibles() throws Exception {
+        initializeGraphClient();
+        
+        // Probar con los site IDs que tienes
+        String[] siteIds = {
+            "bancodealimentosdsevilla.sharepoint.com,ee4d7ea9-c8f0-45f7-864a-2da47d05c0fd,ace86285-8799-4cd6-8121-26255a3c62db",
+            "bancodealimentosdsevilla.sharepoint.com,aaea4167-1f45-4bba-ac5a-0bfb33dd3dec"
+        };
+        
+        for (String siteId : siteIds) {
+            System.out.println("\n=== SITE ID: " + siteId + " ===");
+            try {
+                // Obtener todas las listas de este sitio
+                ListCollectionResponse lists = graphClient.sites().bySiteId(siteId).lists().get();
+                
+                System.out.println("Listas encontradas en este sitio:");
+                for (com.microsoft.graph.models.List lista : lists.getValue()) {
+                    System.out.println("  - " + lista.getDisplayName() + " (ID: " + lista.getId() + ")");
+                }
+            } catch (Exception e) {
+                System.out.println("Error accediendo a este sitio: " + e.getMessage());
+            }
+        }
+    }
+    public static void encontrarSitioInformatica() throws Exception {
+        initializeGraphClient();
+        
+        // El List ID que sabemos que existe en el sitio de informática
+        String targetListId = "b77f5166-7221-460a-bd3c-fae26a3880c5";
+        
+        // Obtener todos los sitios a los que la aplicación tiene acceso
+        SiteCollectionResponse sites = graphClient.sites().get();
+        
+        System.out.println("=== BUSCANDO SITIO QUE CONTIENE LA LISTA ===");
+        System.out.println("List ID buscado: " + targetListId);
+        System.out.println("Total de sitios a revisar: " + sites.getValue().size());
+        System.out.println("");
+        
+        int contador = 0;
+        for (com.microsoft.graph.models.Site site : sites.getValue()) {
+            contador++;
+            String siteId = site.getId();
+            String siteName = site.getDisplayName();
+            String siteUrl = site.getWebUrl();
+            
+            System.out.println(contador + ". Revisando: " + siteName);
+            System.out.println("   URL: " + siteUrl);
+            System.out.println("   Site ID: " + siteId);
+            
+            try {
+                // Intentar obtener la lista por su ID
+                com.microsoft.graph.models.List lista = graphClient.sites().bySiteId(siteId)
+                    .lists().byListId(targetListId)
+                    .get();
+                
+                System.out.println("");
+                System.out.println(">>> ¡LISTA ENCONTRADA! <<<");
+                System.out.println(">>> Site ID CORRECTO: " + siteId);
+                System.out.println(">>> Site Name: " + siteName);
+                System.out.println(">>> Site URL: " + siteUrl);
+                System.out.println(">>> List Name: " + lista.getDisplayName());
+                System.out.println("");
+                System.out.println("✅ COPIA ESTE SITE ID EN TU CONSTANTE:");
+                System.out.println("public static final String SP_SITE_ID_INFORMATICA = \"" + siteId + "\";");
+                return;
+                
+            } catch (Exception e) {
+                // Este sitio no tiene esa lista, continuar
+                System.out.println("   -> No contiene la lista buscada");
+            }
+            System.out.println("");
+        }
+        
+        System.out.println("=== NO SE ENCONTRÓ NINGÚN SITIO CON ESA LISTA ===");
+        System.out.println("Posibles causas:");
+        System.out.println("1. La aplicación no tiene permisos para acceder al sitio de informática");
+        System.out.println("2. El List ID es incorrecto");
+        System.out.println("3. El sitio de informática es un subsitio (subsite) y no aparece en la lista de sitios");
+    }
     private static void initializeGraphClient() {
         if (graphClient == null) {
             final String clientId = "e15a2c05-a43a-487f-a78b-aa7fade86e7a";
@@ -39,7 +123,6 @@ public class SharePointUtil {
             graphClient = new GraphServiceClient(credential);
         }
     }
-
     public static String getListId(String targetSiteId, String listName) throws Exception {
         initializeGraphClient();
         ListCollectionResponse lists = graphClient.sites().bySiteId(targetSiteId).lists().get(requestConfiguration -> {

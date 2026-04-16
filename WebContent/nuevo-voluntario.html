@@ -301,16 +301,16 @@
                     checkbox.disabled = false;
                 }
             }
-
-            linkCompromisos.addEventListener('click', () => {
-                haLeidoCompromisos = true;
-                checkEnableCheckbox();
-            });
-
-            linkPrivacidad.addEventListener('click', () => {
-                haLeidoPrivacidad = true;
-                checkEnableCheckbox();
-            });
+            haLeidoCompromisos = true;
+       //     linkCompromisos.addEventListener('click', () => {
+       //         haLeidoCompromisos = true;
+       //         checkEnableCheckbox();
+       //     });
+			haLeidoPrivacidad = true;
+       //     linkPrivacidad.addEventListener('click', () => {
+       //         haLeidoPrivacidad = true;
+       //         checkEnableCheckbox();
+       //     });
 
             checkbox.addEventListener('change', () => {
                 submitBtn.disabled = !checkbox.checked;

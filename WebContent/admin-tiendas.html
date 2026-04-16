@@ -87,7 +87,7 @@
             <h1 class="text-3xl font-bold text-gray-800 tracking-tight">Puntos de Recogida</h1>
             <div class="flex flex-wrap gap-2">
                 <!-- Botón de Refrescar Todo: Con Tooltip descriptivo -->
-                <button onclick="refreshAllTiendas()" 
+                <button id="btn-refresh-all" onclick="refreshAllTiendas()" 
                         class="btn bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-100 px-4 py-2 text-sm font-bold flex items-center transition-all"
                         title="Sincronización global: Crea tiendas nuevas desde SharePoint, actualiza datos de las existentes y desactiva las tiendas locales que ya no figuren en la nube.">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,12 +276,19 @@
                 const response = await fetch(AppConfig.getUrl('USUARIO_ACTUAL'));
                 if (!response.ok) { window.location.href = 'login.html'; return; }
                 const user = await response.json();
-                
-                if (!user.isAdmin) { window.location.href = 'login.html'; return; }
+                if (!user.rol || (user.rol !== 'A' && user.rol !== 'S' && user.rol !== 'C')) {
+                	 window.location.href = 'login.html'; 
+                	 return; 
+                	 }
 
                 usuarioActual = user.usuario || "";
                 document.getElementById('debug-user-info').textContent = `Usuario: ${usuarioActual}`;
-
+                const refreshAllBtn = document.getElementById('btn-refresh-all');
+                if (user.rol === 'A') {
+                    refreshAllBtn.style.display = 'inline-flex'; // o el display que tenga originalmente
+                } else {
+                    refreshAllBtn.style.display = 'none';
+                }
                 const userSanitized = usuarioActual.trim().toUpperCase();
                 if (userSanitized === '28654139A') {
                     document.getElementById('btn-repair-uuids').classList.remove('hidden');

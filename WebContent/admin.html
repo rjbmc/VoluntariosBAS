@@ -35,7 +35,7 @@
     <!-- Contenido Principal -->
     <main class="container mx-auto px-6 py-12">
         <h1 id="welcome-admin" class="text-3xl font-bold text-gray-800 mb-8">Bienvenido/a, Administrador</h1>
-        
+        <div id="debug-nivel" class="text-xs text-gray-400 mt-4 text-center"></div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="admin-cards-container">
             <!-- Tarjetas con atributo data-required-role -->
             <a href="admin-campanas.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center" data-required-role="A">
@@ -43,7 +43,7 @@
                 <h2 class="text-xl font-semibold text-gray-800">Gestionar Campañas</h2>
                 <p class="text-gray-500 mt-2">Crear, editar y activar campañas.</p>
             </a>
-            <a href="admin-tiendas.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center" data-required-role="A">
+            <a href="admin-tiendas.html" class="admin-card bg-white p-6 rounded-lg card-shadow text-center" data-required-role="S">
                 <div class="icon-bg text-white rounded-full p-4 w-20 h-20 mx-auto flex items-center justify-center mb-4"><img src="images/icons/store.svg" class="h-10 w-10" alt="Icono"></div>
                 <h2 class="text-xl font-semibold text-gray-800">Gestionar Tiendas</h2>
                 <p class="text-gray-500 mt-2">Añadir y gestionar puntos de recogida.</p>
@@ -120,6 +120,11 @@
                 const tarjetas = document.querySelectorAll('[data-required-role]');
                 const nivel = { 'A': 3, 'C': 2, 'S': 1, 'V': 0 };
                 const nivelUsuario = nivel[user.rol] || 0;
+                
+                const debugDiv = document.getElementById('debug-nivel');
+                if (debugDiv) {
+                    debugDiv.textContent = `Tu nivel: ${nivelUsuario} (Rol: ${user.rol})`;
+                }
                 
                 tarjetas.forEach(tarjeta => {
                     const rolRequerido = tarjeta.dataset.requiredRole;

@@ -41,22 +41,19 @@ public class AdminFiltrosTiendasServlet extends HttpServlet {
         public List<String> zonas = new ArrayList<>();
     }
 
-    // 3. Verificación de seguridad estandarizada
-    private boolean isAdmin(HttpServletRequest request) {
-        HttpSession session = request.getSession(false);
-        if (session == null || session.getAttribute("usuario") == null) return false;
-        
-        Object isAdminAttr = session.getAttribute("isAdmin");
-        return (isAdminAttr instanceof Boolean && (Boolean) isAdminAttr) || 
-               ("S".equals(isAdminAttr));
+ // Verifica si el usuario tiene permiso de acceso (roles A, S, C)
+    private boolean tienePermiso(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol) || "S".equals(rol) || "C".equals(rol);
     }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-
-        if (!isAdmin(request)) {
+        
+        if (!tienePermiso(request.getSession())) {
             logger.warn("Acceso denegado a AdminFiltrosTiendas. IP: {}", request.getRemoteAddr());
             response.sendError(HttpServletResponse.SC_FORBIDDEN, "Acceso denegado.");
             return;

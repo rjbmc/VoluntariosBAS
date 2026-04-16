@@ -65,15 +65,15 @@ public class ConsultarVoluntarioServlet extends HttpServlet {
             if (sharepointData != null) {
                 // 3. Encontrado en SharePoint: devolver datos para pre-rellenar
                 Map<String, Object> data = new HashMap<>();
-                data.put("nombre", getString(sharepointData, "field_1", ""));
+                data.put("nombre", getString(sharepointData, "Nombre", ""));
                 data.put("apellidos", getString(sharepointData, "field_2", ""));
-                data.put("email", getString(sharepointData, "field_6", ""));
+                data.put("email", getString(sharepointData, "field_9", ""));
                 data.put("telefono", getString(sharepointData, "field_7", ""));
-                data.put("cp", getString(sharepointData, "field_9", ""));
+                data.put("cp", getString(sharepointData, "C.Postal", ""));
                 
                 // --- PROCESAR FECHA DE NACIMIENTO (field_8) ---
                 String fechaNacimiento = "";
-                Object fechaObj = sharepointData.get("field_8");
+                Object fechaObj = sharepointData.get("FechaNacimiento");
                 if (fechaObj != null) {
                     String fechaStr = fechaObj.toString().trim();
                     logger.info("Fecha original desde SharePoint: {}", fechaStr);
@@ -111,7 +111,7 @@ public class ConsultarVoluntarioServlet extends HttpServlet {
 
     private Map<String, Object> findVoluntarioInSharePoint(Connection con, String dni) throws Exception {
         final String dniFieldName = "field_3";
-        return SharePointUtil.findItemByFieldValue(con, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, VOLUNTARIOS_LIST_NAME, dniFieldName, dni);
+        return SharePointUtil.findItemByFieldValue(con, SharePointUtil.SP_SITE_ID_INFORMATICA, SharePointUtil.LIST_NAME_VOLUNTARIOS, dniFieldName, dni);
     }
 
     private String getString(Map<String, Object> map, String key, String defaultValue) {

@@ -23,6 +23,7 @@ import com.microsoft.graph.models.ListItemCollectionResponse;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -288,10 +289,10 @@ public class AdminCampanasServlet extends HttpServlet {
     private void handleGetRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-
+        
         HttpSession session = request.getSession(false);
         // En GET permitimos lectura a roles A, S, C
-        if (!tienePermisoLectura(session)) {
+        if (session==null || !tienePermisoLectura(session)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }

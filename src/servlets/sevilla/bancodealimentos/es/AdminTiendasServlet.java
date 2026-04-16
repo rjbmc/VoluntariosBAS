@@ -327,35 +327,53 @@ public class AdminTiendasServlet extends HttpServlet {
         if (listId == null) throw new IOException("La lista de tiendas no fue encontrada en SharePoint.");
         return listId;
     }
-
+    private boolean esAdmin(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol);
+    }
     private String findItemIdByCodigo(Connection conn, String listId, String codigo) throws Exception {
         String itemId = SharePointUtil.findItemIdByFieldValue(conn, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "codigo", codigo);
         if (itemId == null) throw new IOException("La tienda con código '" + codigo + "' no fue encontrada en SharePoint.");
         return itemId;
     }
-
+    private boolean tienePermisoLectura(HttpSession session) {
+        if (session == null) return false;
+        String rol = (String) session.getAttribute("rol");
+        return "A".equals(rol) || "S".equals(rol) || "C".equals(rol);
+    }
     private void handleGetRequest(HttpServletRequest request, HttpServletResponse response) throws IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
-        if (!isAdmin(request)) {
+        HttpSession session = request.getSession(false);
+        if (!tienePermisoLectura(session)) {
             sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
             return;
         }
 
         String supervisor = request.getParameter("supervisor");
         String zona = request.getParameter("zona");
-
+        String rol = (String) session.getAttribute("rol");
+        String nombreCompleto = (String) session.getAttribute("nombreCompleto");
+        if (nombreCompleto == null) nombreCompleto = "";
+        
         List<TiendaDTO> tiendas = new ArrayList<>();
 
-        StringBuilder sql = new StringBuilder("SELECT * FROM tiendas WHERE 1=1");
+        StringBuilder sql = new StringBuilder("SELECT * FROM tiendas WHERE disponible = 'S'");
         List<Object> params = new ArrayList<>();
+
+        if (!esAdmin(session)) {
+        	sql.append(" AND (LOWER(REPLACE(REPLACE(REPLACE(Supervisor, ' ', ''), '.', ''), ',', '')) = LOWER(REPLACE(REPLACE(REPLACE(?, ' ', ''), '.', ''), ',', '')) OR LOWER(REPLACE(REPLACE(REPLACE(Coordinador, ' ', ''), '.', ''), ',', '')) = LOWER(REPLACE(REPLACE(REPLACE(?, ' ', ''), '.', ''), ',', '')) )"); 
+            params.add(nombreCompleto);
+            params.add(nombreCompleto);
+        }
 
         if (supervisor != null && !supervisor.trim().isEmpty()) {
             sql.append(" AND Supervisor = ?");
             params.add(supervisor);
         }
-
+        
         if (zona != null && !zona.trim().isEmpty()) {
             sql.append(" AND Zona = ?");
             params.add(zona);
@@ -364,22 +382,22 @@ public class AdminTiendasServlet extends HttpServlet {
         sql.append(" ORDER BY denominacion");
 
         try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
-
-            for (int i = 0; i < params.size(); i++) {
-                stmt.setString(i + 1, (String) params.get(i));
-            }
-
-            logger.info("Ejecutando consulta de tiendas con filtros - Supervisor: {}, Zona: {}", supervisor, zona);
-
-            try (ResultSet rs = stmt.executeQuery()) {
-                while (rs.next()) {
-                    tiendas.add(mapRowToTienda(rs));
-                }
-            }
-
-            logger.info("Se encontraron {} tiendas", tiendas.size());
-            mapper.writeValue(response.getWriter(), tiendas);
+                PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+               
+               for (int i = 0; i < params.size(); i++) {
+                   stmt.setString(i + 1, (String) params.get(i));
+               }
+               
+               logger.info("Ejecutando consulta de tiendas con filtros - Supervisor: {}, Zona: {}, Rol: {}", supervisor, zona, rol);
+               
+               try (ResultSet rs = stmt.executeQuery()) {
+                   while (rs.next()) {
+                       tiendas.add(mapRowToTienda(rs));
+                   }
+               }
+               
+               logger.info("Se encontraron {} tiendas", tiendas.size());
+               mapper.writeValue(response.getWriter(), tiendas);
 
         } catch (SQLException e) {
             logger.error("Error SQL en GET de tiendas con filtros. Supervisor: {}, Zona: {}", supervisor, zona, e);
