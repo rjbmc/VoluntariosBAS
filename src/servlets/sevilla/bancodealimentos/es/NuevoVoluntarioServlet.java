@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.HashMap;
@@ -147,12 +148,28 @@ public class NuevoVoluntarioServlet extends HttpServlet {
                 ps.executeUpdate();
             }
         } else { // Nuevo
-            sql = "INSERT INTO voluntarios (Usuario, Nombre, Apellidos, `DNI NIF`, Clave, Email, telefono, fechaNacimiento, cp, tiendaReferencia, verificado, token_verificacion, SqlRowUUID, notificar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, 'S')";
+            sql = "INSERT INTO voluntarios (Usuario, Nombre, Apellidos, `DNI NIF`, Clave, Email, telefono, fechaNacimiento, cp, tiendaReferencia, administrador, verificado, token_verificacion, SqlRowUUID, notificar) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', ?, ?, 'S')";
             try(PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, usuario); ps.setString(2, nombre); ps.setString(3, apellidos); ps.setString(4, dni);
-                ps.setString(5, hashedPassword); ps.setString(6, email); ps.setString(7, telefono); ps.setString(8, fechaNacimientoStr);
-                ps.setString(9, cp); ps.setInt(10, tiendaReferencia); ps.setString(11, verificationToken); ps.setString(12, sqlRowUuid);
-                ps.executeUpdate();
+            	ps.setString(1, usuario);
+	    	    ps.setString(2, nombre);
+	    	    ps.setString(3, apellidos);
+	    	    ps.setString(4, dni);
+	    	    ps.setString(5, hashedPassword);
+	    	    ps.setString(6, email);
+	    	    ps.setString(7, telefono);
+	    	    ps.setString(8, fechaNacimientoStr);
+	    	    ps.setString(9, cp);
+	    	    ps.setInt(10, tiendaReferencia);
+	    	    ps.setString(11, "V");                 
+	    	    ps.setString(12, verificationToken);   
+	    	    ps.setString(13, sqlRowUuid);          
+	    	    ps.executeUpdate();
+            }  catch (SQLIntegrityConstraintViolationException e) {
+                if (e.getMessage().contains("Duplicate entry") && e.getMessage().contains("for key 'voluntarios.Email'")) {
+                    System.out.println("Error: El correo electrónico ya está registrado.");
+                } else {
+                    throw e; 
+                }
             }
         }
     }

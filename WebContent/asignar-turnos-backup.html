@@ -85,7 +85,7 @@
     
     <!-- Modal del Mapa y Toasts -->
     <div id="map-modal" class="modal-overlay hidden z-50 p-4">
-        <div class="modal-content bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
+        <div class="modal-content bg-white rounded-3xl shadow-2xl overflow-x-auto border border-gray-100">
             <div class="flex justify-between items-center p-6 border-b border-gray-50">
                 <h3 class="text-xl font-bold text-gray-800">Ubicaciones Disponibles</h3>
                 <button onclick="closeMapModal()" class="text-gray-400 hover:text-gray-600"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
@@ -115,7 +115,7 @@
             let html = '';
             for(let i=1; i<=4; i++) {
                 html += `
-                    <div class="border border-gray-200 rounded-2xl p-6 bg-white hover:shadow-md transition-shadow relative overflow-hidden group">
+                    <div class="border border-gray-200 rounded-2xl p-6 bg-white hover:shadow-md transition-shadow relative overflow-x-auto group">
                         <div class="absolute top-0 left-0 w-1 h-full bg-gray-100 group-hover:bg-orange-400 transition-colors"></div>
                         <h3 class="font-bold text-gray-800 mb-5 flex items-center">
                             <span class="bg-orange-100 text-orange-600 w-8 h-8 rounded-lg inline-flex items-center justify-center mr-3 text-sm font-bold shadow-sm">${i}</span>

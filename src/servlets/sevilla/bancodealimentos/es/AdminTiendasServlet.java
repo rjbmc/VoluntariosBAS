@@ -65,10 +65,10 @@ public class AdminTiendasServlet extends HttpServlet {
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        if (!isAdmin(request)) {
-            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
-            return;
-        }
+//        if (!isAdmin(request)) {
+//            sendJsonResponse(response, HttpServletResponse.SC_FORBIDDEN, false, "Acceso denegado.");
+//            return;
+//        }
 
         response.setContentType("application/json");
         String adminUser = getUsuario(request);
@@ -127,8 +127,14 @@ public class AdminTiendasServlet extends HttpServlet {
     }
 
     private void refreshSingleTienda(String adminUser, String codigo) throws Exception {
+    	if(codigo.length()<3) {
+    		if(codigo.length()<2) {
+    			codigo="0"+codigo;
+    		}
+			codigo="0"+codigo;
+    	}
+    	
         String listId = getListId();
-
         String itemId = SharePointUtil.findItemIdByFieldValue(null, SharePointUtil.SP_SITE_ID_VOLUNTARIOS, listId, "codigo", codigo);
 
         if (itemId == null) {
@@ -360,15 +366,15 @@ public class AdminTiendasServlet extends HttpServlet {
         
         List<TiendaDTO> tiendas = new ArrayList<>();
 
-        StringBuilder sql = new StringBuilder("SELECT * FROM tiendas WHERE disponible = 'S'");
+        StringBuilder sql = new StringBuilder("SELECT * FROM tiendas Where 1=1");
         List<Object> params = new ArrayList<>();
 
-        if (!esAdmin(session)) {
-        	sql.append(" AND (LOWER(REPLACE(REPLACE(REPLACE(Supervisor, ' ', ''), '.', ''), ',', '')) = LOWER(REPLACE(REPLACE(REPLACE(?, ' ', ''), '.', ''), ',', '')) OR LOWER(REPLACE(REPLACE(REPLACE(Coordinador, ' ', ''), '.', ''), ',', '')) = LOWER(REPLACE(REPLACE(REPLACE(?, ' ', ''), '.', ''), ',', '')) )"); 
-            params.add(nombreCompleto);
-            params.add(nombreCompleto);
-        }
-
+   //   if (!esAdmin(session)) {
+   //   	sql.append(" AND (LOWER(REGEXP_REPLACE(SUPERVISOR, '[^a-zA-ZáéíóúñÁÉÍÓÚÑ]', ''))  = LOWER(REGEXP_REPLACE(?, '[^a-zA-ZáéíóúñÁÉÍÓÚÑ]', ''))  OR LOWER(REGEXP_REPLACE(COORDINADOR, '[^a-zA-ZáéíóúñÁÉÍÓÚÑ]', ''))  = LOWER(REGEXP_REPLACE(?, '[^a-zA-ZáéíóúñÁÉÍÓÚÑ]', '')))"); 
+   //       params.add(nombreCompleto);
+   //       params.add(nombreCompleto);
+   //   }
+        
         if (supervisor != null && !supervisor.trim().isEmpty()) {
             sql.append(" AND Supervisor = ?");
             params.add(supervisor);

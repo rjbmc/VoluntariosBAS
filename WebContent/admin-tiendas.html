@@ -327,6 +327,7 @@
             if (zona) url.searchParams.append('zona', zona);
 
             try {
+            	
                 const response = await fetch(url);
                 const tiendas = await response.json();
                 tiendasCache = tiendas;
@@ -356,7 +357,20 @@
                     `;
                     tableBody.appendChild(tr);
                 });
-            } catch (error) { displayMessage('No se han podido cargar las tiendas.', 'error'); }
+            } catch (error) { 
+            	  // Extraer el mensaje de error de diferentes formas posibles
+                let mensajeError = '';                
+                if (error.response && error.response.data) {
+                    // Si es una respuesta de Axios con estructura de error
+                    mensajeError = error.response.data.message || error.response.data || error.message;
+                } else if (error.message) {
+                    // Error estándar de JavaScript
+                    mensajeError = error.message;
+                } else {
+                    mensajeError = 'No se han podido cargar las tiendas.';
+                }               
+                displayMessage(mensajeError, 'error');
+            }
         }
 
         async function refreshTienda(codigo) {

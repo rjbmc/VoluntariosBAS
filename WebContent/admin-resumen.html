@@ -225,7 +225,9 @@
 
             try {
                 const url = `${AppConfig.getUrl('ADMIN_DETALLE_TURNO')}?campana=${selectedCampaign}&tienda=${tiendaId}&turno=${turnoNum}`;
-                const response = await fetch(url);
+                const response = await fetch(url, {
+                    credentials: 'include'   // ← Envía cookies (incluyendo JSESSIONID)
+                });
                 if (!response.ok) throw new Error('No se pudo cargar el detalle.');
                 const voluntarios = await response.json();
 

@@ -28,10 +28,29 @@ import util.sevilla.bancodealimentos.es.SharePointUtil;
 @WebServlet(name = "ConsultarVoluntarioServlet", urlPatterns = {"/consultar-voluntario"})
 public class ConsultarVoluntarioServlet extends HttpServlet {
 
-    private static final long serialVersionUID = 3L; // Versión incrementada
+    private static final long serialVersionUID = 4L; // Versión incrementada
     private static final String VOLUNTARIOS_LIST_NAME = "Voluntarios";
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final Logger logger = LoggerFactory.getLogger(ConsultarVoluntarioServlet.class);
+    
+    // Flag para controlar que la caché de códigos postales se carga solo una vez
+    private static boolean codigosPostalesCargados = false;
+
+    @Override
+    public void init() throws ServletException {
+        super.init();
+        // Cargar códigos postales al iniciar el servlet (solo una vez)
+        if (!codigosPostalesCargados) {
+            try (Connection con = DatabaseUtil.getConnection()) {
+                SharePointUtil.cargarCodigosPostales(con, SharePointUtil.SP_SITE_ID_INFORMATICA);
+                codigosPostalesCargados = true;
+                logger.info("Caché de códigos postales cargada correctamente");
+            } catch (Exception e) {
+                logger.error("Error cargando caché de códigos postales: {}", e.getMessage());
+                // No falla la inicialización del servlet, solo loguea el error
+            }
+        }
+    }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -66,10 +85,13 @@ public class ConsultarVoluntarioServlet extends HttpServlet {
                 // 3. Encontrado en SharePoint: devolver datos para pre-rellenar
                 Map<String, Object> data = new HashMap<>();
                 data.put("nombre", getString(sharepointData, "Nombre", ""));
-                data.put("apellidos", getString(sharepointData, "field_2", ""));
+                data.put("apellidos", getString(sharepointData, "LinkTitleNoMenu", ""));
                 data.put("email", getString(sharepointData, "field_9", ""));
                 data.put("telefono", getString(sharepointData, "field_7", ""));
-                data.put("cp", getString(sharepointData, "C.Postal", ""));
+                
+                // ✅ Obtener el código postal (ahora viene directamente desde la caché)
+                String codigoPostal = getCodigoPostalFromData(con, sharepointData);
+                data.put("cp", codigoPostal);
                 
                 // --- PROCESAR FECHA DE NACIMIENTO (field_8) ---
                 String fechaNacimiento = "";
@@ -77,7 +99,6 @@ public class ConsultarVoluntarioServlet extends HttpServlet {
                 if (fechaObj != null) {
                     String fechaStr = fechaObj.toString().trim();
                     logger.info("Fecha original desde SharePoint: {}", fechaStr);
-                    // Registrar en el log de actividad
                     LogUtil.logOperation(con, "SP_FECHA_CAMPO", "Sistema", 
                         "DNI: " + dni + " - Fecha encontrada en campo: field_8 = " + fechaStr);
                     fechaNacimiento = formatearFecha(fechaStr);
@@ -111,7 +132,40 @@ public class ConsultarVoluntarioServlet extends HttpServlet {
 
     private Map<String, Object> findVoluntarioInSharePoint(Connection con, String dni) throws Exception {
         final String dniFieldName = "field_3";
-        return SharePointUtil.findItemByFieldValue(con, SharePointUtil.SP_SITE_ID_INFORMATICA, SharePointUtil.LIST_NAME_VOLUNTARIOS, dniFieldName, dni);
+        return SharePointUtil.findItemByFieldValue(con, SharePointUtil.SP_SITE_ID_INFORMATICA, 
+                SharePointUtil.LIST_NAME_VOLUNTARIOS, dniFieldName, dni);
+    }
+    
+    /**
+     * Obtiene el código postal a partir de los datos de SharePoint
+     * Primero intenta obtener C_x002e_Postal (si ya viene de la caché)
+     * Si no, intenta obtener el LookupId y busca en la caché
+     */
+    private String getCodigoPostalFromData(Connection con, Map<String, Object> sharepointData) {
+        // Intentar obtener el valor directamente
+        Object postalValue = sharepointData.get("C_x002e_Postal");
+        if (postalValue != null && !postalValue.toString().isEmpty() && !postalValue.toString().matches("\\d+")) {
+            // Si no es solo un número (ID), asumimos que es el valor real
+            return postalValue.toString();
+        }
+        
+        // Si no, intentar obtener el LookupId y buscar en la caché
+        Object lookupIdObj = sharepointData.get("C_x002e_PostalLookupId");
+        if (lookupIdObj != null) {
+            try {
+                Integer lookupId = Integer.parseInt(lookupIdObj.toString());
+                if (lookupId > 0) {
+                    String codigoPostal = SharePointUtil.getCodigoPostalById(lookupId);
+                    if (codigoPostal != null && !codigoPostal.isEmpty()) {
+                        return codigoPostal;
+                    }
+                }
+            } catch (NumberFormatException e) {
+                logger.warn("Error parsing lookupId: {}", lookupIdObj);
+            }
+        }
+        
+        return "";
     }
 
     private String getString(Map<String, Object> map, String key, String defaultValue) {

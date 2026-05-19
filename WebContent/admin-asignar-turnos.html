@@ -113,7 +113,7 @@
     
     <!-- Modal del Mapa -->
     <div id="map-modal" class="modal-overlay hidden z-50">
-        <div class="modal-content bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div class="modal-content bg-white rounded-2xl shadow-2xl overflow-x-auto">
             <div class="flex justify-between items-center p-5 border-b">
                 <div>
                     <h3 class="text-xl font-bold text-gray-800">Seleccionar Punto de Recogida</h3>
@@ -174,7 +174,8 @@
                 const params = new URLSearchParams(window.location.search);
                 const urlUser = params.get('usuario');
 
-                targetUsuario = (urlUser && sessionUser.isAdmin) ? urlUser : sessionUser.usuario;
+                //targetUsuario = (urlUser && sessionUser.isAdmin) ? urlUser : sessionUser.usuario;
+                targetUsuario = urlUser;
                 
                 document.getElementById('user-display').textContent = `Conectado como: ${sessionUser.usuario}`;
                 document.getElementById('user-display').classList.remove('hidden');
@@ -249,24 +250,24 @@
 
                     const nombreNormalizado = normalizar(nombreCompleto);
                     console.log('Nombre normalizado del usuario:', nombreNormalizado);
-
-                    if (rolUsuario === 'A') {
+                    
+                    // if (rolUsuario === 'A') {
                         tiendasCache = todas;
                         console.log('Admin: todas las tiendas, total:', tiendasCache.length);
-                    } else if (rolUsuario === 'S') {
-                        tiendasCache = todas.filter(t => 
-                            t.supervisor && normalizar(t.supervisor) === nombreNormalizado
-                        );
-                        console.log('Supervisor: tiendas filtradas, total:', tiendasCache.length);
-                    } else if (rolUsuario === 'C') {
-                        tiendasCache = todas.filter(t => 
-                            t.coordinador && normalizar(t.coordinador) === nombreNormalizado
-                        );
-                        console.log('Coordinador: tiendas filtradas, total:', tiendasCache.length);
-                    } else {
-                        tiendasCache = [];
-                        console.log('Rol no autorizado');
-                    }
+                    //} else if (rolUsuario === 'S') {
+                    //    tiendasCache = todas.filter(t => 
+                    //        t.supervisor && normalizar(t.supervisor) === nombreNormalizado
+                    //    );
+                    //    console.log('Supervisor: tiendas filtradas, total:', tiendasCache.length);
+                    //} else if (rolUsuario === 'C') {
+                    //    tiendasCache = todas.filter(t => 
+                    //        t.coordinador && normalizar(t.coordinador) === nombreNormalizado
+                    //    );
+                    //    console.log('Coordinador: tiendas filtradas, total:', tiendasCache.length);
+                    //} else {
+                    //    tiendasCache = [];
+                    //    console.log('Rol no autorizado');
+                    //}
                     console.log('Tiendas cargadas en caché:', tiendasCache.length);
                 } else {
                     console.error('Error al cargar tiendas, status:', response.status);

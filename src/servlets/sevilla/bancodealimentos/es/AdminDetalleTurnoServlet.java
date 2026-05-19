@@ -92,9 +92,9 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
         );
         
         // Si no es administrador, añadir filtro para que solo vea voluntarios en tiendas donde sea responsable
-        if (!"A".equals(rol)) {
-            sql.append(" AND EXISTS (SELECT 1 FROM tiendas t WHERE t.codigo = ? AND (t.Supervisor = ? OR t.Coordinador = ?))");
-        }
+//        if (!"A".equals(rol)) {
+//            sql.append(" AND EXISTS (SELECT 1 FROM tiendas t WHERE t.codigo = ? AND (t.Supervisor = ? OR t.Coordinador = ?))");
+//        }
 
         Connection conn = null;
         try {
@@ -103,11 +103,11 @@ public class AdminDetalleTurnoServlet extends HttpServlet {
                 int paramIndex = 1;
                 stmt.setString(paramIndex++, campanaId);
                 stmt.setInt(paramIndex++, Integer.parseInt(tiendaIdStr));
-                if (!"A".equals(rol)) {
-                    stmt.setInt(paramIndex++, Integer.parseInt(tiendaIdStr)); // para el EXISTS
-                    stmt.setString(paramIndex++, nombreCompleto);
-                    stmt.setString(paramIndex++, nombreCompleto);
-                }
+//                if (!"A".equals(rol)) {
+//                    stmt.setInt(paramIndex++, Integer.parseInt(tiendaIdStr)); // para el EXISTS
+//                    stmt.setString(paramIndex++, nombreCompleto);
+//                    stmt.setString(paramIndex++, nombreCompleto);
+//                }
                 try (ResultSet rs = stmt.executeQuery()) {
                     while (rs.next()) {
                         VoluntarioTurnoDTO dto = new VoluntarioTurnoDTO();

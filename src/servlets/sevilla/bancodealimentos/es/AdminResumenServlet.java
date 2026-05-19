@@ -60,7 +60,7 @@ public class AdminResumenServlet extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-
+        
         HttpSession session = request.getSession(false);
         if (!tienePermiso(session)) {
             logger.warn("Acceso denegado a AdminResumen. IP: {}", request.getRemoteAddr());
@@ -105,7 +105,7 @@ public class AdminResumenServlet extends HttpServlet {
     private Map<Integer, TurnoStats[]> getStatsPorTienda(Connection conn, String campanaId) throws SQLException {
         Map<Integer, TurnoStats[]> statsMap = new HashMap<>();
         String sql = "SELECT Turno1, Comentario1, Turno2, Comentario2, Turno3, Comentario3, Turno4, Comentario4 FROM voluntarios_en_campana WHERE Campana = ?";
-        
+         
         try (PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, campanaId);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -123,7 +123,7 @@ public class AdminResumenServlet extends HttpServlet {
                                 try {
                                     String numStr = comentario.substring("Voluntarios: ".length()).split("\\.")[0].trim();
                                     stats.acompanantes += Integer.parseInt(numStr);
-                                } catch (Exception e) { 
+                                } catch (Exception e) {
                                     logger.debug("No se pudo parsear acompañantes en comentario: '{}'", comentario);
                                 }
                             }
@@ -132,7 +132,8 @@ public class AdminResumenServlet extends HttpServlet {
                 }
             }
         }
-        return statsMap;
+
+    	 return statsMap;
     }
 
     /**
@@ -154,16 +155,16 @@ public class AdminResumenServlet extends HttpServlet {
         );
         
         // Si no es administrador, filtrar por supervisor o coordinador
-        if (!"A".equals(rol)) {
-            sql.append(" AND (Supervisor = ? OR Coordinador = ?)");
-        }
+//        if (!"A".equals(rol)) {
+//            sql.append(" AND (Supervisor = ? OR Coordinador = ?)");
+//        }
         sql.append(" ORDER BY denominacion");
 
         try (PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
-            if (!"A".equals(rol)) {
-                stmt.setString(1, nombreCompleto);
-                stmt.setString(2, nombreCompleto);
-            }
+//            if (!"A".equals(rol)) {
+//                stmt.setString(1, nombreCompleto);
+//                stmt.setString(2, nombreCompleto);
+//            }
             
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {

@@ -52,7 +52,18 @@ public class VoluntarioDetallesServlet extends HttpServlet {
             return (adminAttr instanceof Boolean && (Boolean) adminAttr) || "S".equals(adminAttr);
         }
     }
-
+    private boolean esEstructura(HttpSession session) {
+        if (session == null) return false;
+        // Intentar obtener el nuevo atributo 'rol'
+        String rol = (String) session.getAttribute("rol");
+        if (rol != null) {
+            return !"V".equals(rol);
+        } else {
+            // Fallback al antiguo isAdmin
+        	Object adminAttr = session.getAttribute("isAdmin");
+            return (adminAttr instanceof Boolean && (Boolean) adminAttr) || "S".equals(adminAttr);
+        }
+    }
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         response.setContentType("application/json");
@@ -65,7 +76,7 @@ public class VoluntarioDetallesServlet extends HttpServlet {
         }
 
         String usuarioEnSesion = (String) session.getAttribute("usuario");
-        boolean esAdmin = esAdmin(session);
+        boolean esAdmin = esEstructura(session);
 
         // Si se pasa un parámetro 'usuario' y quien consulta es ADMIN, buscamos ese usuario.
         // Si no, buscamos los datos del usuario de la sesión actual.

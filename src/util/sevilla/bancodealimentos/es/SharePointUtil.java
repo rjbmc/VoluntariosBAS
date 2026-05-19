@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.azure.identity.ClientSecretCredential;
 import com.azure.identity.ClientSecretCredentialBuilder;
@@ -27,8 +28,110 @@ public class SharePointUtil {
     public static final String LIST_NAME_TIENDAS = "Tiendas";
     public static final String FIELD_CODIGO_TIENDA = "codigo";
     public static final String LIST_NAME_VOLUNTARIOS = "Voluntarios BAS";
+    private static Map<Integer, String> codigosPostalesCache = new ConcurrentHashMap<>();
+    private static boolean codigosPostalesCargados = false;
 
     private static GraphServiceClient graphClient = null;
+    /**
+     * Carga todos los códigos postales de la lista 'cpostales' en memoria
+     */
+    public static void cargarCodigosPostales(Connection conn, String siteId) throws Exception {
+        if (codigosPostalesCargados) {
+            LogUtil.logOperation(conn, "SP_INFO", "SYSTEM", "Los códigos postales ya están cargados en caché");
+            return;
+        }
+        
+        initializeGraphClient();
+        String listId = getListId(siteId, "cpostales");
+        
+        if (listId == null) {
+            LogUtil.logOperation(conn, "SP_WARNING", "SYSTEM", "No se pudo encontrar la lista 'cpostales'");
+            return; // No es un error fatal, solo no se pueden cargar
+        }
+        
+        LogUtil.logOperation(conn, "SP_INFO", "SYSTEM", "Cargando códigos postales desde SharePoint...");
+        
+        try {
+            int totalCargados = 0;
+            String nextLink = null;
+            
+            do {
+                com.microsoft.graph.models.ListItemCollectionResponse response;
+                
+                if (nextLink == null) {
+                    response = graphClient.sites().bySiteId(siteId)
+                        .lists().byListId(listId)
+                        .items()
+                        .get(requestConfiguration -> {
+                            requestConfiguration.queryParameters.expand = new String[]{"fields"};
+                            requestConfiguration.queryParameters.top = 100;
+                        });
+                } else {
+                    // Si hay más páginas, salir del bucle (implementación simplificada)
+                    break;
+                }
+                
+                if (response != null && response.getValue() != null) {
+                    for (com.microsoft.graph.models.ListItem item : response.getValue()) {
+                        com.microsoft.graph.models.FieldValueSet fields = item.getFields();
+                        if (fields != null) {
+                            Map<String, Object> fieldData = fields.getAdditionalData();
+                            Integer itemId = Integer.valueOf(item.getId());
+                            
+                            // Buscar el campo que contiene el código postal
+                            String codigoPostal = null;
+                            if (fieldData.containsKey("Title")) {
+                                codigoPostal = fieldData.get("Title") != null ? fieldData.get("Title").toString() : null;
+                            } else if (fieldData.containsKey("CodigoPostal")) {
+                                codigoPostal = fieldData.get("CodigoPostal") != null ? fieldData.get("CodigoPostal").toString() : null;
+                            }
+                            
+                            if (codigoPostal != null && !codigoPostal.isEmpty()) {
+                                codigosPostalesCache.put(itemId, codigoPostal);
+                                totalCargados++;
+                            }
+                        }
+                    }
+                }
+                
+                nextLink = null; // Salir del bucle después de la primera página
+                
+            } while (nextLink != null);
+            
+            codigosPostalesCargados = true;
+            LogUtil.logOperation(conn, "SP_INFO", "SYSTEM", "Cargados " + totalCargados + " códigos postales en caché");
+            
+        } catch (Exception e) {
+            LogUtil.logOperation(conn, "SP_ERROR", "SYSTEM", "Error cargando códigos postales: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Obtiene el valor del código postal a partir de su LookupId
+     */
+    public static String getCodigoPostalById(Integer lookupId) {
+        if (lookupId == null || lookupId == 0) {
+            return "";
+        }
+        
+        String codigoPostal = codigosPostalesCache.get(lookupId);
+        if (codigoPostal == null) {
+            return String.valueOf(lookupId); // Devuelve el ID como fallback
+        }
+        
+        return codigoPostal;
+    }
+
+    /**
+     * Método auxiliar para limpiar la caché (útil para pruebas)
+     */
+    public static void limpiarCacheCodigosPostales() {
+        codigosPostalesCache.clear();
+        codigosPostalesCargados = false;
+    }
+    
+    
     public static void listarTodasLasListasAccesibles() throws Exception {
         initializeGraphClient();
         
@@ -241,7 +344,7 @@ public class SharePointUtil {
         String filter = "fields/" + fieldName + " eq '" + escapedValue + "'";
 
         try {
-            ListItemCollectionResponse response = graphClient.sites().bySiteId(siteId).lists().byListId(listId).items().get(requestConfiguration -> {
+            com.microsoft.graph.models.ListItemCollectionResponse response = graphClient.sites().bySiteId(siteId).lists().byListId(listId).items().get(requestConfiguration -> {
                 requestConfiguration.queryParameters.filter = filter;
                 requestConfiguration.queryParameters.expand = new String[]{"fields"};
                 requestConfiguration.queryParameters.top = 1;
@@ -250,9 +353,30 @@ public class SharePointUtil {
 
             if (response != null && response.getValue() != null && !response.getValue().isEmpty()) {
                 LogUtil.logOperation(conn, "SP_QUERY_SUCCESS", "SYSTEM", "Item encontrado en lista '" + listName + "' con filtro: " + filter);
-                return response.getValue().get(0).getFields().getAdditionalData();
+                
+                com.microsoft.graph.models.ListItem item = response.getValue().get(0);
+                com.microsoft.graph.models.FieldValueSet fields = item.getFields();
+                Map<String, Object> resultData = new HashMap<>(fields.getAdditionalData());
+                
+                // Si tenemos el campo lookup, añadimos el valor usando la caché
+                if (resultData.containsKey("C_x002e_PostalLookupId") && !resultData.containsKey("C_x002e_Postal")) {
+                    Object lookupIdObj = resultData.get("C_x002e_PostalLookupId");
+                    if (lookupIdObj != null) {
+                        try {
+                            Integer lookupId = Integer.parseInt(lookupIdObj.toString());
+                            if (lookupId > 0) {
+                                String codigoPostal = getCodigoPostalById(lookupId);
+                                resultData.put("C_x002e_Postal", codigoPostal);
+                            }
+                        } catch (NumberFormatException e) {
+                            resultData.put("C_x002e_Postal", "");
+                        }
+                    }
+                }
+                
+                return resultData;
             } else {
-                 LogUtil.logOperation(conn, "SP_QUERY_NOT_FOUND", "SYSTEM", "Item no encontrado en lista '" + listName + "' con filtro: " + filter);
+                LogUtil.logOperation(conn, "SP_QUERY_NOT_FOUND", "SYSTEM", "Item no encontrado en lista '" + listName + "' con filtro: " + filter);
                 return null;
             }
         } catch (Exception e) {

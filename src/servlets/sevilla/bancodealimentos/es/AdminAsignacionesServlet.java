@@ -325,16 +325,20 @@ public class AdminAsignacionesServlet extends HttpServlet {
             "LEFT JOIN tiendas t2 ON vec.Turno2 = t2.codigo " +
             "LEFT JOIN tiendas t3 ON vec.Turno3 = t3.codigo " +
             "LEFT JOIN tiendas t4 ON vec.Turno4 = t4.codigo " +
-            "WHERE vec.Campana = ?"
+            "WHERE vec.Campana = ?" +
+            "  AND (vec.Turno1 IS NOT NULL " +
+            "   OR vec.Turno2 IS NOT NULL " +
+            "   OR vec.Turno3 IS NOT NULL " +
+            "   OR vec.Turno4 IS NOT NULL) " 
         );
         
         // Si no es administrador, añadir filtro por supervisor/coordinador
-        if (!"A".equals(rol)) {
-            sql.append(" AND (t1.Supervisor = ? OR t1.Coordinador = ? ");
-            sql.append(" OR t2.Supervisor = ? OR t2.Coordinador = ? ");
-            sql.append(" OR t3.Supervisor = ? OR t3.Coordinador = ? ");
-            sql.append(" OR t4.Supervisor = ? OR t4.Coordinador = ?)");
-        }
+//        if (!"A".equals(rol)) {
+//            sql.append(" AND (t1.Supervisor = ? OR t1.Coordinador = ? ");
+//            sql.append(" OR t2.Supervisor = ? OR t2.Coordinador = ? ");
+//            sql.append(" OR t3.Supervisor = ? OR t3.Coordinador = ? ");
+//            sql.append(" OR t4.Supervisor = ? OR t4.Coordinador = ?)");
+//        }
         sql.append(" ORDER BY v.Apellidos, v.Nombre");
 
         try (Connection conn = DatabaseUtil.getConnection();
@@ -343,11 +347,11 @@ public class AdminAsignacionesServlet extends HttpServlet {
             int paramIndex = 1;
             stmt.setString(paramIndex++, campanaId);
             
-            if (!"A".equals(rol)) {
-                for (int i = 0; i < 8; i++) {
-                    stmt.setString(paramIndex++, nombreCompleto);
-                }
-            }
+//            if (!"A".equals(rol)) {
+//                for (int i = 0; i < 8; i++) {
+//                    stmt.setString(paramIndex++, nombreCompleto);
+//                }
+//            }
             
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
